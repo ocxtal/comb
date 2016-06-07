@@ -28,7 +28,7 @@ def configure(conf):
 	conf.env.append_value('DEFINES_COMB',
 		conf.env.DEFINES_SR + conf.env.DEFINES_AW + conf.env.DEFINES_GREF + conf.env.DEFINES_GGSEA + conf.env.DEFINES_PTASK)
 	conf.env.append_value('OBJ_COMB',
-		['comb.o'] + conf.env.OBJ_SR + conf.env.OBJ_AW + conf.env.OBJ_GREF + conf.env.OBJ_GGSEA + conf.env.OBJ_PTASK)
+		conf.env.OBJ_SR + conf.env.OBJ_AW + conf.env.OBJ_GREF + conf.env.OBJ_GGSEA + conf.env.OBJ_PTASK)
 
 
 def build(bld):
@@ -38,18 +38,9 @@ def build(bld):
 	bld.recurse('ggsea')
 	bld.recurse('ptask')
 
-	bld.objects(source = 'comb.c', target = 'comb.o')
-
-	bld.stlib(
-		source = ['unittest.c'],
+	bld.program(
+		source = ['comb.c'],
 		target = 'comb',
 		use = bld.env.OBJ_COMB,
 		lib = bld.env.LIB_COMB,
-		defines = bld.env.DEFINES_COMB)
-
-	bld.program(
-		source = ['unittest.c'],
-		target = 'unittest',
-		use = bld.env.OBJ_COMB,
-		lib = bld.env.LIB_COMB,
-		defines = ['TEST'] + bld.env.DEFINES_COMB)
+		defines = ['MAIN'] + bld.env.DEFINES_COMB)
