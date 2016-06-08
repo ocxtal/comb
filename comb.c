@@ -102,7 +102,7 @@ void comb_print_help(
 	int level)
 {
 	if(level == COMB_PRINT_VERSION) {
-		fprintf(stderr, "Comb aligner version %s\n", COMB_VERSION_STRING);
+		fprintf(stderr, "comb aligner version %s\n", COMB_VERSION_STRING);
 	} else if(level == COMB_PRINT_HELP) {
 		fprintf(stderr, comb_help_message, COMB_VERSION_STRING);
 	}
@@ -178,6 +178,7 @@ char *comb_build_command_string(
 {
 	kvec_t(char) s;
 
+	kv_init(s);
 	for(int i = 0; i < argc; i++) {
 		char const *p = argv[i];
 		while(*p != '\0') {
@@ -383,6 +384,10 @@ void *comb_source(
 
 	/* get the next iterator */
 	struct sr_gref_s *q = sr_get_iter(a->query);
+	if(q == NULL) {
+		/* reached the end */
+		return(NULL);
+	}
 
 	/* create worker_item object */
 	struct comb_worker_item_s *i = (struct comb_worker_item_s *)lmm_malloc(
@@ -467,6 +472,8 @@ static _force_inline
 void comb_worker_clean(
 	struct comb_worker_args_s *w)
 {
+	if(w == NULL) { return; }
+
 	for(struct comb_worker_args_s *p = w; p->params != NULL; p++) {
 		ggsea_ctx_clean(p->ctx);
 		memset(p, 0, sizeof(struct comb_worker_args_s));
@@ -482,25 +489,44 @@ static _force_inline
 int comb_run(
 	struct comb_params_s const *params)
 {
+	int ret = 1;
+
+	ggsea_conf_t *conf = NULL;
+	sr_t *ref = NULL;
+	sr_t *query = NULL;
+	aw_t *aw = NULL;
+	struct comb_worker_args_s *w = NULL;
+	ptask_t *pt = NULL;
+
 	/* build ggsea configuration object */
-	ggsea_conf_t *conf = ggsea_conf_init(GGSEA_PARAMS(
+	conf = ggsea_conf_init(GGSEA_PARAMS(
 		.xdrop = params->xdrop,
 		.score_matrix = GABA_SCORE_SIMPLE(params->m, params->x, params->gi, params->ge),
 		.kmer_cnt_thresh = params->kmer_cnt_thresh,
 		.overlap_thresh = params->overlap_thresh,
 		.popcnt_thresh = params->popcnt_thresh,
 		.score_thresh = params->score_thresh));
+	if(conf == NULL) {
+		fprintf(stderr, "[ERROR] Failed to create alignment configuration.\n");
+		goto _comb_run_error_handler;
+	}
+
 
 	/* build reference sequence index */
-	sr_t *ref = sr_init(params->ref_name,
+	ref = sr_init(params->ref_name,
 		SR_PARAMS(
 			.k = params->k,
 			.seq_direction = SR_FW_ONLY,
 			.num_threads = params->num_threads
 		));
+	if(ref == NULL) {
+		fprintf(stderr, "[ERROR] Failed to open reference file `%s'.\n", params->ref_name);
+		goto _comb_run_error_handler;
+	}
+
 
 	/* build read pool */
-	sr_t *query = (strcmp(params->ref_name, params->query_name) == 0)
+	query = (strcmp(params->ref_name, params->query_name) == 0)
 		? ref
 		: sr_init(params->query_name,
 			SR_PARAMS(
@@ -508,10 +534,15 @@ int comb_run(
 				.seq_direction = SR_FW_ONLY,
 				.num_threads = params->num_threads
 			));
+	if(query == NULL) {
+		fprintf(stderr, "[ERROR] Failed to open query file `%s'.\n", params->query_name);
+		goto _comb_run_error_handler;
+	}
+
 
 	/* build alignment writer */
 	struct sr_gref_s *r = sr_get_index(ref);
-	aw_t *aw = aw_init(params->out_name, r->gref,
+	aw = aw_init(params->out_name, r->gref,
 		AW_PARAMS(
 			.clip = params->clip,
 			.program_id = params->program_id,
@@ -519,24 +550,35 @@ int comb_run(
 			.command = params->command
 		));
 	sr_gref_free(r);
+	if(aw == NULL) {
+		fprintf(stderr, "[ERROR] Failed to open output file `%s'.\n", params->out_name);
+		goto _comb_run_error_handler;
+	}
+
 
 	/* initialize parallel task dispatcher */
-	struct comb_worker_args_s *w = comb_worker_init(params, conf, ref, query, aw);
-	ptask_t *pt = ptask_init(comb_worker, (void **)&w, params->num_threads, 2048);
+	w = comb_worker_init(params, conf, ref, query, aw);
+	pt = ptask_init(comb_worker, (void **)&w, params->num_threads, 2048);
+	if(w == NULL || pt == NULL) {
+		fprintf(stderr, "[ERROR] Failed to initialize parallel worker threads.\n");
+		goto _comb_run_error_handler;
+	}
 
 	/* run tasks */
 	ptask_stream(pt, comb_source, (void *)w, comb_drain, (void *)w, 512);
 
 	/* destroy objects */
-	comb_worker_clean(w); w = NULL;
+	ret = 0;
+_comb_run_error_handler:;
 	ggsea_conf_clean(conf); conf = NULL;
 	if(ref != query) {
 		sr_clean(query); query = NULL;
 	}
 	sr_clean(ref); ref = NULL;
 	aw_clean(aw); aw = NULL;
+	comb_worker_clean(w); w = NULL;
 	ptask_clean(pt); pt = NULL;
-	return(0);
+	return(ret);
 }
 
 #ifdef MAIN
