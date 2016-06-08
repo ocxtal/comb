@@ -27,6 +27,10 @@
 /* inline directive */
 #define _force_inline				inline
 
+/* max and min */
+#define MAX2(x,y) 		( (x) > (y) ? (x) : (y) )
+#define MIN2(x,y) 		( (x) < (y) ? (x) : (y) )
+
 
 /* constants */
 #define COMB_VERSION_STRING			"0.0.1"
@@ -256,7 +260,7 @@ struct comb_params_s *comb_parse_args(
 	struct comb_params_s *params = (struct comb_params_s *)malloc(
 		sizeof(struct comb_params_s));
 	*params = (struct comb_params_s){
-		.num_threads = 1,
+		.num_threads = 0,
 		.command = comb_build_command_string(argc, argv),
 		.program_name = strdup("comb"),
 		.program_id = UNITTEST_UNIQUE_ID,
@@ -384,10 +388,11 @@ struct comb_worker_args_s *comb_worker_init(
 	sr_t *query,
 	aw_t *aw)
 {
+	int64_t num_worker = MAX2(1, params->num_threads);
 	struct comb_worker_args_s *w = (struct comb_worker_args_s *)malloc(
-		(params->num_threads + 1) * sizeof(struct comb_worker_args_s));
+		(num_worker + 1) * sizeof(struct comb_worker_args_s));
 
-	for(int64_t i = 0; i < params->num_threads; i++) {
+	for(int64_t i = 0; i < num_worker; i++) {
 		w[i] = (struct comb_worker_args_s){
 			.params = params,
 			.ctx = ggsea_ctx_init(conf, sr_get_index(ref)->gref),
@@ -396,7 +401,7 @@ struct comb_worker_args_s *comb_worker_init(
 			.aw = aw
 		};
 	}
-	memset(&w[params->num_threads], 0, sizeof(struct comb_worker_args_s));
+	memset(&w[num_worker], 0, sizeof(struct comb_worker_args_s));
 	return(w);
 }
 
