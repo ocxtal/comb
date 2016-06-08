@@ -374,6 +374,50 @@ void comb_clean_params(
 
 
 /**
+ * @fn comb_worker_init
+ */
+static _force_inline
+struct comb_worker_args_s *comb_worker_init(
+	struct comb_params_s const *params,
+	ggsea_conf_t const *conf,
+	sr_t *ref,
+	sr_t *query,
+	aw_t *aw)
+{
+	struct comb_worker_args_s *w = (struct comb_worker_args_s *)malloc(
+		(params->num_threads + 1) * sizeof(struct comb_worker_args_s));
+
+	for(int64_t i = 0; i < params->num_threads; i++) {
+		w[i] = (struct comb_worker_args_s){
+			.params = params,
+			.ctx = ggsea_ctx_init(conf, sr_get_index(ref)->gref),
+			.ref = ref,
+			.query = query,
+			.aw = aw
+		};
+	}
+	memset(&w[params->num_threads], 0, sizeof(struct comb_worker_args_s));
+	return(w);
+}
+
+/**
+ * @fn comb_worker_clean
+ */
+static _force_inline
+void comb_worker_clean(
+	struct comb_worker_args_s *w)
+{
+	if(w == NULL) { return; }
+
+	for(struct comb_worker_args_s *p = w; p->params != NULL; p++) {
+		ggsea_ctx_clean(p->ctx);
+		memset(p, 0, sizeof(struct comb_worker_args_s));
+	}
+	free(w);
+	return;
+}
+
+/**
  * @fn comb_source
  */
 static
@@ -438,49 +482,6 @@ void comb_drain(
 	return;
 }
 
-/**
- * @fn comb_worker_init
- */
-static _force_inline
-struct comb_worker_args_s *comb_worker_init(
-	struct comb_params_s const *params,
-	ggsea_conf_t const *conf,
-	sr_t *ref,
-	sr_t *query,
-	aw_t *aw)
-{
-	struct comb_worker_args_s *w = (struct comb_worker_args_s *)malloc(
-		(params->num_threads + 1) * sizeof(struct comb_worker_args_s));
-
-	for(int64_t i = 0; i < params->num_threads; i++) {
-		w[i] = (struct comb_worker_args_s){
-			.params = params,
-			.ctx = ggsea_ctx_init(conf, sr_get_index(ref)->gref),
-			.ref = ref,
-			.query = query,
-			.aw = aw
-		};
-	}
-	memset(&w[params->num_threads], 0, sizeof(struct comb_worker_args_s));
-	return(w);
-}
-
-/**
- * @fn comb_worker_clean
- */
-static _force_inline
-void comb_worker_clean(
-	struct comb_worker_args_s *w)
-{
-	if(w == NULL) { return; }
-
-	for(struct comb_worker_args_s *p = w; p->params != NULL; p++) {
-		ggsea_ctx_clean(p->ctx);
-		memset(p, 0, sizeof(struct comb_worker_args_s));
-	}
-	free(w);
-	return;
-}
 
 /**
  * @fn comb_run
