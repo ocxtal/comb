@@ -13,11 +13,11 @@
 
 #include <ctype.h>
 #include <stdint.h>
-#include "ptask/ptask.h"	/* parallel task dispatcher */
-#include "sr/sr.h"			/* sequence reader */
-#include "gref/gref.h"		/* graphical sequence indexer */
-#include "ggsea/ggsea.h"	/* graph-to-graph seed-and-extend alignment */
-#include "aw/aw.h"			/* alignment writer */
+#include "ptask.h"			/* parallel task dispatcher */
+#include "sr.h"				/* sequence reader */
+#include "gref.h"			/* graphical sequence indexer */
+#include "ggsea.h"			/* graph-to-graph seed-and-extend alignment */
+#include "aw.h"				/* alignment writer */
 #include "sassert.h"
 #include "kvec.h"
 #include "log.h"
