@@ -26,6 +26,7 @@ def configure(conf):
 	if 'LIB_PTHREAD' not in conf.env:
 		conf.check_cc(lib = 'pthread')
 
+	conf.env.append_value('CFLAGS', '-Wall')
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	conf.env.append_value('CFLAGS', '-march=native')
