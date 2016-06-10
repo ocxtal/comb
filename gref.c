@@ -1668,6 +1668,35 @@ unittest_config(
 	.depends_on = { "psort", "hmap", "zf" }
 );
 
+/**
+ * @fn unittest_random_base
+ */
+static _force_inline
+char unittest_random_base(void)
+{
+	char const table[4] = {0x01, 0x02, 0x04, 0x08};
+	return(table[rand() % 4]);
+}
+
+/**
+ * @fn unittest_generate_random_sequence
+ */
+static _force_inline
+char *unittest_generate_random_sequence(
+	int64_t len)
+{
+	char *seq;		/** a pointer to sequence */
+	seq = (char *)malloc(sizeof(char) * (len + 1));
+
+	if(seq == NULL) { return NULL; }
+	for(int64_t i = 0; i < len; i++) {
+		seq[i] = unittest_random_base();
+	}
+	seq[len] = '\0';
+	return seq;
+}
+
+
 #define _str(x)		x, strlen(x)
 #define _seq(x)		(uint8_t const *)(x), strlen(x)
 
@@ -1903,6 +1932,51 @@ unittest()
 	assert(gref_get_section(acv, 3)->base[0] == 0x0c, "%x", gref_get_section(acv, 3)->base[0]);
 	assert(gref_get_section(acv, 4)->base[0] == 0x01, "%x", gref_get_section(acv, 4)->base[0]);
 	assert(gref_get_section(acv, 5)->base[0] == 0x01, "%x", gref_get_section(acv, 5)->base[0]);
+
+	gref_clean(acv);
+}
+
+/* archive (fr_copy / large sequence) */
+unittest()
+{
+	int64_t const len = 100000;
+	int64_t const cnt = 1000;
+
+	gref_pool_t *pool = gref_init_pool(GREF_PARAMS(
+		.k = 3,
+		.seq_direction = GREF_FW_RV,
+		.seq_format = GREF_4BIT,
+		.copy_mode = GREF_COPY,
+		.seq_head_margin = 32,
+		.seq_tail_margin = 32));
+
+	/* dump */
+	for(int64_t i = 0; i < cnt; i++) {
+
+		/* name */
+		char buf[1024];
+		sprintf(buf, "seq%lld", i);
+
+		/* seq */
+		char *seq = unittest_generate_random_sequence(len);
+
+		/* append */
+		gref_append_segment(pool, buf, strlen(buf), (uint8_t const *)seq, strlen(seq));
+		free(seq);
+	}
+
+	/* freeze */
+	gref_acv_t *acv = gref_freeze_pool(pool);
+	assert(acv != NULL, "acv(%p)", acv);
+
+	assert(acv->type == GREF_ACV, "%d", acv->type);
+	assert(acv->link_table != NULL, "%p", acv->link_table);
+
+	/* section count */
+	assert(gref_get_section_count(acv) == cnt, "%lld", gref_get_section_count(acv));
+
+	/* total len */
+	assert(gref_get_total_len(acv) == cnt * len, "len(%lld)", gref_get_total_len(acv));
 
 	gref_clean(acv);
 }
