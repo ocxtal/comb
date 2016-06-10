@@ -298,7 +298,7 @@ int main() {
 #define lmm_kv_pusha(lmm, elem_t, v, x) do { \
 		uint64_t size = lmm_kv_roundup(sizeof(elem_t), sizeof(*(v).a)); \
 		if(sizeof(*(v).a) * ((v).m - (v).n) < size) { \
-			(v).m = (v).m * 2;								\
+			(v).m = LMM_MAX2((v).m * 2, (v).n + (size));				\
 			(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m);	\
 		} \
 		*((elem_t *)&((v).a[(v).n])) = (x); \
@@ -307,7 +307,7 @@ int main() {
 
 #define lmm_kv_pushm(lmm, v, arr, size) do { \
 		if(sizeof(*(v).a) * ((v).m - (v).n) < (uint64_t)(size)) { \
-			(v).m = (v).m * 2;								\
+			(v).m = LMM_MAX2((v).m * 2, (v).n + (size));				\
 			(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m);	\
 		} \
 		for(uint64_t _i = 0; _i < (uint64_t)(size); _i++) { \

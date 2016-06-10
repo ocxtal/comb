@@ -69,7 +69,7 @@ int main() {
 
 // #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 #define kv_roundup(x, base)			( (((x) + (base) - 1) / (base)) * (base) )
-
+#define kv_max2(a, b)				( ((a) < (b)) ? (b) : (a) )
 
 #define KVEC_INIT_SIZE 			( 256 )
 
@@ -115,7 +115,7 @@ int main() {
 #define kv_pusha(elem_t, v, x) do { \
 		uint64_t size = kv_roundup(sizeof(elem_t), sizeof(*(v).a)); \
 		if(sizeof(*(v).a) * ((v).m - (v).n) < size) { \
-			(v).m = (v).m * 2;								\
+			(v).m = kv_max2((v).m * 2, (v).n + (size));		\
 			(v).a = realloc((v).a, sizeof(*(v).a) * (v).m);	\
 		} \
 		*((elem_t *)&((v).a[(v).n])) = (x); \
@@ -124,7 +124,7 @@ int main() {
 
 #define kv_pushm(v, arr, size) do { \
 		if(sizeof(*(v).a) * ((v).m - (v).n) < (uint64_t)(size)) { \
-			(v).m = (v).m * 2;								\
+			(v).m = kv_max2((v).m * 2, (v).n + (size));		\
 			(v).a = realloc((v).a, sizeof(*(v).a) * (v).m);	\
 		} \
 		for(uint64_t _i = 0; _i < (uint64_t)(size); _i++) { \
