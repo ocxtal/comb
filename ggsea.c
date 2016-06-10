@@ -378,7 +378,7 @@ void ggsea_save_rep_kmer(
 		kv_init(c->qv);
 	}
 
-	log("save repetitive kmer(%llx), r(%u, %u), q(%u, %u), rv(%p, %llu), qv(%p, %llu)",
+	debug("save repetitive kmer(%llx), r(%u, %u), q(%u, %u), rv(%p, %llu), qv(%p, %llu)",
 		kmer, rpos.gid, rpos.pos, qpos.gid, qpos.pos,
 		kv_ptr(c->rv), kv_size(c->rv), kv_ptr(c->qv), kv_size(c->qv));
 
@@ -540,7 +540,8 @@ void ggsea_update_overlap_section(
 
 		if(hit == 0) {
 			/* add new region */
-			*(n = (struct ggsea_region_s *)r - 1) = (struct ggsea_region_s){
+			struct ggsea_region_s *nn = (struct ggsea_region_s *)tree_create_node(ctx->tree);
+			*nn = (struct ggsea_region_s){
 				.h.zero = 0,
 				.h.key = key,
 				.len = ctx->conf.overlap_width,
@@ -550,8 +551,9 @@ void ggsea_update_overlap_section(
 				.score = r->score
 			};
 
-			debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)", n, n->h.key, n->len, n->sp, n->ep);
-			tree_insert(ctx->tree, (tree_node_t *)n);
+			debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)",
+				nn, nn->h.key, nn->len, nn->sp, nn->ep);
+			tree_insert(ctx->tree, (tree_node_t *)nn);
 		}
 	}
 	return;
