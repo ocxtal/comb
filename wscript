@@ -30,6 +30,7 @@ def configure(conf):
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	conf.env.append_value('CFLAGS', '-march=native')
+	conf.env.append_value('CFLAGS', '-Wno-unused-function')
 
 	conf.env.append_value('LIB_COMB', conf.env.LIB_Z + conf.env.LIB_BZ2 + conf.env.LIB_PTHREAD)
 	conf.env.append_value('DEFINES_COMB', conf.env.DEFINES_Z + conf.env.DEFINES_BZ2)
@@ -41,7 +42,6 @@ def build(bld):
 	bld.recurse('arch')
 
 	bld.objects(source = 'aw.c', target = 'aw.o')
-	bld.objects(source = 'comb.c', target = 'comb.o')
 	bld.objects(source = 'fna.c', target = 'fna.o')
 	bld.objects(source = 'gaba.c', target = 'gaba_linear.o', includes = ['.'], defines = ['SUFFIX', 'MODEL=LINEAR'])
 	bld.objects(source = 'gaba.c', target = 'gaba_affine.o', includes = ['.'], defines = ['SUFFIX', 'MODEL=AFFINE'])
