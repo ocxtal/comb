@@ -432,22 +432,26 @@ void *comb_source(
 	struct comb_worker_args_s *a = (struct comb_worker_args_s *)arg;
 
 	/* get the next iterator */
-	struct sr_gref_s *q = sr_get_iter(a->query);
-	if(q == NULL) {
-		/* reached the end */
-		return(NULL);
+	struct sr_gref_s *q = NULL;
+	while((q = sr_get_iter(a->query)) != NULL) {
+		debug("iterator fetched q(%p), iter(%p)", q, q->iter);
+
+		if(q->iter != NULL) {
+			/* valid iterator was returned, create worker_item object */
+			struct comb_worker_item_s *i = (struct comb_worker_item_s *)lmm_malloc(
+				q->lmm, sizeof(struct comb_worker_item_s));
+
+			/* init item */
+			*i = (struct comb_worker_item_s){
+				.lmm = q->lmm,
+				.q = q
+			};
+			return((void *)i);
+		}
 	}
 
-	/* create worker_item object */
-	struct comb_worker_item_s *i = (struct comb_worker_item_s *)lmm_malloc(
-		q->lmm, sizeof(struct comb_worker_item_s));
-
-	/* init item */
-	*i = (struct comb_worker_item_s){
-		.lmm = q->lmm,
-		.q = q
-	};
-	return((void *)i);
+	/* reached the end */
+	return(NULL);
 }
 
 /**
@@ -462,7 +466,7 @@ void *comb_worker(
 	struct comb_worker_item_s *i = (struct comb_worker_item_s *)item;
 
 	/* do alignment */
-	i->aln = ggsea_align(a->ctx, i->q->gref);
+	i->aln = ggsea_align(a->ctx, i->q->gref, i->q->iter);
 	return((void *)i);
 }
 
@@ -532,9 +536,7 @@ int comb_run(
 
 
 	/* build read pool */
-	query = (strcmp(params->ref_name, params->query_name) == 0)
-		? ref
-		: sr_init(params->query_name,
+	query = sr_init(params->query_name,
 			SR_PARAMS(
 				.k = params->k,
 				.seq_direction = SR_FW_ONLY,
@@ -602,7 +604,6 @@ int main(int argc, char *argv[])
 	/* option parsers */
 	struct comb_params_s *(*parse_args)(int argc, char *argv[]) = comb_parse_args;
 	if(strcmp(argv[1], "unittest") == 0) {
-		argc--; argv++;
 		return(unittest_main(argc, argv));
 	}
 

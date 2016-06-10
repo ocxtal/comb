@@ -57,6 +57,12 @@ void hmap_clean(
 	hmap_t *hmap);
 
 /**
+ * @fn hmap_flush
+ */
+void hmap_flush(
+	hmap_t *hmap);
+
+/**
  * @fn hmap_get_id
  * @brief returns index in the object array
  */

@@ -72,8 +72,8 @@ ngx_rbtree_node_t *ngx_rbtree_find_key_right(ngx_rbtree_t *tree, int64_t key);
 ngx_rbtree_node_t *ngx_rbtree_find_left(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
 ngx_rbtree_node_t *ngx_rbtree_find_right(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
 
-typedef void (*ngx_rbtree_walk_pt) (ngx_rbtree_node_t **node, ngx_rbtree_node_t *sentinel);
-void ngx_rbtree_walk(ngx_rbtree_t *tree, ngx_rbtree_walk_pt walk);
+typedef void (*ngx_rbtree_walk_pt) (ngx_rbtree_node_t **node, ngx_rbtree_node_t *sentinel, void *ctx);
+void ngx_rbtree_walk(ngx_rbtree_t *tree, ngx_rbtree_walk_pt walk, void *ctx);
 
 #define ngx_rbt_red(node)               ((node)->color = 1)
 #define ngx_rbt_black(node)             ((node)->color = 0)

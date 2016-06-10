@@ -24,6 +24,17 @@
 #define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
+ * @struct tree_vec_s
+ */
+struct tree_vec_s {
+	struct tree_vec_s *next;
+	struct tree_vec_s *prev;
+	int64_t cnt;
+	int64_t pad;
+	uint8_t v[];
+};
+
+/**
  * @struct tree_s
  */
 struct tree_s {
@@ -32,14 +43,19 @@ struct tree_s {
 	uint32_t pad;
 	struct tree_params_s params;
 
-	int64_t vsize;
+	/* vector pointers */
+	uint8_t *v;
 	int64_t vrem;
-	uint8_t *v, *vhead, *vroot;
+	struct tree_vec_s *vhead, *vroot;
+
+	/* tree */
 	ngx_rbtree_t t;
 	ngx_rbtree_node_t sentinel;
+
+	/* working buffer */
+	tree_walk_t fn;
+	void *ctx;
 };
-#define _next_v(v)					( *((uint8_t **)v) )
-#define _tail(v)					( (struct tree_node_intl_s *)(v) )
 
 /**
  * @struct tree_node_intl_s
@@ -53,20 +69,6 @@ _static_assert(offsetof(struct tree_node_s, key) == TREE_OBJECT_OFFSET);
 _static_assert(offsetof(struct tree_node_intl_s, h.key) == TREE_OBJECT_OFFSET);
 _static_assert(tree_get_object(NULL) == (void *)TREE_OBJECT_OFFSET);
 
-/**
- * @fn tree_free_elem
- */
-static
-void tree_free_elem(
-	ngx_rbtree_node_t **node,
-	ngx_rbtree_node_t *sentinel)
-{
-	if(*node != sentinel && (*node)->data != 0xff) {
-		debug("free node(%p), sentinel(%p)", *node, sentinel);
-		free(*node);
-	}
-	return;
-}
 
 /**
  * @fn tree_clean
@@ -77,12 +79,10 @@ void tree_clean(
 	struct tree_s *tree = (struct tree_s *)_tree;
 	if(tree == NULL) { return; }
 
-	ngx_rbtree_walk(&tree->t, (ngx_rbtree_walk_pt)tree_free_elem);
-
 	lmm_t *lmm = tree->lmm;
-	uint8_t *v = tree->vroot;
+	struct tree_vec_s *v = tree->vroot;
 	while(v != NULL) {
-		uint8_t *vnext = _next_v(v);
+		struct tree_vec_s *vnext = v->next;
 		lmm_free(lmm, v); v = vnext;
 	}
 	lmm_free(lmm, tree);
@@ -113,21 +113,52 @@ tree_t *tree_init(
 	tree->params = *params;
 
 	/* init vector */
-	tree->vsize = tree->vrem = TREE_INIT_ELEM_CNT;
-	tree->v = tree->vhead = tree->vroot = lmm_malloc(lmm,
-		2 * sizeof(uint8_t *) + tree->vsize * tree->object_size);
-	_next_v(tree->v) = NULL;
+	tree->vhead = tree->vroot = (struct tree_vec_s *)lmm_malloc(lmm,
+		sizeof(struct tree_vec_s) + TREE_INIT_ELEM_CNT * tree->object_size);
+	tree->vhead->next = NULL;			/* dual linked list */
+	tree->vhead->prev = NULL;
+	tree->vhead->cnt = TREE_INIT_ELEM_CNT;
+
+	tree->v = tree->vhead->v;
+	tree->vrem = tree->vhead->cnt;
 
 	/* init free list */
-	struct tree_node_intl_s *tail = (struct tree_node_intl_s *)(tree->v += 2 * sizeof(uint8_t *));
+	struct tree_node_intl_s *tail = (struct tree_node_intl_s *)tree->v;
 	tail->h.key = (int64_t)NULL;
-	// tail->h.data = 0xff;
+	debug("vector inited, v(%p), head(%p), root(%p)", tree->v, tree->vhead, tree->vroot);
+
+	/* init tree */
+	ngx_rbtree_init(&tree->t, &tree->sentinel, ngx_rbtree_insert_value);
+	tree->sentinel.left = (void *)0x01;
+	tree->sentinel.right = (void *)0x02;
+	tree->sentinel.data = 0xff;
+	return((tree_t *)tree);
+}
+
+/**
+ * @fn tree_flush
+ */
+void tree_flush(
+	tree_t *_tree)
+{
+	struct tree_s *tree = (struct tree_s *)_tree;
+	if(tree == NULL) { return; }
+
+	/* init v */
+	tree->vhead = tree->vroot;
+
+	tree->v = tree->vhead->v;
+	tree->vrem = tree->vhead->cnt;
+
+	/* init free list */
+	struct tree_node_intl_s *tail = (struct tree_node_intl_s *)tree->v;
+	tail->h.key = (int64_t)NULL;
 	debug("vector inited, v(%p), head(%p), root(%p)", tree->v, tree->vhead, tree->vroot);
 
 	/* init tree */
 	ngx_rbtree_init(&tree->t, &tree->sentinel, ngx_rbtree_insert_value);
 	tree->sentinel.data = 0xff;
-	return((tree_t *)tree);
+	return;
 }
 
 /**
@@ -139,7 +170,7 @@ tree_node_t *tree_create_node(
 	tree_t *_tree)
 {
 	struct tree_s *tree = (struct tree_s *)_tree;
-	struct tree_node_intl_s *tail = _tail(tree->v);
+	struct tree_node_intl_s *tail = (struct tree_node_intl_s *)tree->v;
 	struct tree_node_intl_s *node = NULL;
 
 	/* check the recycle list */
@@ -156,19 +187,28 @@ tree_node_t *tree_create_node(
 		tree->v += tree->object_size;
 
 		if(--tree->vrem <= 0) {
-			/* add new vector */
-			tree->vrem = (tree->vsize *= 2);
-			tree->vhead = tree->v = (_next_v(tree->vhead) = lmm_malloc(tree->lmm,
-				2 * sizeof(uint8_t *) + tree->vsize * tree->object_size));
-			_next_v(tree->v) = NULL;
+			if(tree->vhead->next == NULL) {
+				/* add new vector */
+				int64_t next_cnt = tree->vhead->cnt * 2;
+				struct tree_vec_s *v = tree->vhead->next = (struct tree_vec_s *)lmm_malloc(
+					tree->lmm, sizeof(struct tree_vec_s) + next_cnt * tree->object_size);
+				v->next = NULL;
+				v->prev = tree->vhead;
+				v->cnt = next_cnt;
+			}
 
-			/* adjust v */
-			tree->v += 2 * sizeof(uint8_t *);
+			/* follow the forward link */
+			tree->vhead = tree->vhead->next;
+
+			/* init v and vrem */
+			tree->v = tree->vhead->v;
+			tree->vrem = tree->vhead->cnt;
 			debug("added new vector, v(%p), vhead(%p), vroot(%p)", tree->v, tree->vhead, tree->vroot);
 		}
 
 		/* copy root of free list */
-		_tail(tree->v)->h.key = node->h.key;
+		struct tree_node_intl_s *tail = (struct tree_node_intl_s *)tree->v;
+		tail->h.key = node->h.key;
 		debug("new node created, node(%p)", node);
 	}
 
@@ -208,7 +248,7 @@ void tree_remove(
 
 	if(node->h.data == 0xff) {
 		/* append node to the head of freed list */
-		struct tree_node_intl_s *tail = _tail(tree->v);
+		struct tree_node_intl_s *tail = (struct tree_node_intl_s *)tree->v;
 		node->h.key = tail->h.key;
 		tail->h.key = (int64_t)node;
 	}
@@ -278,6 +318,33 @@ tree_node_t *tree_right(
 {
 	struct tree_s *tree = (struct tree_s *)_tree;
 	return((tree_node_t *)ngx_rbtree_find_right(&tree->t, (ngx_rbtree_node_t *)node));
+}
+
+/**
+ * @fn tree_walk
+ *
+ * @brief walk over the tree
+ */
+void tree_walk_intl(
+	ngx_rbtree_node_t **node,
+	ngx_rbtree_node_t *sentinel,
+	void *_ctx)
+{
+	tree_t *tree = (tree_t *)_ctx;
+	tree->fn((tree_node_t *)(*node), tree->ctx);
+	return;
+}
+void tree_walk(
+	tree_t *_tree,
+	tree_walk_t _fn,
+	void *_ctx)
+{
+	struct tree_s *tree = (struct tree_s *)_tree;
+
+	tree->fn = _fn;
+	tree->ctx = _ctx;
+	ngx_rbtree_walk(&tree->t, (ngx_rbtree_walk_pt)tree_walk_intl, (void *)tree);
+	return;
 }
 
 
@@ -408,7 +475,12 @@ unittest()
 	tree_clean(tree);
 }
 
-/* create multiple nodes */
+/* create multiple nodes with malloc */
+void unittest_free_node(tree_node_t *node, void *ctx)
+{
+	free(node);
+	return;
+}
 unittest()
 {
 	tree_t *tree = tree_init(8, NULL);
@@ -493,10 +565,74 @@ unittest()
 		assert(obj[1] == i, "obj[1](%lld), val(%lld)", obj[1], i);
 	}
 
+	/* cleanup */
+	tree_walk(tree, unittest_free_node, NULL);
 	tree_clean(tree);
 }
 
-/* search_key_left / search_key_right / left / right */
+/* flush, duplicated key */
+unittest()
+{
+	tree_t *tree = tree_init(8, NULL);
+
+	#define _shuf(x)		( (0xff & ((i<<4) | (i>>4))) )
+
+	debug("tree->root(%p), tree->sentinel(%p)", tree->t.root, tree->t.sentinel);
+
+	/* insert */
+	for(int64_t i = 0; i < 65536; i++) {
+		debug("insert node i(%lld)", i);
+		tree_node_t *n = tree_create_node(tree);
+		assert(n != NULL);
+
+		int64_t *o = (int64_t *)tree_get_object(n);
+		o[0] = _shuf(i)<<1;
+		o[1] = 65536 - i;
+
+		tree_insert(tree, n);
+	}
+
+	/* flush and insert again */
+	tree_flush(tree);
+	for(int64_t i = 0; i < 65536; i++) {
+		debug("insert node again i(%lld)", i);
+		tree_node_t *n = tree_create_node(tree);
+		assert(n != NULL);
+
+		int64_t *o = (int64_t *)tree_get_object(n);
+		o[0] = _shuf(i)<<1;
+		o[1] = i;
+
+		tree_insert(tree, n);
+	}
+
+	/* search (1) */
+	for(int64_t i = 0; i < 256; i++) {
+		tree_node_t *n = tree_search_key(tree, i<<1);
+		assert(n != NULL);
+	}
+	for(int64_t i = 256; i < 65536; i++) {
+		tree_node_t *n = tree_search_key(tree, i<<1);
+		assert(n == NULL);
+	}
+
+	/* remove */
+	for(int64_t i = 0; i < 65536; i++) {
+		debug("remove node i(%lld)", i);
+		tree_node_t *n = tree_search_key(tree, _shuf(i)<<1);
+		assert(n != NULL);
+		tree_remove(tree, n);
+	}
+
+	/* search (2) */
+	for(int64_t i = 0; i < 256; i++) {
+		tree_node_t *n = tree_search_key(tree, i<<1);
+		assert(n == NULL);
+	}
+	tree_clean(tree);
+}
+
+/* search_key_left / search_key_right / left / right (NULL) */
 unittest()
 {
 	tree_t *tree = tree_init(8, NULL);
@@ -517,16 +653,17 @@ unittest()
 	n = tree_search_key_right(tree, 200);
 	assert(n == NULL);
 
-	tree_clean(tree);
-
 	/* left / right of sentinel */
 	n = tree_left(tree, (tree_node_t *)&tree->sentinel);
 	assert(n == NULL);
 
 	n = tree_right(tree, (tree_node_t *)&tree->sentinel);
 	assert(n == NULL);
+
+	tree_clean(tree);
 }
 
+/* search_key_left / search_key_right / left / right (NULL) */
 unittest()
 {
 	tree_t *tree = tree_init(8, NULL);

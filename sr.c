@@ -269,9 +269,8 @@ void sr_gref_free(
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)_r;
 	if(r == NULL) { return; }
 
-	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); } r->gref = NULL;
 	gref_iter_clean(r->iter); r->iter = NULL;
-
+	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); } r->gref = NULL;
 	if(r->seq_need_free != 0) { fna_seq_free(r->seq); r->seq = NULL; }
 
 	lmm_t *lmm = r->lmm; r->lmm = NULL;

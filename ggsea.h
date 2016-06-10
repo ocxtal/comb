@@ -104,7 +104,8 @@ void ggsea_ctx_clean(
  */
 struct ggsea_result_s ggsea_align(
 	ggsea_ctx_t *_ctx,
-	gref_acv_t const *query);
+	gref_acv_t const *query,
+	gref_iter_t *iter);
 
 /**
  * @fn ggsea_aln_free

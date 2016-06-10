@@ -121,7 +121,7 @@ struct ggsea_ctx_s {
 
 	/* dp context */
 	gaba_dp_t *dp;
-	struct ggsea_node_s *node;			/* node info array */
+	// struct ggsea_node_s *node;			/* node info array */
 	kvec_t(struct ggsea_segq_s) segq;	/* segment queue */
 	uint8_t *margin;
 	struct gref_section_s fw_margin, rv_margin;
@@ -311,6 +311,18 @@ void ggsea_ctx_flush(
 	/* set sequence info */
 	ctx->q = query;
 
+	/* flush hashmap */
+	int64_t hcnt = hmap_get_count(ctx->rep_kmer);
+	for(int64_t i = 0; i < hcnt; i++) {
+		struct ggsea_rep_kmer_cont_s *c = hmap_get_object(ctx->rep_kmer, i);
+		kv_destroy(c->rv);
+		kv_destroy(c->qv);
+	}
+	hmap_flush(ctx->rep_kmer);
+
+	/* flush tree */
+	tree_flush(ctx->tree);
+
 	/* flush queues */
 	kv_hq_clear(ctx->segq);
 
@@ -360,7 +372,16 @@ void ggsea_save_rep_kmer(
 	uint32_t id = hmap_get_id(ctx->rep_kmer,
 		(char const *)&kmer, sizeof(uint64_t));
 	struct ggsea_rep_kmer_cont_s *c = hmap_get_object(ctx->rep_kmer, id);
-	
+
+	if(id == (hmap_get_count(ctx->rep_kmer) - 1)) {
+		kv_init(c->rv);
+		kv_init(c->qv);
+	}
+
+	log("save repetitive kmer(%llx), r(%u, %u), q(%u, %u), rv(%p, %llu), qv(%p, %llu)",
+		kmer, rpos.gid, rpos.pos, qpos.gid, qpos.pos,
+		kv_ptr(c->rv), kv_size(c->rv), kv_ptr(c->qv), kv_size(c->qv));
+
 	/* add rpos */
 	kv_push(c->rv, rpos);
 	if(kv_size(c->rv) > c->vec_size) {
@@ -470,7 +491,13 @@ void ggsea_update_overlap_section(
 	struct ggsea_fill_pair_s pair,
 	struct gaba_result_s const *r)
 {
+	debug("update overlap section r->slen(%u)", r->slen);
+
 	for(int64_t i = 0; i < r->slen; i++) {
+		debug("update overlap section i(%lld), a(%u, %u, %u), b(%u, %u, %u)",
+			i,
+			r->sec[i].aid, r->sec[i].apos, r->sec[i].alen,
+			r->sec[i].bid, r->sec[i].bpos, r->sec[i].blen);
 
 		/* calc p (pos) and q (key) */
 		int64_t sp = r->sec[i].apos + r->sec[i].bpos;
@@ -830,21 +857,32 @@ struct ggsea_fill_pair_s ggsea_extend(
  */
 struct ggsea_result_s ggsea_align(
 	ggsea_ctx_t *_ctx,
-	gref_acv_t const *query)
+	gref_acv_t const *query,
+	gref_iter_t *iter)
 {
 	struct ggsea_ctx_s *ctx = (struct ggsea_ctx_s *)_ctx;
 
 	debug("align entry");
 
+	/* seeding */
+	// gref_iter_t *iter = gref_iter_init(ctx->q);
+
+	debug("check iter(%p)", iter);
+	/*
+	if(query == NULL || iter == NULL) {
+		return((struct ggsea_result_s){
+			.ref = ctx->r,
+			.query = query,
+			.aln = NULL,
+			.cnt = 0
+		});
+	}
+	*/
+
 	/* flush ctxing buffer */
 	ggsea_ctx_flush(ctx, query);
 
-	/* seeding */
-	gref_iter_t *iter = gref_iter_init(ctx->q);
-
-	debug("iter inited");
-
-
+	/* init result container */
 	kvec_t(struct gaba_result_s const *) aln;
 	kv_init(aln);
 
@@ -891,7 +929,7 @@ struct ggsea_result_s ggsea_align(
 	}
 
 	/* cleanup iterator */
-	gref_iter_clean(iter);
+	// gref_iter_clean(iter);
 	debug("done. %llu alignments generated", kv_size(aln));
 
 	return((struct ggsea_result_s){
@@ -908,6 +946,7 @@ struct ggsea_result_s ggsea_align(
 void ggsea_aln_free(
 	ggsea_result_t aln)
 {
+	free((void *)aln.aln);
 	return;
 }
 
@@ -922,7 +961,7 @@ unittest_config(
 #define _str(x)		x, strlen(x)
 #define _seq(x)		(uint8_t const *)(x), strlen(x)
 
-#if 0
+
 /* create conf */
 unittest()
 {
@@ -960,7 +999,7 @@ unittest()
 	ggsea_ctx_clean(sea);
 	ggsea_conf_clean(conf);
 }
-#endif
+
 /* omajinais */
 #define with_default_conf() \
 	.init = (void *(*)(void *))ggsea_conf_init, \
@@ -971,7 +1010,7 @@ unittest()
 
 #define omajinai() \
 	ggsea_conf_t *conf = (ggsea_conf_t *)ctx;
-#if 0
+
 /* omajinai test */
 unittest(with_default_conf())
 {
@@ -993,14 +1032,16 @@ unittest(with_default_conf())
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, idx);
 
 	/* align */
-	ggsea_result_t r = ggsea_align(sea, (gref_acv_t *)idx);
+	gref_iter_t *iter = gref_iter_init(idx);
+	ggsea_result_t r = ggsea_align(sea, (gref_acv_t *)idx, iter);
 	assert(r.aln != NULL, "%p", r.aln);
 
 	ggsea_aln_free(r);
 	ggsea_ctx_clean(sea);
+	gref_iter_clean(iter);
 	gref_clean(idx);
 }
-#endif
+
 /* longer sequence */
 unittest(with_default_conf())
 {
@@ -1023,13 +1064,16 @@ unittest(with_default_conf())
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, ref);
 
 	/* align */
-	ggsea_result_t r = ggsea_align(sea, query);
+	gref_iter_t *iter = gref_iter_init(query);
+	ggsea_result_t r = ggsea_align(sea, query, iter);
 	assert(r.aln != NULL, "%p", r.aln);
 
 	/* cleanup */
 	ggsea_aln_free(r);
 	ggsea_ctx_clean(sea);
+
 	gref_clean(ref);
+	gref_iter_clean(iter);
 	gref_clean(query);
 }
 

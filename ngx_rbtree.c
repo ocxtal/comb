@@ -515,26 +515,26 @@ ngx_rbtree_find_left(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
 }
 
 static void
-ngx_rbtree_walk_intl(ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel, ngx_rbtree_walk_pt walk)
+ngx_rbtree_walk_intl(ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel, ngx_rbtree_walk_pt walk, void *ctx)
 {
 
     if(node->left != sentinel) {
-        ngx_rbtree_walk_intl(node->left, sentinel, walk);
+        ngx_rbtree_walk_intl(node->left, sentinel, walk, ctx);
     }
     if(node->right != sentinel) {
-        ngx_rbtree_walk_intl(node->right, sentinel, walk);
+        ngx_rbtree_walk_intl(node->right, sentinel, walk, ctx);
     }
-    walk(&node, sentinel);
+    walk(&node, sentinel, ctx);
 }
 
 void
-ngx_rbtree_walk(ngx_rbtree_t *tree, ngx_rbtree_walk_pt walk)
+ngx_rbtree_walk(ngx_rbtree_t *tree, ngx_rbtree_walk_pt walk, void *ctx)
 {
     ngx_rbtree_node_t *node = tree->root;
     ngx_rbtree_node_t *sentinel = tree->sentinel;
 
     if(node != sentinel) {
-        ngx_rbtree_walk_intl(node, sentinel, walk);
+        ngx_rbtree_walk_intl(node, sentinel, walk, ctx);
     }
 
     return;

@@ -41,15 +41,21 @@ typedef struct tree_params_s tree_params_t;
 #define TREE_OBJECT_OFFSET		( 32 )
 #define tree_get_object(x)		( (void *)((uint8_t *)(x) + TREE_OBJECT_OFFSET) )
 
+
+/**
+ * @fn tree_init
+ */
+tree_t *tree_init(uint64_t object_size, tree_params_t const *params);
+
 /**
  * @fn tree_clean
  */
 void tree_clean(tree_t *tree);
 
 /**
- * @fn tree_init
+ * @fn tree_flush
  */
-tree_t *tree_init(uint64_t object_size, tree_params_t const *params);
+void tree_flush(tree_t *tree);
 
 /**
  * @fn tree_create_node
@@ -98,6 +104,13 @@ tree_node_t *tree_left(tree_t *tree, tree_node_t const *node);
  * @brief returns the right next node
  */
 tree_node_t *tree_right(tree_t *tree, tree_node_t const *node);
+
+/**
+ * @fn tree_walk
+ * @breif iterate over tree
+ */
+typedef void (*tree_walk_t)(tree_node_t *node, void *ctx);
+void tree_walk(tree_t *tree, tree_walk_t fn, void *ctx);
 
 /**
  * end of tree.c

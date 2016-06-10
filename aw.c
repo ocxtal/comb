@@ -237,7 +237,7 @@ void sam_print_seq_qual(
 	/* determine direction and fix seq pointer */
 	uint8_t const *seq = (gref_dir(curr->bid) == GREF_FW)
 		? bsec->base
-		: gref_rev_ptr(bsec->base, lim) - bsec->len;
+		: gref_rev_ptr(bsec->base, lim) - (bsec->len - 1);
 	
 	int64_t hlen = (gref_dir(curr->bid) == GREF_FW)
 		? curr->bpos

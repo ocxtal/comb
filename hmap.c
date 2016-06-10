@@ -251,6 +251,24 @@ void hmap_clean(
 }
 
 /**
+ * @fn hmap_flush
+ */
+void hmap_flush(
+	hmap_t *_hmap)
+{
+	struct hmap_s *hmap = (struct hmap_s *)_hmap;
+
+	if(hmap != NULL) {
+		lmm_kv_clear(hmap->lmm, hmap->key_arr);
+		lmm_kv_clear(hmap->lmm, hmap->object_arr);
+
+		hmap->next_id = 0;
+		memset(hmap->table, 0xff, sizeof(struct hmap_pair_s) * (hmap->mask + 1));
+	}
+	return;
+}
+
+/**
  * @fn hmap_object_get_ptr
  */
 static _force_inline
@@ -387,6 +405,7 @@ uint32_t hmap_get_id(
 
 		/* reserve working area */
 		uint8_t tmp[hmap->object_size];
+		// memset(tmp, 0, hmap->object_size);
 		struct hmap_header_intl_s *h = (struct hmap_header_intl_s *)tmp;
 
 		/* push key string to key_arr */
@@ -485,7 +504,7 @@ unittest()
 	/* append key */
 	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		uint32_t id = hmap_get_id(hmap, make_args(i));
-		
+
 		assert((int64_t)id == i, "i(%lld), id(%lld)", i, id);
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
@@ -501,6 +520,42 @@ unittest()
 
 	/* get key in reverse order */
 	for(int64_t i = UNITTEST_KEY_COUNT - 1; i >= 0; i--) {
+		struct hmap_key_s k = hmap_get_key(hmap, i);
+
+		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
+		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+	}
+	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
+
+	hmap_clean(hmap);
+}
+
+/* flush */
+unittest()
+{
+	hmap_t *hmap = hmap_init(sizeof(hmap_header_t), NULL);
+
+	/* append key */
+	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
+		uint32_t id = hmap_get_id(hmap, make_args(i));
+
+		assert((int64_t)id == i, "i(%lld), id(%lld)", i, id);
+	}
+	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
+
+	/* flush the content */
+	hmap_flush(hmap);
+
+	/* append again */
+	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
+		uint32_t id = hmap_get_id(hmap, make_args(i));
+
+		assert((int64_t)id == i, "i(%lld), id(%lld)", i, id);
+	}
+	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
+
+	/* get key */
+	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
