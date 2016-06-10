@@ -85,12 +85,12 @@ void sr_dump_seq(
 	while((seq = fna_read(sr->fna)) != NULL) {
 
 		if(seq->type == FNA_SEGMENT) {
-			
+			/*
 			for(int64_t i = 0; i < seq->s.segment.seq_len; i++) {
 				fprintf(stderr, "%c", " AC G   T"[seq->s.segment.seq[i]]);
 			}
 			fprintf(stderr, "\n");
-			
+			*/
 
 			gref_append_segment(pool,
 				seq->s.segment.name,
