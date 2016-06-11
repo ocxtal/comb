@@ -59,10 +59,16 @@ struct aw_s {
 	struct aw_conf_s conf;		/* function pointers and misc */
 	uint8_t format;				/* AW_SAM, AW_GPA, ... */
 	char clip;					/* cigar operation to represent clip operation ('S' or 'H') */
-	uint8_t pad[2];
+	uint8_t pad1[2];
 	uint32_t program_id;
 	char *program_name;
 	char *command;				/* '\t' must be substituted to ' ' */
+	
+	/* alignment name in gam format */
+	char *aln_name_prefix;
+	uint32_t aln_name_len;
+	uint32_t pad2;
+	int64_t aln_cnt;
 };
 
 
@@ -412,6 +418,11 @@ void gpa_write_segment(
 	/* write tag ('A': alignment) */
 	zfprintf(aw->fp, "A\t");
 
+	/* alignment name */
+	aw_print_str(aw->fp, aw->aln_name_prefix, aw->aln_name_len);
+	zfprintf(aw->fp, "%lld\t", aw->aln_cnt);
+	aw->aln_cnt++;
+
 	/* ref name */
 	aw_print_str(aw->fp,
 		gref_get_name(r, sec->aid).str,
@@ -423,6 +434,10 @@ void gpa_write_segment(
 		(gref_dir(sec->aid) == GREF_FW)
 			? sec->apos
 			: gref_get_section(r, sec->aid)->len - sec->apos);
+	zfputc(aw->fp, '\t');
+
+	/* ref len */
+	aw_print_num(aw->fp, sec->alen);
 	zfputc(aw->fp, '\t');
 
 	/* ref direction */
@@ -442,6 +457,10 @@ void gpa_write_segment(
 			: gref_get_section(r, sec->bid)->len - sec->bpos);
 	zfputc(aw->fp, '\t');
 
+	/* query len */
+	aw_print_num(aw->fp, sec->blen);
+	zfputc(aw->fp, '\t');
+
 	/* query direction */
 	zfputc(aw->fp, (gref_dir(sec->bid) == GREF_FW) ? '+' : '-');
 	zfputc(aw->fp, '\t');
@@ -457,11 +476,11 @@ void gpa_write_segment(
 
 	/* optional fields */
 	/* mapping quality */
-	zfprintf(aw->fp, "MQ:i:%d\t", 255);
+	zfprintf(aw->fp, "MQ:i:%d\n", 255);
 
 	/* alen and blen */
-	zfprintf(aw->fp, "RL:i:%u\tQL:i:%u", sec->alen, sec->blen);
-	zfputc(aw->fp, '\n');
+	// zfprintf(aw->fp, "RL:i:%u\tQL:i:%u", sec->alen, sec->blen);
+	// zfputc(aw->fp, '\n');
 	return;
 }
 
@@ -591,6 +610,13 @@ aw_t *aw_init(
 		? strdup_rm_tab(params->program_name) : NULL;
 	aw->command = (params->command != NULL)
 		? strdup_rm_tab(params->command) : NULL;
+	aw->aln_name_prefix = (params->name_prefix != NULL)
+		? strdup_rm_tab(params->name_prefix) : NULL;
+	aw->aln_name_len = (params->name_prefix != NULL)
+		? strlen(aw->aln_name_prefix) : 0;
+
+	/* init name id counter */
+	aw->aln_cnt = 0;
 
 	/* open file */
 	aw->fp = zfopen(path, aw->conf.mode);
@@ -608,6 +634,7 @@ _aw_init_error_handler:;
 		zfclose(aw->fp); aw->fp = NULL;
 		free(aw->program_name); aw->program_name = NULL;
 		free(aw->command); aw->command = NULL;
+		free(aw->aln_name_prefix); aw->aln_name_prefix = NULL;
 	}
 	free(aw);
 	return(NULL);
@@ -629,6 +656,7 @@ void aw_clean(
 		zfclose(aw->fp); aw->fp = NULL;
 		free(aw->program_name); aw->program_name = NULL;
 		free(aw->command); aw->command = NULL;
+		free(aw->aln_name_prefix); aw->aln_name_prefix = NULL;
 	}
 	free(aw);
 	return;
@@ -1022,14 +1050,47 @@ unittest()
 
 	char const *gpa =
 		"H\tVN:Z:0.1\n"
-		"A\tsec0\t0\t+\tsec0\t0\t+\t4M\tMQ:i:255\tRL:i:4\tQL:i:4\n"
-		"A\tsec1\t0\t+\tsec1\t0\t+\t4M\tMQ:i:255\tRL:i:4\tQL:i:4\n"
-		"A\tsec2\t0\t+\tsec2\t0\t+\t8M\tMQ:i:255\tRL:i:8\tQL:i:8\n"
-		"A\tsec0\t0\t+\tsec2\t4\t-\t4M\tMQ:i:255\tRL:i:4\tQL:i:4\n"
-		"A\tsec1\t0\t+\tsec1\t4\t-\t4M\tMQ:i:255\tRL:i:4\tQL:i:4\n"
-		"A\tsec2\t0\t+\tsec0\t4\t-\t2M\tMQ:i:255\tRL:i:2\tQL:i:2\n"
-		"A\tsec0\t0\t+\tsec0\t0\t+\t4M\tMQ:i:255\tRL:i:4\tQL:i:4\n"
-		"A\tsec2\t0\t+\tsec2\t0\t+\t8M\tMQ:i:255\tRL:i:8\tQL:i:8\n";
+		"A\t0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\t1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\t2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n"
+		"A\t3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\tMQ:i:255\n"
+		"A\t4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\tMQ:i:255\n"
+		"A\t5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\tMQ:i:255\n"
+		"A\t6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\t7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n";
+	char *rbuf = (char *)malloc(1024);
+
+	zf_t *fp = zfopen(path, "r");
+	int64_t size = zfread(fp, rbuf, 1024);
+
+	assert(size == strlen(gpa), "size(%lld, %lld)", size, strlen(gpa));
+	assert(memcmp(rbuf, gpa, MIN2(size, strlen(gpa))) == 0, "%s%s, %s, %s", dump(rbuf, size), dump(gpa, strlen(gpa)), rbuf, gpa);
+
+	zfclose(fp);
+	free(rbuf);
+	remove(path);
+}
+
+/* gpa with prefix */
+unittest()
+{
+	omajinai();
+
+	char const *path = "./test.gpa";
+	aw_t *aw = aw_init(path, c->idx, AW_PARAMS( .name_prefix = "aln" ));
+	aw_append_alignment(aw, c->idx, c->idx, (gaba_result_t const *const *)c->res, c->cnt);
+	aw_clean(aw);
+
+	char const *gpa =
+		"H\tVN:Z:0.1\n"
+		"A\taln0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\taln1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\taln2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n"
+		"A\taln3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\tMQ:i:255\n"
+		"A\taln4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\tMQ:i:255\n"
+		"A\taln5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\tMQ:i:255\n"
+		"A\taln6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
+		"A\taln7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n";
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");

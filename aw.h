@@ -47,6 +47,7 @@ struct aw_params_s {
 	uint32_t program_id;
 	char const *program_name;
 	char const *command;
+	char const *name_prefix;
 };
 typedef struct aw_params_s aw_params_t;
 #define AW_PARAMS(...)		( &((aw_params_t const){ __VA_ARGS__ }) )
