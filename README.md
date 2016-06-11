@@ -1,6 +1,6 @@
 # Comb aligner
 
-Comb aligner is a prototype implementation of a graphical local alignment algorithm, calculating a set of high-scoring paths between two nucleotide string graphs. The aligner accepts FASTA, FASTQ, and [GFA](https://github.com/GFA-spec/GFA-spec) format for the input (query and reference) sequences and dumps alignments in the [SAM](https://github.com/samtools/hts-specs) or a [Graphical Pairwise Alignment (GPA)](https://github.com/ocxtal/gpa) format.
+Comb aligner is a prototype implementation of a graphical local alignment algorithm, calculating a set of high-scoring paths between two nucleotide string graphs. The aligner accepts FASTA, FASTQ, and [GFA](https://github.com/GFA-spec/GFA-spec) format for the input (query and reference) sequences and dumps alignments in the [SAM](https://github.com/samtools/hts-specs) or the [Graphical Pairwise Alignment (GPA)](https://github.com/ocxtal/gpa) format.
 
 
 ## Overview of the algorithm
