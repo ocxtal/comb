@@ -486,8 +486,11 @@ void comb_drain(
 
 	/* cleanup */
 	ggsea_aln_free(i->aln);
+
+	/* lmm must be freed before gref_free */
+	struct sr_gref_s *q = i->q;
 	lmm_free(i->lmm, item);
-	sr_gref_free(i->q);
+	sr_gref_free(q);
 	return;
 }
 
