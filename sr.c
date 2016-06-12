@@ -169,6 +169,11 @@ struct sr_gref_s *sr_get_iter_graph(
 	/* check if archive is already built */
 	if(sr->acv == NULL) {
 		sr_dump_seq(sr);
+		if(sr->acv == NULL) {
+			return(NULL);
+		}
+	} else {
+		return(NULL);
 	}
 
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)malloc(
@@ -176,9 +181,8 @@ struct sr_gref_s *sr_get_iter_graph(
 	*r = (struct sr_gref_intl_s){
 		.lmm = NULL,
 		.path = sr->path,
-		.gref = NULL,
-		.iter = gref_iter_init(sr->acv),
-		.gref_need_free = 1
+		.gref = sr->acv,
+		.iter = gref_iter_init(sr->acv)
 	};
 	return((struct sr_gref_s *)r);
 }
