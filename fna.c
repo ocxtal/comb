@@ -462,6 +462,7 @@ void fna_seq_make_margin(
 	for(int64_t i = 0; i < len; i++) {
 		lmm_kv_at(*v, base + i) = 0;
 	}
+	lmm_kv_size(*v) = base + len;
 	return;
 }
 
@@ -857,7 +858,7 @@ struct fna_seq_intl_s *fna_read_fasta(
 		lmm_kv_ptr(v) + fna->head_margin);
 	char *name = (char *)(r + 1);
 	uint8_t *seq = (uint8_t *)(name + (name_len + 1) + r->seq_head_margin);
-	uint8_t *qual = (uint8_t *)(seq + seq_len + 1);
+	uint8_t *qual = (uint8_t *)(seq + (seq_len + 1) + r->seq_tail_margin);
 	int64_t qual_len = 0;
 
 	return(_fna_pack_segment(r,
@@ -936,7 +937,7 @@ struct fna_seq_intl_s *fna_read_fastq(
 		lmm_kv_ptr(v) + fna->head_margin);
 	char *name = (char *)(r + 1);
 	uint8_t *seq = (uint8_t *)(name + (name_len + 1) + r->seq_head_margin);
-	uint8_t *qual = (uint8_t *)(seq + seq_len + 1);
+	uint8_t *qual = (uint8_t *)(seq + (seq_len + 1) + r->seq_tail_margin);
 
 	return(_fna_pack_segment(r,
 		name, name_len,
@@ -1058,7 +1059,7 @@ struct fna_seq_intl_s *fna_read_gfa_seq(
 		lmm_kv_ptr(v) + fna->head_margin);
 	char *name = (char *)(r + 1);
 	uint8_t *seq = (uint8_t *)(name + (name_len + 1) + r->seq_head_margin);
-	uint8_t *qual = (uint8_t *)(seq + seq_len + 1);
+	uint8_t *qual = (uint8_t *)(seq + (seq_len + 1) + r->seq_tail_margin);
 	int64_t qual_len = 0;
 
 	return(_fna_pack_segment(r,
