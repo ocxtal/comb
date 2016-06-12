@@ -76,6 +76,8 @@ void sr_dump_seq(
 		.k = sr->params.k,
 		.seq_direction = sr->params.seq_direction,
 		.seq_format = GREF_4BIT,
+		.seq_head_margin = 32,
+		.seq_tail_margin = 32,
 		.copy_mode = GREF_COPY,
 		.num_threads = sr->params.num_threads,
 		.lmm = NULL));
@@ -304,7 +306,9 @@ sr_t *sr_init(
 	/* create fna object */
 	sr->fna = fna_init(path, FNA_PARAMS(
 		.file_format = params->format,
-		.seq_encode = FNA_4BIT));
+		.seq_encode = FNA_4BIT,
+		.seq_head_margin = 32,
+		.seq_tail_margin = 32));
 	if(sr->fna == NULL) {
 		goto _sr_init_error_handler;
 	}
