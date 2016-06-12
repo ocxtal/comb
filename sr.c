@@ -98,8 +98,8 @@ void sr_dump_seq(
 				seq->s.segment.seq,
 				seq->s.segment.seq_len);
 		} else if(seq->type == FNA_LINK) {
-			/* check cigar */
-			if(seq->s.link.cigar_len != 0) {
+			/* check cigar starts from '0' (indicating cigar is "0M") */
+			if(seq->s.link.cigar[0] != '0') {
 				debug("overlapping link is not supported.");
 				break;
 			} else {

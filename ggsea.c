@@ -624,6 +624,8 @@ gaba_fill_t const *ggsea_extend_update_queue_r(
 
 	/* push section pairs */
 	for(int64_t i = 0; i < rlink.len; i++) {
+		debug("push queue, fill(%p), psum(%lld), r(%u), q(%u)",
+			fill, fill->psum, rlink.gid_arr[i], qsec->gid);
 		kv_hq_push(ctx->segq, ((struct ggsea_segq_s){
 			.psum = (int64_t)fill->psum,
 			.fill = fill,
@@ -671,6 +673,9 @@ gaba_fill_t const *ggsea_extend_update_queue_q(
 
 	/* push section pair if all the incoming edges are scaned */
 	for(int64_t i = 0; i < qlink.len; i++) {
+		debug("push queue, fill(%p), psum(%lld), r(%u), q(%u)",
+			fill, fill->psum, rsec->gid, qlink.gid_arr[i]);
+
 		kv_hq_push(ctx->segq, ((struct ggsea_segq_s){
 			.psum = (int64_t)fill->psum,
 			.fill = fill,
@@ -712,6 +717,9 @@ gaba_fill_t const *ggsea_extend_update_queue_rq(
 	/* push section pair if all the incoming edges are scaned */
 	for(int64_t i = 0; i < rlink.len; i++) {
 		for(int64_t j = 0; j < qlink.len; j++) {
+			debug("push queue, fill(%p), psum(%lld), r(%u), q(%u)",
+				fill, fill->psum, rlink.gid_arr[i], qlink.gid_arr[j]);
+
 			kv_hq_push(ctx->segq, ((struct ggsea_segq_s){
 				.psum = (int64_t)fill->psum,
 				.fill = fill,
@@ -787,6 +795,9 @@ gaba_fill_t const *ggsea_extend_intl(
 	/* loop */
 	while(kv_hq_size(ctx->segq) > 0) {
 		struct ggsea_segq_s seg = kv_hq_pop(ctx->segq);
+		debug("pop queue, fill(%p), psum(%lld), r(%u), q(%u)",
+			seg.fill, seg.psum, seg.rgid, seg.qgid);
+
 		if(seg.fill == NULL) {
 			debug("fill == NULL (unexpected NULL pointer detected)");
 			break;
@@ -800,9 +811,11 @@ gaba_fill_t const *ggsea_extend_intl(
 		 */
 
 		/* extend */
+		rsec = gref_get_section(ctx->r, seg.rgid);
+		qsec = gref_get_section(ctx->q, seg.qgid);
 		gaba_fill_t *fill = gaba_dp_fill(ctx->dp, seg.fill,
-			(struct gaba_section_s const *)gref_get_section(ctx->r, seg.rgid),
-			(struct gaba_section_s const *)gref_get_section(ctx->q, seg.qgid));
+			(struct gaba_section_s const *)rsec,
+			(struct gaba_section_s const *)qsec);
 
 		/* update max */
 		debug("check max, max(%lld), prev_max(%lld)", fill->max, max->max);

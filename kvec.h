@@ -169,7 +169,7 @@ int main() {
 	} \
 }
 #define kv_hq_pop(v) ({ \
-	debug("push, n(%llu), m(%llu)", (v).n, (v).m); \
+	debug("pop, n(%llu), m(%llu)", (v).n, (v).m); \
 	uint64_t i = 1, j = 2; \
 	(v).a[0] = (v).a[i]; \
 	(v).a[i] = (v).a[--(v).n]; \

@@ -1099,7 +1099,7 @@ struct fna_seq_intl_s *fna_read_gfa_link(
 	}
 
 	/* direction */
-	int64_t from_ori = (zfgetc(fna->fp) == '+') ? 1 : -1;
+	int64_t from_ori = (zfgetc(fna->fp) == '+') ? 0 : 1;
 	if(zfgetc(fna->fp) != '\t') {
 		fna->status = FNA_ERROR_BROKEN_FORMAT;
 		return(NULL);
@@ -1113,7 +1113,7 @@ struct fna_seq_intl_s *fna_read_gfa_link(
 	}
 
 	/* direction */
-	int64_t to_ori = (zfgetc(fna->fp) == '+') ? 1 : -1;
+	int64_t to_ori = (zfgetc(fna->fp) == '+') ? 0 : 1;
 	if(zfgetc(fna->fp) != '\t') {
 		fna->status = FNA_ERROR_BROKEN_FORMAT;
 		return(NULL);
