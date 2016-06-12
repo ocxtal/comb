@@ -54,7 +54,7 @@ A penalty for a gap with length k is represented in a Gi + k*Ge form.
 Linear-to-linear alignment is the normal, conventional alignment concept that is implemented in many programs like the BLAST, BWA and so on... The comb aligner can handle the similar tasks, taking FASTA reference and FASTA/Q reads then generating SAM output.
 
 ```
-comb example/linear1.fa example/linear2.fa test.sam
+comb examples/linear1.fa examples/linear2.fa test.sam
 ```
 
 ### Linear-to-graph
@@ -62,7 +62,7 @@ comb example/linear1.fa example/linear2.fa test.sam
 The GFA format is acceptable as an input reference sequence object. The sequence segments in the GFA file are indexed in the same way as the linear references. The alignments are reported in the GPA format by default.
 
 ```
-comb example/graph1.fa example/linear2.fa test.gpa
+comb examples/graph1.fa examples/linear2.fa test.gpa
 ```
 
 ### Graph-to-graph
@@ -70,7 +70,7 @@ comb example/graph1.fa example/linear2.fa test.gpa
 The comb aligner can find a set of high-score paths between two graphical sequence objects.
 
 ```
-comb example/graph1.fa example/graph2.fa test.gpa
+comb examples/graph1.fa examples/graph2.fa test.gpa
 ```
 
 ## Notes
