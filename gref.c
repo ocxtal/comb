@@ -1411,8 +1411,10 @@ int64_t *gref_build_kmer_idx_table(
 	lmm_kvec_t(int64_t) kmer_idx;
 	lmm_kv_init(acv->lmm, kmer_idx);
 
+	/* may fail when main memory is small */
 	uint64_t kmer_idx_size = 0x01 << (2 * acv->params.k);
 	lmm_kv_reserve(acv->lmm, kmer_idx, kmer_idx_size);
+	if(lmm_kv_ptr(kmer_idx) == NULL) { return(NULL); }
 
 	uint64_t prev_kmer = 0;
 	lmm_kv_push(acv->lmm, kmer_idx, prev_kmer);

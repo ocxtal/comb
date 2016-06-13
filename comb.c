@@ -496,6 +496,23 @@ void comb_drain(
 
 
 /**
+ * @fn comb_run_print_error
+ */
+static _force_inline
+void comb_run_print_error(
+	char const *msg,
+	...)
+{
+	va_list l;
+	va_start(l, msg);
+	fprintf(stderr, "[ERROR] ");
+	vfprintf(stderr, msg, l);
+	fprintf(stderr, "\n");
+	va_end(l);
+	return;
+}
+
+/**
  * @fn comb_run
  */
 static _force_inline
@@ -511,7 +528,15 @@ int comb_run(
 	struct comb_worker_args_s *w = NULL;
 	ptask_t *pt = NULL;
 
+	#define comb_run_error(expr, ...) { \
+		if(!(expr)) { \
+			comb_run_print_error("" __VA_ARGS__); \
+			goto _comb_run_error_handler; \
+		} \
+	}
+
 	/* build ggsea configuration object */
+	debug("build conf");
 	conf = ggsea_conf_init(GGSEA_PARAMS(
 		.xdrop = params->xdrop,
 		.score_matrix = GABA_SCORE_SIMPLE(params->m, params->x, params->gi, params->ge),
@@ -519,11 +544,7 @@ int comb_run(
 		.overlap_thresh = params->overlap_thresh,
 		.popcnt_thresh = params->popcnt_thresh,
 		.score_thresh = params->score_thresh));
-	if(conf == NULL) {
-		fprintf(stderr, "[ERROR] Failed to create alignment configuration.\n");
-		goto _comb_run_error_handler;
-	}
-
+	comb_run_error(conf != NULL, "Failed to create alignment configuration.");
 
 	/* build reference sequence index */
 	ref = sr_init(params->ref_name,
@@ -532,27 +553,20 @@ int comb_run(
 			.seq_direction = SR_FW_ONLY,
 			.num_threads = params->num_threads
 		));
-	if(ref == NULL) {
-		fprintf(stderr, "[ERROR] Failed to open reference file `%s'.\n", params->ref_name);
-		goto _comb_run_error_handler;
-	}
-
+	comb_run_error(ref != NULL, "Failed to open reference file `%s'.", params->ref_name);
 
 	/* build read pool */
 	query = sr_init(params->query_name,
-			SR_PARAMS(
-				.k = params->k,
-				.seq_direction = SR_FW_ONLY,
-				.num_threads = params->num_threads
-			));
-	if(query == NULL) {
-		fprintf(stderr, "[ERROR] Failed to open query file `%s'.\n", params->query_name);
-		goto _comb_run_error_handler;
-	}
-
+		SR_PARAMS(
+			.k = params->k,
+			.seq_direction = SR_FW_ONLY,
+			.num_threads = params->num_threads
+		));
+	comb_run_error(query != NULL, "Failed to open query file `%s'.", params->query_name);
 
 	/* build alignment writer */
 	struct sr_gref_s *r = sr_get_index(ref);
+	comb_run_error(r != NULL, "Failed to build reference index.");
 	aw = aw_init(params->out_name, r->gref,
 		AW_PARAMS(
 			.clip = params->clip,
@@ -561,19 +575,12 @@ int comb_run(
 			.command = params->command
 		));
 	sr_gref_free(r);
-	if(aw == NULL) {
-		fprintf(stderr, "[ERROR] Failed to open output file `%s'.\n", params->out_name);
-		goto _comb_run_error_handler;
-	}
-
+	comb_run_error(aw != NULL, "Failed to open output file `%s'.", params->out_name);
 
 	/* initialize parallel task dispatcher */
 	w = comb_worker_init(params, conf, ref, query, aw);
 	pt = ptask_init(comb_worker, (void **)&w, params->num_threads, 2048);
-	if(w == NULL || pt == NULL) {
-		fprintf(stderr, "[ERROR] Failed to initialize parallel worker threads.\n");
-		goto _comb_run_error_handler;
-	}
+	comb_run_error(w != NULL && pt != NULL, "Failed to initialize parallel worker threads.");
 
 	/* run tasks */
 	ptask_stream(pt, comb_source, (void *)w, comb_drain, (void *)w, 512);
