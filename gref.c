@@ -1007,7 +1007,7 @@ struct gref_iter_s {
 	/* global info */
 	uint32_t base_gid;
 	uint32_t tail_gid;
-	uint32_t reserved1;
+	uint32_t step_gid;
 	uint8_t seed_len;
 	uint8_t shift_len;
 	uint16_t reserved2;
@@ -1274,13 +1274,20 @@ struct gref_iter_stack_s *gref_iter_init_stack(
  * @fn gref_iter_init
  */
 gref_iter_t *gref_iter_init(
-	gref_acv_t const *acv)
+	gref_acv_t const *acv,
+	gref_iter_params_t const *params)
 {
 	struct gref_s const *gref = (struct gref_s const *)acv;
 
-	debug("init_stack_size(%lld)", gref->iter_init_stack_size);
-
+	debug("init_stack_size(%lld)", gref->iter_init_stack_size);	
 	if(gref == NULL || gref->type == GREF_POOL) { return(NULL); }
+
+	/* restore params */
+	static struct gref_iter_params_s const default_params = {
+		.step_size = 1,
+		.seq_direction = GREF_FW_ONLY
+	};
+	params = (params == NULL) ? &default_params : params;
 
 	/* malloc mem */
 	struct gref_iter_s *iter = (struct gref_iter_s *)lmm_malloc(acv->lmm,
@@ -1296,6 +1303,7 @@ gref_iter_t *gref_iter_init(
 	/* iterate from section 0 */
 	iter->base_gid = 0;
 	iter->tail_gid = _encode_id(acv->sec_cnt, 0);
+	iter->step_gid = (params->seq_direction == GREF_FW_RV) ? 1 : 2;
 	
 	/* set params */
 	iter->seed_len = acv->params.k;
@@ -1313,7 +1321,7 @@ gref_iter_t *gref_iter_init(
 			debug("stack(%p), iter(%p), len(%u)", iter->stack, iter, iter->hsec[iter->base_gid].sec.len);
 			return((gref_iter_t *)iter);
 		}
-	} while((iter->base_gid += 2) < iter->tail_gid);
+	} while((iter->base_gid += iter->step_gid) < iter->tail_gid);
 
 	debug("no valid stack created");
 	lmm_free(iter->lmm, (void *)iter);
@@ -1356,7 +1364,7 @@ struct gref_kmer_tuple_s gref_iter_next(
 
 	debug("stack == NULL, stack(%p)", stack);
 	/* update gid and stack for the next section */
-	while((iter->base_gid += 2) < iter->tail_gid) {
+	while((iter->base_gid += iter->step_gid) < iter->tail_gid) {
 		iter->stack = stack = gref_iter_init_stack(iter, (struct gref_iter_stack_s *)(iter + 1));
 
 		/* check if init_stack succeeded */
@@ -1475,7 +1483,11 @@ gref_idx_t *gref_build_index(
 	lmm_kvec_t(struct gref_kmer_tuple_s) v;
 	lmm_kv_init(acv->lmm, v);
 
-	struct gref_iter_s *iter = gref_iter_init(acv);
+	static struct gref_iter_params_s const iter_params = {
+		.step_size = 1,
+		.seq_direction = GREF_FW_RV
+	};
+	struct gref_iter_s *iter = gref_iter_init(acv, &iter_params);
 	struct gref_kmer_tuple_s t;
 	int64_t i = 0;
 	while((t = gref_iter_next(iter)).gid_pos.gid != (uint32_t)-1) {
@@ -2030,7 +2042,7 @@ unittest()
 	gref_acv_t *acv = gref_freeze_pool(pool);
 
 	/* create iterator */
-	gref_iter_t *iter = gref_iter_init(acv);
+	gref_iter_t *iter = gref_iter_init(acv, NULL);
 	assert(iter != NULL, "%p", iter);
 
 	/* enumerate */
@@ -2167,7 +2179,7 @@ unittest()
 	gref_acv_t *idx = gref_build_index(gref_freeze_pool(pool));
 
 	/* create iterator */
-	gref_iter_t *iter = gref_iter_init(idx);
+	gref_iter_t *iter = gref_iter_init(idx, NULL);
 	assert(iter != NULL, "%p", iter);
 
 	/* enumerate */

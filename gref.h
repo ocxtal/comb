@@ -37,9 +37,9 @@ enum gref_error {
 };
 
 /**
- * @enum gref_revcomp
+ * @enum gref_seq_direction
  */
-enum gref_revcomp {
+enum gref_seq_direction {
 	GREF_FW_ONLY				= 1,
 	GREF_FW_RV					= 2
 };
@@ -108,6 +108,17 @@ struct gref_params_s {
 };
 typedef struct gref_params_s gref_params_t;
 #define GREF_PARAMS(...)			( &((struct gref_params_s const) { __VA_ARGS__ }) )
+
+/**
+ * @struct gref_iter_params_s
+ */
+struct gref_iter_params_s {
+	uint32_t step_size;
+	uint8_t seq_direction;
+	uint8_t pad[3];
+};
+typedef struct gref_iter_params_s gref_iter_params_t;
+#define GREF_ITER_PARAMS(...)		( &((struct gref_iter_params_s const) { __VA_ARGS__ }) )
 
 /**
  * @struct gref_section_s
@@ -281,7 +292,8 @@ int gref_dump_index(
  * @brief kmer iterator
  */
 gref_iter_t *gref_iter_init(
-	gref_acv_t const *gref);
+	gref_acv_t const *gref,
+	gref_iter_params_t const *params);
 
 /**
  * @fn gref_iter_next

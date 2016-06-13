@@ -1040,7 +1040,7 @@ unittest(with_default_conf())
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, idx);
 
 	/* align */
-	gref_iter_t *iter = gref_iter_init(idx);
+	gref_iter_t *iter = gref_iter_init(idx, NULL);
 	ggsea_result_t r = ggsea_align(sea, (gref_acv_t *)idx, iter);
 	assert(r.aln != NULL, "%p", r.aln);
 
@@ -1072,7 +1072,7 @@ unittest(with_default_conf())
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, ref);
 
 	/* align */
-	gref_iter_t *iter = gref_iter_init(query);
+	gref_iter_t *iter = gref_iter_init(query, NULL);
 	ggsea_result_t r = ggsea_align(sea, query, iter);
 	assert(r.aln != NULL, "%p", r.aln);
 

@@ -184,7 +184,7 @@ struct sr_gref_s *sr_get_iter_graph(
 		.lmm = NULL,
 		.path = sr->path,
 		.gref = sr->acv,
-		.iter = gref_iter_init(sr->acv)
+		.iter = gref_iter_init(sr->acv, NULL)
 	};
 	return((struct sr_gref_s *)r);
 }
@@ -249,7 +249,7 @@ struct sr_gref_s *sr_get_iter_read(
 		.lmm = lmm_read,
 		.path = sr->path,
 		.gref = acv,
-		.iter = gref_iter_init(acv),
+		.iter = gref_iter_init(acv, NULL),
 		.seq = seq,
 		.gref_need_free = 1,
 		.seq_need_free = 1
