@@ -4209,20 +4209,6 @@ int32_t gaba_dp_add_stack(
 #endif
 
 /**
- * @fn gaba_dp_save
- */
-struct gaba_stack_s const *suffix(gaba_dp_save)(
-	struct gaba_dp_context_s *this)
-{
-	struct gaba_stack_s *stack = (struct gaba_stack_s *)gaba_dp_malloc(
-		this, sizeof(struct gaba_stack_s));
-	stack->mem = this->curr_mem;
-	stack->stack_top = this->stack_top;
-	stack->stack_end = this->stack_end;
-	return(stack);
-}
-
-/**
  * @fn gaba_dp_flush
  */
 void suffix(gaba_dp_flush)(
@@ -4235,15 +4221,47 @@ void suffix(gaba_dp_flush)(
 	this->w.r.alim = alim;
 	this->w.r.blim = blim;
 
+	this->curr_mem = &this->mem;
+	this->stack_top = (uint8_t *)(this + 1);
+	this->stack_end = (uint8_t *)this + this->mem.size - MEM_MARGIN_SIZE;
+	return;
+}
+
+/**
+ * @fn gaba_dp_save_stack
+ */
+struct gaba_stack_s const *suffix(gaba_dp_save_stack)(
+	struct gaba_dp_context_s *this)
+{
+	struct gaba_mem_block_s *mem = this->curr_mem;
+	uint8_t *stack_top = this->stack_top;
+	uint8_t *stack_end = this->stack_end;
+
+	/* save */
+	struct gaba_stack_s *stack = (struct gaba_stack_s *)gaba_dp_malloc(
+		this, sizeof(struct gaba_stack_s));
+	stack->mem = mem;
+	stack->stack_top = stack_top;
+	stack->stack_end = stack_end;
+	debug("save stack(%p, %p, %p)", stack->mem, stack->stack_top, stack->stack_end);
+	return(stack);
+}
+
+/**
+ * @fn gaba_dp_flush_stack
+ */
+void suffix(gaba_dp_flush_stack)(
+	struct gaba_dp_context_s *this,
+	gaba_stack_t const *stack)
+{
 	if(stack == NULL) {
-		this->curr_mem = &this->mem;
-		this->stack_top = (uint8_t *)(this + 1);
-		this->stack_end = (uint8_t *)this + this->mem.size - MEM_MARGIN_SIZE;
-	} else {
-		this->curr_mem = stack->mem;
-		this->stack_top = stack->stack_top;
-		this->stack_end = stack->stack_end;
+		return;
 	}
+
+	this->curr_mem = stack->mem;
+	this->stack_top = stack->stack_top;
+	this->stack_end = stack->stack_end;
+	debug("restore stack(%p, %p, %p)", stack->mem, stack->stack_top, stack->stack_end);
 	return;
 }
 

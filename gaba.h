@@ -242,19 +242,25 @@ gaba_dp_t *gaba_dp_init(
 	uint8_t const *blim);
 
 /**
- * @fn gaba_dp_save
- */
-gaba_stack_t const *gaba_dp_save(
-	gaba_dp_t *this);
-
-/**
  * @fn gaba_dp_flush
  * @brief flush stack (flush all if NULL) 
  */
 void gaba_dp_flush(
 	gaba_dp_t *this,
 	uint8_t const *alim,
-	uint8_t const *blim,
+	uint8_t const *blim);
+
+/**
+ * @fn gaba_dp_save_stack
+ */
+gaba_stack_t const *gaba_dp_save_stack(
+	gaba_dp_t *this);
+
+/**
+ * @fn gaba_dp_flush_stack
+ */
+void gaba_dp_flush_stack(
+	gaba_dp_t *this,
 	gaba_stack_t const *stack);
 
 /**
