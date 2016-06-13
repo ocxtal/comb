@@ -885,7 +885,7 @@ struct ggsea_result_s ggsea_align(
 	ggsea_ctx_flush(ctx, query);
 
 	struct gref_kmer_tuple_s t;
-	while((t = gref_iter_next(iter)).kmer != GREF_ITER_KMER_TERM) {
+	while((t = gref_iter_next(iter)).gid_pos.gid != (uint32_t)-1) {
 		
 		/* match */
 		struct gref_match_res_s m = gref_match_2bitpacked(ctx->r, t.kmer);
