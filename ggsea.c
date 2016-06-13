@@ -260,13 +260,13 @@ ggsea_ctx_t *ggsea_ctx_init(
 	debug("init, hq_size(%llu)", kv_hq_size(ctx->segq));
 
 	/* init margin seq */
-	ctx->margin = (uint8_t *)malloc(2 * sizeof(uint8_t) * (MARGIN_SEQ_SIZE + 32));
-	if(ctx->margin == NULL) {
+	uint64_t margin_size = 2 * sizeof(uint8_t) * (MARGIN_SEQ_SIZE + 32);
+	if((ctx->margin = (uint8_t *)malloc(margin_size)) == NULL) {
 		goto _ggsea_ctx_init_error_handler;
 	}
+	memset(ctx->margin, 0, margin_size);
 
 	/* init forward margin section */
-	memset(ctx->margin, 0, MARGIN_SEQ_SIZE);
 	ctx->fw_margin = (struct gref_section_s){
 		.gid = 0xfffc,
 		.len = MARGIN_SEQ_LEN,
@@ -274,7 +274,6 @@ ggsea_ctx_t *ggsea_ctx_init(
 	};
 
 	/* init reverse margin section */
-	memset(&ctx->margin[MARGIN_SEQ_SIZE], 0, MARGIN_SEQ_SIZE);
 	ctx->rv_margin = (struct gref_section_s){
 		.gid = 0xfffd,
 		.len = MARGIN_SEQ_LEN,
@@ -322,7 +321,7 @@ void ggsea_ctx_flush(
 
 	/* flush dp context for the new read */
 	debug("rlim(%p), qlim(%p)", gref_get_lim(ctx->r), gref_get_lim(ctx->q));
-	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q));
+	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q), NULL);
 
 	/* flush result vector */
 	kv_clear(ctx->alnv);
@@ -826,6 +825,16 @@ struct ggsea_result_s ggsea_refine_result(
 	/* build array and sort */
 	struct gaba_result_s const **alnv = kv_ptr(ctx->alnv);
 	int64_t const cnt = kv_size(ctx->alnv);
+
+	if(cnt == 0) {
+		return((struct ggsea_result_s){
+			.ref = ctx->r,
+			.query = ctx->q,
+			.aln = NULL,
+			.cnt = 0
+		});
+	}
+
 	struct ggsea_score_pos_s karr[cnt];
 	for(int64_t i = 0; i < cnt; i++) {
 		karr[i] = (struct ggsea_score_pos_s){
@@ -886,6 +895,8 @@ struct ggsea_result_s ggsea_align(
 
 	struct gref_kmer_tuple_s t;
 	while((t = gref_iter_next(iter)).gid_pos.gid != (uint32_t)-1) {
+		/* save stack */
+		gaba_stack_t const *stack = gaba_dp_save(ctx->dp);
 		
 		/* match */
 		struct gref_match_res_s m = gref_match_2bitpacked(ctx->r, t.kmer);
@@ -914,6 +925,7 @@ struct ggsea_result_s ggsea_align(
 			/* extension */
 			struct ggsea_fill_pair_s pair = ggsea_extend(ctx, m.gid_pos_arr[i], t.gid_pos);
 			if(pair.fw->max + pair.rv->max <= ctx->conf.params.score_thresh) {
+				gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q), stack);
 				continue;
 			}
 
