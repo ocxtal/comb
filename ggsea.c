@@ -78,14 +78,6 @@ struct ggsea_region_s {
 // _static_assert(sizeof(struct ggsea_region_s) == 96);
 
 /**
- * @struct ggsea_overlap_s
- */
-struct ggsea_overlap_s {
-	int64_t score;
-	struct ggsea_region_s *region;
-};
-
-/**
  * @struct ggsea_segq_s
  * @brief segment info container (to push into heapqueue)
  */
@@ -96,14 +88,6 @@ struct ggsea_segq_s {
 	uint32_t qgid;
 };
 _static_assert(sizeof(struct ggsea_segq_s) == 24);
-
-/**
- * @struct ggsea_fill_pair_s
- */
-struct ggsea_fill_pair_s {
-	gaba_fill_t const *fw;
-	gaba_fill_t const *rv;
-};
 
 /**
  * @struct ggsea_ctx_s
@@ -128,6 +112,9 @@ struct ggsea_ctx_s {
 	kvec_t(struct ggsea_segq_s) segq;	/* segment queue */
 	uint8_t *margin;
 	struct gref_section_s fw_margin, rv_margin;
+
+	/* result container */
+	kvec_t(struct gaba_result_s const *) alnv;
 };
 
 
@@ -208,6 +195,7 @@ void ggsea_ctx_clean(
 		gaba_dp_clean(ctx->dp); ctx->dp = NULL;
 		kv_hq_destroy(ctx->segq);
 		free(ctx->margin); ctx->margin = NULL;
+		kv_destroy(ctx->alnv);
 		free(ctx);
 	}
 	return;
@@ -292,6 +280,9 @@ ggsea_ctx_t *ggsea_ctx_init(
 		.len = MARGIN_SEQ_LEN,
 		.base = &ctx->margin[MARGIN_SEQ_SIZE + 32]
 	};
+
+	/* init result vector */
+	kv_init(ctx->alnv);
 	return(ctx);
 
 _ggsea_ctx_init_error_handler:;
@@ -333,6 +324,8 @@ void ggsea_ctx_flush(
 	debug("rlim(%p), qlim(%p)", gref_get_lim(ctx->r), gref_get_lim(ctx->q));
 	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q));
 
+	/* flush result vector */
+	kv_clear(ctx->alnv);
 	debug("flushed");
 	return;
 }
@@ -406,11 +399,11 @@ void ggsea_save_rep_kmer(
 
 /* overlap filters (not implemented yet) */
 /**
- * @fn ggsea_calc_q
+ * @fn ggsea_calc_key
  * @brief calculate q coordinate for use in the overlap filter
  */
 static _force_inline
-int64_t ggsea_calc_q(
+int64_t ggsea_calc_key(
 	struct gref_gid_pos_s rpos,
 	struct gref_gid_pos_s qpos,
 	uint32_t offset)
@@ -442,7 +435,7 @@ int64_t ggsea_overlap_filter(
 {
 	/* calc p (pos) and q (key) */
 	int64_t pos = rpos.pos + qpos.pos + ctx->conf.params.k;
-	int64_t key = ggsea_calc_q(rpos, qpos, ctx->conf.overlap_width);
+	int64_t key = ggsea_calc_key(rpos, qpos, ctx->conf.overlap_width);
 
 	debug("pos(%lld), key(%lld)", pos, key);
 
@@ -486,6 +479,14 @@ void ggsea_save_overlap_kmer(
 }
 
 /**
+ * @struct ggsea_fill_pair_s
+ */
+struct ggsea_fill_pair_s {
+	gaba_fill_t const *fw;
+	gaba_fill_t const *rv;
+};
+
+/**
  * @fn ggsea_update_overlap_section
  */
 static _force_inline
@@ -505,7 +506,7 @@ void ggsea_update_overlap_section(
 		/* calc p (pos) and q (key) */
 		int64_t sp = r->sec[i].apos + r->sec[i].bpos;
 		int64_t ep = sp + r->sec[i].alen + r->sec[i].blen;
-		int64_t key = ggsea_calc_q(
+		int64_t key = ggsea_calc_key(
 			(struct gref_gid_pos_s){
 				.gid = r->sec[i].aid,
 				.pos = r->sec[i].apos
@@ -789,6 +790,87 @@ struct ggsea_fill_pair_s ggsea_extend(
 }
 
 /**
+ * @struct ggsea_score_pos_s
+ */
+struct ggsea_score_pos_s {
+	uint32_t idx;
+	uint32_t pos;
+	int64_t score;
+};
+
+/**
+ * @fn ggsea_cmp_result
+ */
+static _force_inline
+int64_t ggsea_cmp_result(
+	struct gaba_result_s const *const *rarr,
+	struct ggsea_score_pos_s const *karr,
+	int64_t i,
+	int64_t j)
+{
+	debug("compare i(%lld) and j(%lld), [i].score(%lld), [j].score(%lld), [i].aid(%u), [i].bid(%u), [j].aid(%u), [j].bid(%u)",
+		i, j,
+		rarr[karr[i].idx]->score, rarr[karr[i].idx]->score,
+		rarr[karr[i].idx]->sec[0].aid, rarr[karr[i].idx]->sec[0].bid,
+		rarr[karr[j].idx]->sec[0].aid, rarr[karr[j].idx]->sec[0].bid);
+	return(rarr[karr[i].idx]->score - rarr[karr[j].idx]->score);
+}
+
+/**
+ * @fn ggsea_refine_result
+ */
+static _force_inline
+struct ggsea_result_s ggsea_refine_result(
+	struct ggsea_ctx_s *ctx)
+{
+	/* build array and sort */
+	struct gaba_result_s const **alnv = kv_ptr(ctx->alnv);
+	int64_t const cnt = kv_size(ctx->alnv);
+	struct ggsea_score_pos_s karr[cnt];
+	for(int64_t i = 0; i < cnt; i++) {
+		karr[i] = (struct ggsea_score_pos_s){
+			.score = -alnv[i]->score,		/* score in descending order */
+			.pos = alnv[i]->sec[0].aid + alnv[i]->sec[0].bid,
+			.idx = i
+		};
+		debug("pushed, i(%u), score(%lld), pos(%u)",
+			karr[i].idx, karr[i].score, karr[i].pos);
+	}
+	psort_full(karr, cnt, 16, 0);
+
+	for(int64_t i = 0; i < cnt; i++) {
+		debug("sorted, i(%lld), idx(%u), score(%lld), pos(%u), score(%lld)",
+			i, karr[i].idx, karr[i].score, karr[i].pos, alnv[karr[i].idx]->score);
+	}
+
+	/* dedup */
+	int64_t j = 0;
+	for(int64_t i = 0; i < cnt; i++) {
+		if(ggsea_cmp_result(alnv, karr, i, j) == 0) { continue; }
+
+		debug("move to next, j(%lld)", j + 1);
+		karr[++j] = karr[i];
+	}
+	int64_t dedup_cnt = j + 1;
+
+	/* build shrinked result array */
+	struct gaba_result_s const **dedup_alnv = (struct gaba_result_s const **)malloc(
+		dedup_cnt * sizeof(struct gaba_result_s const *));
+	for(int64_t i = 0; i < dedup_cnt; i++) {
+		dedup_alnv[i] = alnv[karr[i].idx];
+		debug("i(%lld) push(%u)", i, karr[i].idx);
+	}
+
+	debug("dedup finished, ptr(%p), cnt(%lld)", dedup_alnv, dedup_cnt);
+	return((struct ggsea_result_s){
+		.ref = ctx->r,
+		.query = ctx->q,
+		.aln = dedup_alnv,
+		.cnt = dedup_cnt
+	});
+}
+
+/**
  * @fn ggsea_align
  */
 struct ggsea_result_s ggsea_align(
@@ -801,10 +883,6 @@ struct ggsea_result_s ggsea_align(
 
 	/* flush ctxing buffer */
 	ggsea_ctx_flush(ctx, query);
-
-	/* init result container */
-	kvec_t(struct gaba_result_s const *) aln;
-	kv_init(aln);
 
 	struct gref_kmer_tuple_s t;
 	while((t = gref_iter_next(iter)).kmer != GREF_ITER_KMER_TERM) {
@@ -840,24 +918,17 @@ struct ggsea_result_s ggsea_align(
 			}
 
 			/* traceback */
-			struct gaba_result_s const *r = gaba_dp_trace(ctx->dp, pair.fw, pair.rv, NULL);
-			kv_push(aln, r);
+			struct gaba_result_s const *aln = gaba_dp_trace(ctx->dp, pair.fw, pair.rv, NULL);
+			kv_push(ctx->alnv, aln);
 
 			/* update overlap filter */
-			ggsea_update_overlap_section(ctx, pair, r);
+			ggsea_update_overlap_section(ctx, pair, aln);
 		}
 	}
 
 	/* cleanup iterator */
-	// gref_iter_clean(iter);
-	debug("done. %llu alignments generated", kv_size(aln));
-
-	return((struct ggsea_result_s){
-		.ref = ctx->r,
-		.query = ctx->q,
-		.aln = kv_ptr(aln),
-		.cnt = kv_size(aln)
-	});
+	debug("done. %llu alignments generated", kv_size(ctx->alnv));
+	return(ggsea_refine_result(ctx));
 }
 
 /**
