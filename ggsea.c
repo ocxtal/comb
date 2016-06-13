@@ -321,7 +321,7 @@ void ggsea_ctx_flush(
 
 	/* flush dp context for the new read */
 	debug("rlim(%p), qlim(%p)", gref_get_lim(ctx->r), gref_get_lim(ctx->q));
-	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q), NULL);
+	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q));
 
 	/* flush result vector */
 	kv_clear(ctx->alnv);
@@ -532,6 +532,7 @@ void ggsea_update_overlap_section(
 				hit++;
 				n->depth++;
 				n->score = MAX2(n->score, r->score);
+				debug("region hit, hit_count(%lld), depth(%lld), score(%lld)", hit, n->depth, n->score);
 			}
 
 			/* retrieve the next region */
@@ -554,7 +555,7 @@ void ggsea_update_overlap_section(
 				.score = r->score
 			};
 
-			debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)",
+			debug("no hit found, create new region n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)",
 				nn, nn->h.key, nn->len, nn->sp, nn->ep);
 			tree_insert(ctx->tree, (tree_node_t *)nn);
 		}
@@ -837,6 +838,7 @@ struct ggsea_result_s ggsea_refine_result(
 
 	struct ggsea_score_pos_s karr[cnt];
 	for(int64_t i = 0; i < cnt; i++) {
+		debug("score(%lld)", alnv[i]->score);
 		karr[i] = (struct ggsea_score_pos_s){
 			.score = -alnv[i]->score,		/* score in descending order */
 			.pos = alnv[i]->sec[0].aid + alnv[i]->sec[0].bid,
@@ -895,9 +897,6 @@ struct ggsea_result_s ggsea_align(
 
 	struct gref_kmer_tuple_s t;
 	while((t = gref_iter_next(iter)).gid_pos.gid != (uint32_t)-1) {
-		/* save stack */
-		gaba_stack_t const *stack = gaba_dp_save(ctx->dp);
-		
 		/* match */
 		struct gref_match_res_s m = gref_match_2bitpacked(ctx->r, t.kmer);
 
@@ -912,6 +911,9 @@ struct ggsea_result_s ggsea_align(
 
 		/* for all positions on ref matched with the kmer */
 		for(int64_t i = 0; i < m.len; i++) {
+			/* save stack */
+			gaba_stack_t const *stack = gaba_dp_save_stack(ctx->dp);
+
 			/* apply overlap filter */
 			int64_t score = ggsea_overlap_filter(ctx, m.gid_pos_arr[i], t.gid_pos);
 
@@ -924,14 +926,17 @@ struct ggsea_result_s ggsea_align(
 
 			/* extension */
 			struct ggsea_fill_pair_s pair = ggsea_extend(ctx, m.gid_pos_arr[i], t.gid_pos);
+			debug("fw_max(%lld), rv_max(%lld)", pair.fw->max, pair.rv->max);
 			if(pair.fw->max + pair.rv->max <= ctx->conf.params.score_thresh) {
-				gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q), stack);
+				debug("stack flushed, score(%lld, %lld)", pair.fw->max + pair.rv->max, ctx->conf.params.score_thresh);
+				gaba_dp_flush_stack(ctx->dp, stack);
 				continue;
 			}
 
 			/* traceback */
 			struct gaba_result_s const *aln = gaba_dp_trace(ctx->dp, pair.fw, pair.rv, NULL);
 			kv_push(ctx->alnv, aln);
+			debug("cnt(%lld), score(%lld)", kv_size(ctx->alnv), aln->score);
 
 			/* update overlap filter */
 			ggsea_update_overlap_section(ctx, pair, aln);
