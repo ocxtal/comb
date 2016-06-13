@@ -2024,7 +2024,7 @@ unittest()
 	int64_t i = 0;
 	while((seq = fna_read(fna)) != NULL) {
 		char buf[1024];
-		sprintf(buf, "seq%lld", i++);
+		sprintf(buf, "seq%" PRId64 "", i++);
 
 		assert(strcmp(seq->s.segment.name, buf) == 0, "name(%s, %s)", seq->s.segment.name, buf);
 		assert(seq->s.segment.seq_len == 100000, "len(%lld)", seq->s.segment.seq_len);

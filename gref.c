@@ -1983,7 +1983,7 @@ unittest()
 
 		/* name */
 		char buf[1024];
-		sprintf(buf, "seq%lld", i);
+		sprintf(buf, "seq%" PRId64 "", i);
 
 		/* seq */
 		char *seq = unittest_generate_random_sequence(len);

@@ -3431,7 +3431,7 @@ int64_t parse_dump_match_string(
 		*((uint16_t *)(buf + c.table.len)) = 'M';
 		return(c.table.adv);
 	} else {
-		int64_t l = sprintf(buf, "%lldM", len);
+		int64_t l = sprintf(buf, "%" PRId64 "M", len);
 		return(l);
 	}
 }
@@ -3454,7 +3454,7 @@ int64_t parse_dump_gap_string(
 		*((uint16_t *)(buf + c.table.len)) = gap_ch;
 		return(c.table.adv);
 	} else {
-		int64_t l = sprintf(buf, "%lld%c", len, gap_ch);
+		int64_t l = sprintf(buf, "%" PRId64 "%c", len, gap_ch);
 		return(l);
 	}
 }
@@ -3509,7 +3509,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 		}
 		int64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
-			clen += _fprintf(fp, "%lldM", m);
+			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
 		}
 		if(ridx <= 0) { break; }
@@ -3517,7 +3517,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 		uint64_t arr;
 		int64_t g = MIN2(_parse_count_gap(arr = parse_load_uint64(p, lim - ridx)), ridx);
 		if(g > 0) {
-			clen += _fprintf(fp, "%u%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
+			clen += _fprintf(fp, "%" PRId64 "%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
 			debug("gap g(%lld)", g);
 		}
 		if((ridx -= g) <= 0) { break; }
@@ -5801,7 +5801,8 @@ unittest()
 			m->max, f->max, f->status, t1->max, t1->status, t2->max, t2->status, n.score);
 		if(m->max != n.score) {
 			struct gaba_fill_s *f2 = gaba_dp_fill_root(d, &sec->afsec, 0, &sec->bfsec, 0);
-			log("refill f2(%lld, %u)", f2->max, f2->status);
+			(void)f2;
+			debug("refill f2(%lld, %u)", f2->max, f2->status);
 		}
 
 		/* trace */
