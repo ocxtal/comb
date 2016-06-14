@@ -1349,8 +1349,8 @@ struct gref_kmer_tuple_s gref_iter_next(
 		return((struct gref_kmer_tuple_s){ \
 			.kmer = (_stack)->kmer[(_stack)->kmer_idx++], \
 			.gid_pos = (struct gref_gid_pos_s){ \
-				.gid = (_iter)->base_gid, \
-				.pos = (_stack)->len - (_stack)->rem_len \
+				.pos = (_stack)->len - (_stack)->rem_len, \
+				.gid = (_iter)->base_gid \
 			} \
 		}); \
 	}
@@ -1384,8 +1384,8 @@ struct gref_kmer_tuple_s gref_iter_next(
 	return((struct gref_kmer_tuple_s){
 		.kmer = GREF_ITER_KMER_TERM,
 		.gid_pos = (struct gref_gid_pos_s){
-			.gid = (uint32_t)-1,
-			.pos = 0
+			.pos = 0,
+			.gid = (uint32_t)-1
 		}
 	});
 }

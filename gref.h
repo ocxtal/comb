@@ -153,8 +153,8 @@ typedef struct gref_str_s gref_str_t;
  * @struct gref_gid_pos_s
  */
 struct gref_gid_pos_s {
-	uint32_t gid;
 	uint32_t pos;
+	uint32_t gid;
 };
 typedef struct gref_gid_pos_s gref_gid_pos_t;
 
