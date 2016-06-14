@@ -69,13 +69,14 @@ struct ggsea_rep_kmer_cont_s {
  * @struct ggsea_region_s
  */
 struct ggsea_region_s {
-	tree_node_t h;					/* (40) header */
-	int64_t len;					/* q section length */
-	int64_t sp, ep;					/* start and end p coordinate */
-	int64_t depth;
-	int64_t score;
+	ivtree_node_t h;				/* (56) header */
+	uint32_t sp, ep;				/* (8) start and end p coordinate */
+	int32_t grad, qbase;			/* (8) */
+	int32_t depth;					/* (4) */
+	int32_t pad[3];					/* (12) */
+	int64_t score;					/* (8) */
 };
-// _static_assert(sizeof(struct ggsea_region_s) == 96);
+_static_assert(sizeof(struct ggsea_region_s) == 96);
 
 /**
  * @struct ggsea_segq_s
@@ -104,7 +105,8 @@ struct ggsea_ctx_s {
 	hmap_t *rep_kmer;
 
 	/* overlap filter */
-	tree_t *tree;
+	int64_t filt_bw;
+	ivtree_t *tree;
 
 	/* dp context */
 	gaba_dp_t *dp;
@@ -161,7 +163,7 @@ ggsea_conf_t *ggsea_conf_init(
 	/* store constants */
 	conf->rep_kmer_hmap_size = 1024;
 	conf->max_rep_vec_size = 128;
-	conf->overlap_width = 32;
+	conf->overlap_width = 48;
 	conf->params = p;
 
 	return((ggsea_conf_t *)conf);
@@ -250,7 +252,8 @@ ggsea_ctx_t *ggsea_ctx_init(
 	#endif
 
 	/* init overlap tree */
-	ctx->tree = tree_init(sizeof(struct ggsea_region_s) - sizeof(tree_node_t), NULL);
+	ctx->filt_bw = conf->overlap_width / 2;
+	ctx->tree = ivtree_init(sizeof(struct ggsea_region_s), NULL);
 
 	/* init queue */
 	kv_hq_init(ctx->segq);
@@ -314,7 +317,7 @@ void ggsea_ctx_flush(
 	hmap_flush(ctx->rep_kmer);
 
 	/* flush tree */
-	tree_flush(ctx->tree);
+	ivtree_flush(ctx->tree);
 
 	/* flush queues */
 	kv_hq_clear(ctx->segq);
@@ -404,8 +407,7 @@ void ggsea_save_rep_kmer(
 static _force_inline
 int64_t ggsea_calc_key(
 	struct gref_gid_pos_s rpos,
-	struct gref_gid_pos_s qpos,
-	uint32_t offset)
+	struct gref_gid_pos_s qpos)
 {
 	union ggsea_q_u {
 		int64_t q;
@@ -417,12 +419,52 @@ int64_t ggsea_calc_key(
 
 	return(((union ggsea_q_u){
 		.e = ((struct ggsea_q_elems_s){
-			.pos = 0x80000000 ^ (rpos.pos - qpos.pos - offset),
+			.pos = 0x80000000 ^ (rpos.pos - qpos.pos),
 			.gid = rpos.gid ^ ((qpos.gid<<16) | (qpos.gid>>16))
 		})
 	}).q);
 }
 
+/**
+ * @fn ggsea_overlap_filter
+ */
+static _force_inline
+int64_t ggsea_overlap_filter(
+	struct ggsea_ctx_s *ctx,
+	struct gref_gid_pos_s rpos,
+	struct gref_gid_pos_s qpos)
+{
+	/* calc p (pos) and q (key) */
+	int64_t pos = rpos.pos + qpos.pos + ctx->conf.params.k;
+	int64_t key = ggsea_calc_key(rpos, qpos);
+
+	debug("pos(%lld), key(%lld)", pos, key);
+
+	/* retrieve intersecting section */
+	ivtree_iter_t *iter = ivtree_intersect(
+		ctx->tree, key - ctx->filt_bw, key + ctx->filt_bw);
+
+	int64_t depth = INT64_MAX;
+	struct ggsea_region_s *n = NULL;
+	while((n = (struct ggsea_region_s *)ivtree_next(iter)) != NULL) {
+		debug("n(%p), n->h.lkey(%lld), n->h.rkey(%lld), n->sp(%u), n->ep(%u)",
+			n, n->h.lkey, n->h.rkey, n->sp, n->ep);
+
+		/* check if the seed is contained in the region */
+		if((uint32_t)(pos - n->sp) >= (uint32_t)(n->ep - n->sp)) { continue; }
+		if(((n->grad * (int32_t)(pos - n->sp))>>6) + n->qbase - key >= 2 * ctx->filt_bw) {
+			continue;
+		}
+
+		/* update depth */
+		depth = MIN2(depth, n->depth);
+	}
+
+	ivtree_iter_clean(iter);
+	return((depth == INT64_MAX) ? 0 : depth);
+}
+
+#if 0
 /**
  * @fn ggsea_overlap_filter
  */
@@ -440,7 +482,7 @@ int64_t ggsea_overlap_filter(
 
 	/* retrieve leftmost overlapped section */
 	struct ggsea_region_s *n = (struct ggsea_region_s *)
-		tree_search_key_right(ctx->tree, key);
+		ivtree_search_key_right(ctx->tree, key);
 
 	if(n != NULL) {
 		debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)", n, n->h.key, n->len, n->sp, n->ep);
@@ -455,13 +497,14 @@ int64_t ggsea_overlap_filter(
 		}
 
 		/* retrieve the next region */
-		n = (struct ggsea_region_s *)tree_right(ctx->tree, (tree_node_t *)n);
+		n = (struct ggsea_region_s *)ivtree_right(ctx->tree, (ivtree_node_t *)n);
 		if(n != NULL) {
 			debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)", n, n->h.key, n->len, n->sp, n->ep);
 		}
 	}
 	return((depth == INT64_MAX) ? 0 : depth);
 }
+#endif
 
 /**
  * @fn ggsea_save_overlap_kmer
@@ -503,61 +546,58 @@ void ggsea_update_overlap_section(
 			r->sec[i].bid, r->sec[i].bpos, r->sec[i].blen);
 
 		/* calc p (pos) and q (key) */
-		int64_t sp = r->sec[i].apos + r->sec[i].bpos;
-		int64_t ep = sp + r->sec[i].alen + r->sec[i].blen;
-		int64_t key = ggsea_calc_key(
-			(struct gref_gid_pos_s){
-				.gid = r->sec[i].aid,
-				.pos = r->sec[i].apos
-			},
-			(struct gref_gid_pos_s){
-				.gid = r->sec[i].bid,
-				.pos = r->sec[i].bpos
-			},
-			ctx->conf.overlap_width);
+		uint32_t sp = r->sec[i].apos + r->sec[i].bpos;
+		int64_t skey = ggsea_calc_key(
+			(struct gref_gid_pos_s){ r->sec[i].aid, r->sec[i].apos },
+			(struct gref_gid_pos_s){ r->sec[i].bid, r->sec[i].bpos });
+		int64_t ekey = ggsea_calc_key(
+			(struct gref_gid_pos_s){ r->sec[i].aid, r->sec[i].apos + r->sec[i].alen },
+			(struct gref_gid_pos_s){ r->sec[i].bid, r->sec[i].bpos + r->sec[i].blen });
 
+		int64_t lkey = MIN2(skey, ekey);
+		int64_t rkey = MAX2(skey, ekey) + 1;
+		uint32_t qbase = skey + ctx->filt_bw;
+		debug("skey(%lld), ekey(%lld), lkey(%lld), rkey(%lld), qbase(%u)",
+			skey, ekey, lkey, rkey, qbase);
 
-		/* search overlapping regions */
-		struct ggsea_region_s *n = (struct ggsea_region_s *)
-			tree_search_key_right(ctx->tree, key);
+		/* search intersecting sections */
+		ivtree_iter_t *iter = ivtree_intersect(ctx->tree, lkey, rkey);
 
-		if(n != NULL) {
-			debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)", n, n->h.key, n->len, n->sp, n->ep);
-		}
-
-		/* itarate over regions */
 		int64_t hit = 0;
-		while(n != NULL && n->h.key < (key + ctx->conf.overlap_width)) {
-			if(n->sp < (sp + 16) && (ep - 16) < n->ep) {
-				hit++;
-				n->depth++;
-				n->score = MAX2(n->score, r->score);
-				debug("region hit, hit_count(%lld), depth(%lld), score(%lld)", hit, n->depth, n->score);
-			}
+		struct ggsea_region_s *n = NULL;
+		while((n = (struct ggsea_region_s *)ivtree_next(iter)) != NULL) {
+		debug("n(%p), n->h.lkey(%lld), n->h.rkey(%lld), n->sp(%u), n->ep(%u)",
+			n, n->h.lkey, n->h.rkey, n->sp, n->ep);
 
-			/* retrieve the next region */
-			n = (struct ggsea_region_s *)tree_right(ctx->tree, (tree_node_t *)n);
-			if(n != NULL) {
-				debug("n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)", n, n->h.key, n->len, n->sp, n->ep);
-			}
+			/* check if the seed is contained in the region */
+			if((uint32_t)(sp - n->sp) >= (uint32_t)(n->ep - n->sp)) { continue; }
+			if(n->qbase - skey >= 2 * ctx->filt_bw) { continue; }
+
+			/* update node */
+			hit++;
+			n->depth++;
+			n->score = MAX2(n->score, r->score);
 		}
+		ivtree_iter_clean(iter);
 
+		/* add new region if no region found */
 		if(hit == 0) {
-			/* add new region */
-			struct ggsea_region_s *nn = (struct ggsea_region_s *)tree_create_node(ctx->tree);
+			uint32_t len = r->sec[i].alen + r->sec[i].blen;
+			struct ggsea_region_s *nn = (struct ggsea_region_s *)ivtree_create_node(ctx->tree);
 			*nn = (struct ggsea_region_s){
-				.h.zero = 0,
-				.h.key = key,
-				.len = ctx->conf.overlap_width,
+				.h.lkey = lkey,
+				.h.rkey = rkey,
 				.sp = sp,
-				.ep = ep,
+				.ep = sp + len,
+				.grad = 64 * (ekey - skey) / len,
+				.qbase = qbase,
 				.depth = 1,
 				.score = r->score
 			};
 
-			debug("no hit found, create new region n(%p), n->h.key(%lld), n->len(%lld), n->sp(%lld), n->ep(%lld)",
-				nn, nn->h.key, nn->len, nn->sp, nn->ep);
-			tree_insert(ctx->tree, (tree_node_t *)nn);
+			debug("no hit found, create new region n(%p), n->h.lkey(%lld), n->h.lkey(%lld), n->sp(%u), n->ep(%u)",
+				nn, nn->h.lkey, nn->h.rkey, nn->sp, nn->ep);
+			ivtree_insert(ctx->tree, (ivtree_node_t *)nn);
 		}
 	}
 	return;
@@ -568,8 +608,8 @@ void ggsea_update_overlap_section(
  * @fn ggsea_clean_overlap_filter
  */
 static
-void ggsea_free_tree_elem(
-	tree_node_t *node)
+void ggsea_free_ivtree_elem(
+	ivtree_node_t *node)
 {
 	return;
 }
@@ -577,7 +617,7 @@ static _force_inline
 void ggsea_clean_overlap_filter(
 	struct ggsea_ctx_s *ctx)
 {
-	tree_iterate(ctx->tree, )
+	ivtree_iterate(ctx->tree, )
 	return;
 }
 #endif
