@@ -1844,9 +1844,9 @@ unittest()
 	seq = fna_read(fna);
 	assert(seq->type == FNA_LINK, "type(%d)", seq->type);
 	assert(strcmp(seq->s.link.from, "11") == 0, "from(%s)", seq->s.link.from);
-	assert(seq->s.link.from_ori == 1, "from_ori(%d)", seq->s.link.from_ori);
+	assert(seq->s.link.from_ori == 0, "from_ori(%d)", seq->s.link.from_ori);
 	assert(strcmp(seq->s.link.to, "12") == 0, "to(%s)", seq->s.link.to);
-	assert(seq->s.link.to_ori == -1, "to_ori(%d)", seq->s.link.to_ori);
+	assert(seq->s.link.to_ori == 1, "to_ori(%d)", seq->s.link.to_ori);
 	assert(strcmp((char const *)seq->s.link.cigar, "4M") == 0, "cigar(%s)", (char const *)seq->s.link.cigar);
 	fna_seq_free(seq);
 
@@ -1854,9 +1854,9 @@ unittest()
 	seq = fna_read(fna);
 	assert(seq->type == FNA_LINK, "type(%d)", seq->type);
 	assert(strcmp(seq->s.link.from, "12") == 0, "from(%s)", seq->s.link.from);
-	assert(seq->s.link.from_ori == -1, "from_ori(%d)", seq->s.link.from_ori);
+	assert(seq->s.link.from_ori == 1, "from_ori(%d)", seq->s.link.from_ori);
 	assert(strcmp(seq->s.link.to, "13") == 0, "to(%s)", seq->s.link.to);
-	assert(seq->s.link.to_ori == 1, "to_ori(%d)", seq->s.link.to_ori);
+	assert(seq->s.link.to_ori == 0, "to_ori(%d)", seq->s.link.to_ori);
 	assert(strcmp((char const *)seq->s.link.cigar, "5M") == 0, "cigar(%s)", (char const *)seq->s.link.cigar);
 	fna_seq_free(seq);
 
@@ -1864,9 +1864,9 @@ unittest()
 	seq = fna_read(fna);
 	assert(seq->type == FNA_LINK, "type(%d)", seq->type);
 	assert(strcmp(seq->s.link.from, "11") == 0, "from(%s)", seq->s.link.from);
-	assert(seq->s.link.from_ori == 1, "from_ori(%d)", seq->s.link.from_ori);
+	assert(seq->s.link.from_ori == 0, "from_ori(%d)", seq->s.link.from_ori);
 	assert(strcmp(seq->s.link.to, "13") == 0, "to(%s)", seq->s.link.to);
-	assert(seq->s.link.to_ori == 1, "to_ori(%d)", seq->s.link.to_ori);
+	assert(seq->s.link.to_ori == 0, "to_ori(%d)", seq->s.link.to_ori);
 	assert(strcmp((char const *)seq->s.link.cigar, "3M") == 0, "cigar(%s)", (char const *)seq->s.link.cigar);
 	fna_seq_free(seq);
 
