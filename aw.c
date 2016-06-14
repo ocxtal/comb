@@ -1068,14 +1068,14 @@ unittest()
 
 	char const *gpa =
 		"H\tVN:Z:0.1\n"
-		"A\t0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\t1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\t2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n"
-		"A\t3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\tMQ:i:255\n"
-		"A\t4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\tMQ:i:255\n"
-		"A\t5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\tMQ:i:255\n"
-		"A\t6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\t7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n";
+		"A\t0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\t*\t1\tMQ:i:255\n"
+		"A\t1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\t0\t2\tMQ:i:255\n"
+		"A\t2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\t1\t*\tMQ:i:255\n"
+		"A\t3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\t*\t4\tMQ:i:255\n"
+		"A\t4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\t3\t5\tMQ:i:255\n"
+		"A\t5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\t4\t*\tMQ:i:255\n"
+		"A\t6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\t*\t7\tMQ:i:255\n"
+		"A\t7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\t6\t*\tMQ:i:255\n";
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
@@ -1101,14 +1101,14 @@ unittest()
 
 	char const *gpa =
 		"H\tVN:Z:0.1\n"
-		"A\taln0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\taln1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\taln2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n"
-		"A\taln3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\tMQ:i:255\n"
-		"A\taln4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\tMQ:i:255\n"
-		"A\taln5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\tMQ:i:255\n"
-		"A\taln6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\tMQ:i:255\n"
-		"A\taln7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\tMQ:i:255\n";
+		"A\taln0\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\t*\taln1\tMQ:i:255\n"
+		"A\taln1\tsec1\t0\t4\t+\tsec1\t0\t4\t+\t4M\taln0\taln2\tMQ:i:255\n"
+		"A\taln2\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\taln1\t*\tMQ:i:255\n"
+		"A\taln3\tsec0\t0\t4\t+\tsec2\t4\t4\t-\t4M\t*\taln4\tMQ:i:255\n"
+		"A\taln4\tsec1\t0\t4\t+\tsec1\t4\t4\t-\t4M\taln3\taln5\tMQ:i:255\n"
+		"A\taln5\tsec2\t0\t2\t+\tsec0\t4\t2\t-\t2M\taln4\t*\tMQ:i:255\n"
+		"A\taln6\tsec0\t0\t4\t+\tsec0\t0\t4\t+\t4M\t*\taln7\tMQ:i:255\n"
+		"A\taln7\tsec2\t0\t8\t+\tsec2\t0\t8\t+\t8M\taln6\t*\tMQ:i:255\n";
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
