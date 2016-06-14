@@ -26,13 +26,13 @@
 typedef struct ngx_rbtree_node_s  ngx_rbtree_node_t;
 
 struct ngx_rbtree_node_s {
-    ngx_rbtree_node_t     *left;
-    ngx_rbtree_node_t     *right;
-    ngx_rbtree_node_t     *parent;
+    ngx_rbtree_node_t       *parent;
+    ngx_rbtree_node_t       *left;
+    ngx_rbtree_node_t       *right;
     uint8_t                 color;
     uint8_t                 data;
     uint8_t                 pad[6];
-    int64_t                key;
+    int64_t                 key;
 };
 
 
@@ -56,10 +56,6 @@ struct ngx_rbtree_s {
 
 void ngx_rbtree_insert(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
 void ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node);
-void ngx_rbtree_insert_value(ngx_rbtree_node_t *root, ngx_rbtree_node_t *node,
-    ngx_rbtree_node_t *sentinel);
-void ngx_rbtree_insert_timer_value(ngx_rbtree_node_t *root,
-    ngx_rbtree_node_t *node, ngx_rbtree_node_t *sentinel);
 
 /*
  * search functions
@@ -85,6 +81,40 @@ void ngx_rbtree_walk(ngx_rbtree_t *tree, ngx_rbtree_walk_pt walk, void *ctx);
 /* a sentinel must be black */
 
 #define ngx_rbtree_sentinel_init(node)  ngx_rbt_black(node)
+
+
+/* interval tree (augumented tree) */
+
+typedef struct ngx_ivtree_node_s ngx_ivtree_node_t;
+
+struct ngx_ivtree_node_s {
+    ngx_ivtree_node_t       *parent;
+    ngx_ivtree_node_t       *left;
+    ngx_ivtree_node_t       *right;
+    uint8_t                 color;
+    uint8_t                 data;
+    uint8_t                 pad[6];
+    int64_t                 lkey;
+    int64_t                 rkey;
+    int64_t                 rkey_max;
+};
+
+
+typedef struct ngx_ivtree_s  ngx_ivtree_t;
+
+
+struct ngx_ivtree_s {
+    ngx_ivtree_node_t     *root;
+    ngx_ivtree_node_t     *sentinel;
+    // ngx_rbtree_insert_pt   insert;
+};
+
+
+#define ngx_ivtree_init(tree, s, i)     ngx_rbtree_init(tree, s, i)
+
+
+void ngx_ivtree_insert(ngx_ivtree_t *tree, ngx_ivtree_node_t *node);
+void ngx_ivtree_delete(ngx_ivtree_t *tree, ngx_ivtree_node_t *node);
 
 
 #endif /* _NGX_RBTREE_H_INCLUDED_ */
