@@ -514,7 +514,8 @@ ivtree_iter_t *ivtree_containing(
 		tree->lmm_iter, sizeof(struct ivtree_iter_s));
 
 	ngx_ivtree_node_t *node = (ngx_ivtree_node_t *)tree->t.root;
-	while(node->left->rkey_max >= rkey) {
+	ngx_ivtree_node_t *sentinel = (ngx_ivtree_node_t *)tree->t.sentinel;
+	while(node != sentinel && node->left->rkey_max >= rkey) {
 		node = node->left;
 	}
 	*iter = (struct ivtree_iter_s){
@@ -542,7 +543,8 @@ ivtree_iter_t *ivtree_intersect(
 		tree->lmm_iter, sizeof(struct ivtree_iter_s));
 
 	ngx_ivtree_node_t *node = (ngx_ivtree_node_t *)tree->t.root;
-	while(node->left->rkey_max > lkey) {
+	ngx_ivtree_node_t *sentinel = (ngx_ivtree_node_t *)tree->t.sentinel;
+	while(node != sentinel && node->left->rkey_max > lkey) {
 		node = node->left;
 	}
 	*iter = (struct ivtree_iter_s){
@@ -1072,9 +1074,9 @@ void ivtree_print_node(
 	ivtree_node_t *node,
 	void *ctx)
 {
-	ngx_ivtree_node_t *n = (ngx_ivtree_node_t *)node;
-	debug("node(%p), left(%p), right(%p), parent(%p), lkey(%lld), rkey(%lld), rkey_max(%lld)",
-		n, n->left, n->right, n->parent, n->lkey, n->rkey, n->rkey_max);
+	// ngx_ivtree_node_t *n = (ngx_ivtree_node_t *)node;
+	// debug("node(%p), left(%p), right(%p), parent(%p), lkey(%lld), rkey(%lld), rkey_max(%lld)",
+		// n, n->left, n->right, n->parent, n->lkey, n->rkey, n->rkey_max);
 	return;
 }
 
@@ -1121,6 +1123,7 @@ unittest()
 	n = ivtree_next(iter); assert(n == NULL);
 
 	/* cleanup */
+	ivtree_iter_clean(iter);
 	ivtree_clean(tree);
 }
 
@@ -1169,6 +1172,7 @@ unittest()
 	n = ivtree_next(iter); assert(n == NULL);
 
 	/* cleanup */
+	ivtree_iter_clean(iter);
 	ivtree_clean(tree);
 }
 
@@ -1219,6 +1223,7 @@ unittest()
 	n = ivtree_next(iter); assert(n == NULL);
 
 	/* cleanup */
+	ivtree_iter_clean(iter);
 	ivtree_clean(tree);
 }
 
