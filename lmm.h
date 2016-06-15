@@ -28,8 +28,9 @@
 #define LMM_MIN_BASE_SIZE			( 128 )
 #define LMM_DEFAULT_BASE_SIZE		( 1024 )
 
-/* max */
+/* max and min */
 #define LMM_MAX2(x,y) 		( (x) > (y) ? (x) : (y) )
+#define LMM_MIN2(x,y) 		( (x) > (y) ? (y) : (x) )
 
 
 /**
@@ -268,8 +269,12 @@ int main() {
 #define lmm_kv_max(v)			( (v).m )
 
 #define lmm_kv_clear(lmm, v)	( (v).n = 0 )
-#define lmm_kv_resize(lmm, v, s) ( \
-	(v).m = (s), (v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m) )
+#define lmm_kv_resize(lmm, v, s) ({ \
+	uint64_t _size = LMM_MAX2(LMM_KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = LMM_MIN2((v).n, _size); \
+	(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m); \
+})
 
 #define lmm_kv_reserve(lmm, v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * (v).m), 0) )
@@ -399,8 +404,12 @@ int main() {
 #define lmm_kpv_asize(v)			( ((v).n + lmm_kpv_elems(v) - 1) / lmm_kpv_elems(v) )
 
 #define lmm_kpv_clear(lmm, v)		( (v).n = 0 )
-#define lmm_kpv_resize(lmm, v, s) ( \
-	(v).m = (s), (v).a = lmm_realloc(lmm, (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)) )
+#define lmm_kpv_resize(lmm, v, s) ({ \
+	uint64_t _size = LMM_MAX2(LMM_KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = LMM_MIN2((v).n, _size); \
+	(v).a = lmm_realloc((lmm), (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)); \
+})
 
 #define lmm_kpv_reserve(lmm, v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = lmm_realloc(lmm, (v).a, sizeof(*(v).a) * lmm_kpv_amax(v)), 0) )

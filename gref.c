@@ -50,9 +50,6 @@
 /**
  * structs and typedefs
  */
-// typedef lmm_kvec_t(struct gref_kmer_tuple_s) kvec_kmer_tuple_t;
-
-
 /* the code supposes NULL == (void *)0 */
 _static_assert(NULL == (void *)0);
 
@@ -797,6 +794,7 @@ int gref_flush_modified_seq(
 
 	/* resize */
 	lmm_kv_resize(acv->lmm, acv->seq, acv->seq_len);
+	lmm_kv_size(acv->seq) = acv->seq_len;
 	if(lmm_kv_ptr(acv->seq) == NULL) { return(-1); }
 
 	/* subtract seq_base from fw_sec, clear rv_sec with NULL */
@@ -826,6 +824,8 @@ int gref_shrink_link_table(
 		link_table[i] = lmm_kv_at(pool->link, i).to;
 	}
 	lmm_kv_resize(pool->lmm, pool->link, link_table_size / 2);
+	lmm_kv_size(pool->link) = link_table_size / 2;
+	debug("shrink ptr(%p), size(%llu)", lmm_kv_ptr(pool->link), link_table_size / 2);
 	
 	/* store info */
 	pool->link_table = (uint32_t *)lmm_kv_ptr(pool->link);
@@ -1426,6 +1426,7 @@ int64_t *gref_build_kmer_idx_table(
 	/* may fail when main memory is small */
 	uint64_t kmer_idx_size = 0x01 << (2 * acv->params.k);
 	lmm_kv_reserve(acv->lmm, kmer_idx, kmer_idx_size);
+	debug("ptr(%p), size(%llu)", lmm_kv_ptr(kmer_idx), kmer_idx_size);
 	if(lmm_kv_ptr(kmer_idx) == NULL) { return(NULL); }
 
 	uint64_t prev_kmer = 0;
@@ -1504,12 +1505,14 @@ gref_idx_t *gref_build_index(
 	if(psort_half(lmm_kv_ptr(v), lmm_kv_size(v),
 		sizeof(struct gref_kmer_tuple_s), acv->params.num_threads) != 0) {
 		lmm_kv_destroy(acv->lmm, v);
+		debug("sort failed");
 		goto _gref_build_index_error_handler;
 	}
 
 	/* build index of kmer table */
 	gref->kmer_idx_table = gref_build_kmer_idx_table(acv, lmm_kv_ptr(v), lmm_kv_size(v));
 	if(gref->kmer_idx_table == NULL) {
+		debug("failed to build index table");
 		goto _gref_build_index_error_handler;
 	}
 
@@ -1517,6 +1520,7 @@ gref_idx_t *gref_build_index(
 	gref->kmer_table_size = lmm_kv_size(v);
 	gref->kmer_table = gref_shrink_kmer_table(acv, lmm_kv_ptr(v), lmm_kv_size(v));
 	if(gref->kmer_table == NULL) {
+		debug("failed to shrink");
 		goto _gref_build_index_error_handler;
 	}
 

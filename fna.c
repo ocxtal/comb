@@ -306,7 +306,6 @@ fna_t *fna_init(
 		}
 	}
 	if(fna->file_format == 0) {
-		// log_error("Couldn't determine file format `%s'.\n", path);
 		fna->status = FNA_ERROR_UNKNOWN_FORMAT;
 		goto _fna_init_error_handler;
 	}

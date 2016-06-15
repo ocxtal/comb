@@ -309,6 +309,7 @@ sr_t *sr_init(
 		.seq_encode = FNA_4BIT,
 		.seq_head_margin = 32,
 		.seq_tail_margin = 32));
+	debug("fna(%p)", sr->fna);
 	if(sr->fna == NULL) {
 		goto _sr_init_error_handler;
 	}

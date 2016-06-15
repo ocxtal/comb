@@ -70,6 +70,7 @@ int main() {
 // #define kv_roundup32(x) (--(x), (x)|=(x)>>1, (x)|=(x)>>2, (x)|=(x)>>4, (x)|=(x)>>8, (x)|=(x)>>16, ++(x))
 #define kv_roundup(x, base)			( (((x) + (base) - 1) / (base)) * (base) )
 #define kv_max2(a, b)				( ((a) < (b)) ? (b) : (a) )
+#define kv_min2(a, b)				( ((a) < (b)) ? (a) : (b) )
 
 #define KVEC_INIT_SIZE 			( 256 )
 
@@ -85,8 +86,12 @@ int main() {
 #define kv_max(v)       ( (v).m )
 
 #define kv_clear(v)		( (v).n = 0 )
-#define kv_resize(v, s) ( \
-	(v).m = (s), (v).a = realloc((v).a, sizeof(*(v).a) * (v).m) )
+#define kv_resize(v, s) ({ \
+	uint64_t _size = kv_max2(KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = kv_min2((v).n, _size); \
+	(v).a = realloc((lmm), (v).a, sizeof(*(v).a) * (v).m); \
+})
 
 #define kv_reserve(v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = realloc((v).a, sizeof(*(v).a) * (v).m), 0) )
@@ -216,8 +221,12 @@ int main() {
 #define kpv_asize(v)    ( ((v).n + kpv_elems(v) - 1) / kpv_elems(v) )
 
 #define kpv_clear(v)	( (v).n = 0 )
-#define kpv_resize(v, s) ( \
-	(v).m = (s), (v).a = realloc((v).a, sizeof(*(v).a) * kpv_amax(v)) )
+#define kpv_resize(v, s) ({ \
+	uint64_t _size = kv_max2(KVEC_INIT_SIZE, (s)); \
+	(v).m = _size; \
+	(v).n = kv_min2((v).n, _size); \
+	(v).a = realloc((lmm), (v).a, sizeof(*(v).a) * kpv_amax(v)); \
+})
 
 #define kpv_reserve(v, s) ( \
 	(v).m > (s) ? 0 : ((v).m = (s), (v).a = realloc((v).a, sizeof(*(v).a) * kpv_amax(v)), 0) )

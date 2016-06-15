@@ -256,15 +256,15 @@ void *kopen(const char *fn, int *_fd)
 	if (strstr(fn, "http://") == fn) {
 		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_HTTP;
-		aux->fd = http_open(fn);
+		*_fd = aux->fd = http_open(fn);
 	} else if (strstr(fn, "ftp://") == fn) {
 		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_FTP;
-		aux->fd = ftp_open(fn);
+		*_fd = aux->fd = ftp_open(fn);
 	} else if (strcmp(fn, "-") == 0) {
 		aux = calloc(1, sizeof(koaux_t));
 		aux->type = KO_STDIN;
-		aux->fd = STDIN_FILENO;
+		*_fd = aux->fd = STDIN_FILENO;
 	} else {
 		const char *p, *q;
 		for (p = fn; *p; ++p)
@@ -300,7 +300,7 @@ void *kopen(const char *fn, int *_fd)
 				close(pfd[1]);
 				aux = calloc(1, sizeof(koaux_t));
 				aux->type = KO_PIPE;
-				aux->fd = pfd[0];
+				*_fd = aux->fd = pfd[0];
 				aux->pid = pid;
 			}
 		} else {
@@ -309,14 +309,14 @@ void *kopen(const char *fn, int *_fd)
 #else
 			*_fd = open(fn, O_RDONLY);
 #endif
-			if (*_fd) {
+			if (*_fd > 0) {
 				aux = calloc(1, sizeof(koaux_t));
 				aux->type = KO_FILE;
 				aux->fd = *_fd;
 			}
 		}
 	}
-	*_fd = aux->fd;
+	// *_fd = aux->fd;
 	return aux;
 }
 
