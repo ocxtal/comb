@@ -104,6 +104,10 @@ struct ggsea_ctx_s {
 	/* repetitive kmer container */
 	hmap_t *rep_kmer;
 
+	/* adjacent kmer filter */
+	int64_t prev_match_idx;
+	struct gref_match_res_s prev_match;
+
 	/* overlap filter */
 	int64_t filt_bw;
 	ivtree_t *tree;
@@ -251,6 +255,11 @@ ggsea_ctx_t *ggsea_ctx_init(
 	}
 	#endif
 
+	/* init seed position vector (adjacent kmer filter) */
+	ctx->prev_match = (struct gref_match_res_s){
+		.gid_pos_arr = NULL,
+		.len = 0
+	};
 	/* init overlap tree */
 	ctx->filt_bw = conf->overlap_width / 2;
 	ctx->tree = ivtree_init(sizeof(struct ggsea_region_s), NULL);
@@ -315,6 +324,12 @@ void ggsea_ctx_flush(
 		kv_destroy(c->qv);
 	}
 	hmap_flush(ctx->rep_kmer);
+
+	/* flush kmer vec */
+	ctx->prev_match = (struct gref_match_res_s){
+		.gid_pos_arr = NULL,
+		.len = 0
+	};
 
 	/* flush tree */
 	ivtree_flush(ctx->tree);
@@ -396,6 +411,52 @@ void ggsea_save_rep_kmer(
 		c->vec_size *= 2;
 	}
 	return;
+}
+
+
+/* adjacent kmer filter */
+/**
+ * @fn ggsea_update_adjacent_filter
+ */
+static _force_inline
+void ggsea_update_adjacent_filter(
+	struct ggsea_ctx_s *ctx,
+	struct gref_match_res_s m)
+{
+	debug("save adjacent filter arr(%p), len(%lld)", m.gid_pos_arr, m.len);
+	ctx->prev_match_idx = 0;
+	ctx->prev_match = m;
+	return;
+}
+
+/**
+ * @fn ggsea_adjacent_filter
+ * @brief filt out previously hit kmer
+ */
+static _force_inline
+int64_t ggsea_adjacent_filter(
+	struct ggsea_ctx_s *ctx,
+	struct gref_gid_pos_s pos)
+{
+	union gid_pos_u {
+		struct gref_gid_pos_s p;
+		uint64_t u;
+	};
+	#define _cast_u(x)	( ((union gid_pos_u){ .p = (x) }).u )
+
+	int64_t i = ctx->prev_match_idx;
+	int64_t size = ctx->prev_match.len;
+	struct gref_gid_pos_s *arr = ctx->prev_match.gid_pos_arr;
+	uint64_t prev_u = 0xffffffff00000000;
+
+	debug("i(%lld), size(%lld), arr(%p), pos(%llx)", i, size, arr, _cast_u(pos));
+	while(i < size && (prev_u = _cast_u(arr[i])) < (_cast_u(pos) - 1)) {
+		debug("i(%lld), size(%lld), arr[i](%llx), pos(%llx)", i, size, _cast_u(arr[i]), _cast_u(pos));
+		i++;
+	}
+	ctx->prev_match_idx = i;
+	debug("adjacent filter, prev_u(%llx), pos(%llx), ret(%d)", prev_u, _cast_u(pos), (prev_u == (_cast_u(pos) - 1)) ? 1 : 0);
+	return((prev_u == (_cast_u(pos) - 1)) ? 1 : 0);
 }
 
 
@@ -954,6 +1015,13 @@ struct ggsea_result_s ggsea_align(
 			/* save stack */
 			gaba_stack_t const *stack = gaba_dp_save_stack(ctx->dp);
 
+			/* adjacent filter */
+			if(ggsea_adjacent_filter(ctx, m.gid_pos_arr[i]) == 1) {
+				/* hit, skip further evaluation */
+				debug("adjacent filter hit");
+				continue;
+			}
+
 			/* apply overlap filter */
 			int64_t score = ggsea_overlap_filter(ctx, m.gid_pos_arr[i], t.gid_pos);
 
@@ -981,6 +1049,9 @@ struct ggsea_result_s ggsea_align(
 			/* update overlap filter */
 			ggsea_update_overlap_section(ctx, pair, aln);
 		}
+
+		/* save kmers for the next loop */
+		ggsea_update_adjacent_filter(ctx, m);
 	}
 
 	/* cleanup iterator */
