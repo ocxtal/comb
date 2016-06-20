@@ -63,7 +63,7 @@ struct aw_s {
 	uint32_t program_id;
 	char *program_name;
 	char *command;				/* '\t' must be substituted to ' ' */
-	
+
 	/* alignment name in gam format */
 	char *aln_name_prefix;
 	uint32_t aln_name_len;
@@ -701,7 +701,7 @@ void *aw_unittest_init(
 		sizeof(struct aw_unittest_ctx_s));
 
 	gref_pool_t *pool = gref_init_pool(GREF_PARAMS(
-		.k = 3,
+		.k = 4,
 		.seq_head_margin = 32,
 		.seq_tail_margin = 32));
 	gref_append_segment(pool, _str("sec0"), _seq("GGRA"));
