@@ -438,7 +438,7 @@ unittest()
 
 	fdump(fasta_filename, fasta_content);
 	sr_t *sr = sr_init(fasta_filename, SR_PARAMS(
-		.k = 3,
+		.k = 4,
 		.seq_direction = SR_FW_ONLY));
 	assert(sr != NULL);
 
@@ -468,7 +468,7 @@ unittest()
 
 	fdump(fasta_filename, fasta_content);
 	sr_t *sr = sr_init(fasta_filename, SR_PARAMS(
-		.k = 3,
+		.k = 4,
 		.seq_direction = SR_FW_ONLY));
 	assert(sr != NULL);
 
