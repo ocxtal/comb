@@ -37,7 +37,43 @@
 
 char const *comb_help_message =
 	"\n"
-	"    comb aligner (version %s)\n"
+	"    comb aligner (%s)\n"
+	"\n"
+	"  Comb aligner is a prototype implementation of a seed-and-extend alignment\n"
+	"on two string graphs. The aligner accept FASTA / FASTQ and GFA formats for the\n"
+	"input files (reference and query) and handle SAM and GPA (Graphical Pairwise\n"
+	"Alignment format) for the output file.\n"
+	"\n"
+	"  Usage\n"
+	"\n"
+	"    $ comb [options] <reference> <query> <output>\n"
+	"\n"
+	"  Options and defaults\n"
+	"    Global option\n"
+	"      -t<int>  [0] Number of threads.\n"
+	"\n"
+	"    Seeding option\n"
+	"      -k<int>  [14] k-mer length in indexing and matching.\n"
+	"\n"
+	"    Filtering options\n"
+	"      -r<int>  [30] Repetitive k-mer filter threshold.\n"
+	"      -d<int>  [3]  Overlap filter threshold.\n"
+	"      -f<int>  [10] Gapless alignment filter threshold.\n"
+	"\n"
+	"    Extension options\n"
+	"      -a<int>  [1]  Match award (in positive integer)\n"
+	"      -b<int>  [1]  Mismatch penalty (in positive integer)\n"
+	"      -p<int>  [1]  Gap-open penalty (pos. int. or 0 (=linear-gap penalty))\n"
+	"      -q<int>  [1]  Gap-extension penalty (positive integer)\n"
+	"      -x<int>  [60] X-drop threshold\n"
+	"\n"
+	"    Reporting options\n"
+	"      -m<int>  [10] Minimum score for reporting.\n"
+	"      -c<char> [S]  Clip operation in CIGAR string. (H (hard) or S (soft))\n"
+	"\n"
+	"    Miscellaneous options\n"
+	"      -h       Print help (this) message.\n"
+	"      -v       Print version information.\n"
 	"\n";
 
 /**
@@ -64,7 +100,7 @@ struct comb_params_s {
 	/* filtering parameters */
 	int64_t kmer_cnt_thresh;
 	int64_t overlap_thresh;
-	int64_t popcnt_thresh;
+	int64_t gapless_thresh;
 
 	/* scoring parameters */
 	int64_t xdrop;
@@ -106,7 +142,7 @@ void comb_print_help(
 	int level)
 {
 	if(level == COMB_PRINT_VERSION) {
-		fprintf(stderr, "comb aligner version %s\n", COMB_VERSION_STRING);
+		fprintf(stderr, "comb aligner (%s)\n", COMB_VERSION_STRING);
 	} else if(level == COMB_PRINT_HELP) {
 		fprintf(stderr, comb_help_message, COMB_VERSION_STRING);
 	}
@@ -144,8 +180,22 @@ static _force_inline
 void comb_print_option_summary(
 	struct comb_params_s const *params)
 {
-
-
+	#define _p(...)		fprintf(stderr, __VA_ARGS__);
+	_p("Running comb aligner with following options:\n");
+	_p("-t%" PRId64 " ", params->num_threads);
+	_p("-k%" PRId64 " ", params->k);
+	_p("-r%" PRId64 " ", params->kmer_cnt_thresh);
+	_p("-d%" PRId64 " ", params->overlap_thresh);
+	_p("-f%" PRId64 " ", params->gapless_thresh);
+	_p("-a%d ", params->m);
+	_p("-b%d ", params->x);
+	_p("-p%d ", params->gi);
+	_p("-q%d ", params->ge);
+	_p("-x%" PRId64 " ", params->xdrop);
+	_p("-m%" PRId64 " ", params->score_thresh);
+	_p("-c%c", params->clip);
+	_p("\n");
+	#undef _p
 	return;
 }
 
@@ -267,7 +317,7 @@ struct comb_params_s *comb_parse_args(
 		.k = 14,
 		.kmer_cnt_thresh = 30,
 		.overlap_thresh = 3,
-		.popcnt_thresh = 10,
+		.gapless_thresh = 10,
 		.xdrop = 60,
 		.m = 1, .x = 1, .gi = 1, .ge = 1,
 		.clip = 'S',
@@ -297,6 +347,7 @@ struct comb_params_s *comb_parse_args(
 
 		/* reporting params */
 		{ "min", required_argument, NULL, 'm' },
+		{ "clip", required_argument, NULL, 'c' }
 	};
 	char *opts_short = comb_build_short_option_string(opts_long);
 
@@ -313,13 +364,14 @@ struct comb_params_s *comb_parse_args(
 			case 'k': params->k = comb_atoi(optarg); break;
 			case 'r': params->kmer_cnt_thresh = comb_atoi(optarg); break;
 			case 'd': params->overlap_thresh = comb_atoi(optarg); break;
-			case 'f': params->popcnt_thresh = comb_atoi(optarg); break;
+			case 'f': params->gapless_thresh = comb_atoi(optarg); break;
 			case 'a': params->m = comb_atoi(optarg); break;
 			case 'b': params->x = comb_atoi(optarg); break;
 			case 'p': params->gi = comb_atoi(optarg); break;
 			case 'q': params->ge = comb_atoi(optarg); break;
 			case 'x': params->xdrop = comb_atoi(optarg); break;
 			case 'm': params->score_thresh = comb_atoi(optarg); break;
+			case 'c': params->clip = optarg[0]; break;
 			
 			/* unknown option */
 			default: comb_print_unknown_option(c); break;
@@ -542,7 +594,7 @@ int comb_run(
 		.score_matrix = GABA_SCORE_SIMPLE(params->m, params->x, params->gi, params->ge),
 		.kmer_cnt_thresh = params->kmer_cnt_thresh,
 		.overlap_thresh = params->overlap_thresh,
-		.popcnt_thresh = params->popcnt_thresh,
+		.gapless_thresh = params->gapless_thresh,
 		.score_thresh = params->score_thresh));
 	comb_run_error(conf != NULL, "Failed to create alignment configuration.");
 
