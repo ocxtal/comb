@@ -119,6 +119,81 @@ void aw_print_num(
 	return;
 }
 
+/**
+ * @union aw_parse_cigar_table_u
+ */
+union aw_parse_cigar_table_u {
+	struct aw_parse_cigar_table_s {
+		char str[2];
+		uint8_t len;
+		uint8_t adv;
+	} table;
+	uint32_t all;
+};
+
+/**
+ * @fn parse_get_cigar_elem
+ * @brief get cigar element of length i
+ */
+static _force_inline
+union aw_parse_cigar_table_u aw_parse_get_cigar_elem(
+	uint8_t i)
+{
+	static struct aw_parse_cigar_table_s const conv_table[64] = {
+		{{0 }, 0, 0}, {{'1'}, 1, 2}, {{'2'}, 1, 2}, {{'3'}, 1, 2},
+		{{'4'}, 1, 2}, {{'5'}, 1, 2}, {{'6'}, 1, 2}, {{'7'}, 1, 2},
+		{{'8'}, 1, 2}, {{'9'}, 1, 2}, {{'1', '0'}, 2, 3}, {{'1', '1'}, 2, 3},
+		{{'1', '2'}, 2, 3}, {{'1', '3'}, 2, 3}, {{'1', '4'}, 2, 3}, {{'1', '5'}, 2, 3},
+		{{'1', '6'}, 2, 3}, {{'1', '7'}, 2, 3}, {{'1', '8'}, 2, 3}, {{'1', '9'}, 2, 3},
+		{{'2', '0'}, 2, 3}, {{'2', '1'}, 2, 3}, {{'2', '2'}, 2, 3}, {{'2', '3'}, 2, 3},
+		{{'2', '4'}, 2, 3}, {{'2', '5'}, 2, 3}, {{'2', '6'}, 2, 3}, {{'2', '7'}, 2, 3},
+		{{'2', '8'}, 2, 3}, {{'2', '9'}, 2, 3}, {{'3', '0'}, 2, 3}, {{'3', '1'}, 2, 3},
+		{{'3', '2'}, 2, 3}, {{'3', '3'}, 2, 3}, {{'3', '4'}, 2, 3}, {{'3', '5'}, 2, 3},
+		{{'3', '6'}, 2, 3}, {{'3', '7'}, 2, 3}, {{'3', '8'}, 2, 3}, {{'3', '9'}, 2, 3},
+		{{'4', '0'}, 2, 3}, {{'4', '1'}, 2, 3}, {{'4', '2'}, 2, 3}, {{'4', '3'}, 2, 3},
+		{{'4', '4'}, 2, 3}, {{'4', '5'}, 2, 3}, {{'4', '6'}, 2, 3}, {{'4', '7'}, 2, 3},
+		{{'4', '8'}, 2, 3}, {{'4', '9'}, 2, 3}, {{'5', '0'}, 2, 3}, {{'5', '1'}, 2, 3},
+		{{'5', '2'}, 2, 3}, {{'5', '3'}, 2, 3}, {{'5', '4'}, 2, 3}, {{'5', '5'}, 2, 3},
+		{{'5', '6'}, 2, 3}, {{'5', '7'}, 2, 3}, {{'5', '8'}, 2, 3}, {{'5', '9'}, 2, 3},
+		{{'6', '0'}, 2, 3}, {{'6', '1'}, 2, 3}, {{'6', '2'}, 2, 3}, {{'6', '3'}, 2, 3}
+	};
+	return((union aw_parse_cigar_table_u){ .table = conv_table[i] });
+}
+
+/**
+ * @fn aw_nprintf
+ */
+static
+int aw_cigar_printf(
+	void *ctx,
+	char const *fmt,
+	...)
+{
+	va_list l;
+	va_start(l, fmt);
+
+	zf_t *fp = (zf_t *)ctx;
+	uint64_t const fmt_base_len = strlen("%" PRId64 "");
+
+	int64_t len = va_arg(l, int64_t);
+	char op = (fmt[fmt_base_len] == '%') ? va_arg(l, int) : fmt[fmt_base_len];
+
+	int adv = 0;
+	if(len < 64) {
+		union aw_parse_cigar_table_u c = aw_parse_get_cigar_elem(len);
+		for(int64_t i = 0; i < c.table.len; i++) {
+			zfputc(fp, c.table.str[i]);
+		}
+		zfputc(fp, op);
+		adv = c.table.adv;
+	} else {
+		adv = zfprintf(fp, "%" PRId64 "%c", len, op);
+	}
+
+	va_end(l);
+	return(adv);
+}
+
 
 /* sam format writers */
 
@@ -214,7 +289,8 @@ void sam_print_cigar(
 
 	/* print cigar */
 	gaba_dp_print_cigar(
-		(gaba_dp_fprintf_t)zfprintf,
+		// (gaba_dp_fprintf_t)zfprintf,
+		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,
 		path->array,
 		path->offset + curr->ppos,
@@ -469,7 +545,8 @@ void gpa_write_segment(
 
 	/* cigar string */
 	gaba_dp_print_cigar(
-		(gaba_dp_fprintf_t)zfprintf,
+		// (gaba_dp_fprintf_t)zfprintf,
+		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,
 		path->array,
 		path->offset + sec->ppos,
