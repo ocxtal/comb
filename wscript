@@ -1,6 +1,35 @@
 #! /usr/bin/env python
 # encoding: utf-8
 
+
+def isxdigit(string):
+	try:
+		int(string, 16)
+		return True
+	except ValueError, e:
+		return False
+
+def get_hash(default_version_string):
+	import subprocess
+	try:
+		return(subprocess.check_output(['git', 'rev-parse', 'HEAD']).split('\n')[0])
+	except subprocess.CalledProcessError, e:
+		return(default_version_string)
+
+def get_tag(hash):
+	import subprocess
+	try:
+		return(filter(lambda a: a == hash, subprocess.check_output(['git', 'show-ref', '--tags']).split('\n')))
+	except subprocess.CalledProcessError, e:
+		return('')
+
+def get_version_string(default_version_string):
+	hash = get_hash(default_version_string)
+	tag = get_tag(hash)
+	hash = hash[0:7] if isxdigit(hash) == True else hash
+	return('"{}"'.format(tag if tag != '' else hash))
+
+
 def options(opt):
 	opt.load('compiler_c')
 	opt.recurse('arch')
@@ -29,11 +58,13 @@ def configure(conf):
 	conf.env.append_value('CFLAGS', '-Wall')
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
-	conf.env.append_value('CFLAGS', '-march=native')
 	conf.env.append_value('CFLAGS', '-Wno-unused-function')
+	conf.env.append_value('CFLAGS', '-march=native')
+	conf.env.append_value('CFLAGS', '-flto')
+	conf.env.append_value('LDFLAGS', '-flto')
 
 	conf.env.append_value('LIB_COMB', conf.env.LIB_Z + conf.env.LIB_BZ2 + conf.env.LIB_PTHREAD)
-	conf.env.append_value('DEFINES_COMB', conf.env.DEFINES_Z + conf.env.DEFINES_BZ2)
+	conf.env.append_value('DEFINES_COMB', conf.env.DEFINES_Z + conf.env.DEFINES_BZ2 + ['COMB_VERSION_STRING=' + get_version_string("0.0.1")])
 	conf.env.append_value('OBJ_COMB',
 		['aw.o', 'fna.o', 'gaba_linear.o', 'gaba_affine.o', 'gaba_wrap.o', 'ggsea.o', 'gref.o', 'hmap.o', 'kopen.o', 'ngx_rbtree.o', 'psort.o', 'ptask.o', 'queue.o', 'queue_internal.o', 'sr.o', 'tree.o', 'zf.o'])
 
