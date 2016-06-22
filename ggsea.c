@@ -141,7 +141,7 @@ ggsea_conf_t *ggsea_conf_init(
 	restore(p.k, 0);
 	restore(p.kmer_cnt_thresh, 100);
 	restore(p.overlap_thresh, 3);
-	restore(p.popcnt_thresh, 25);
+	restore(p.gapless_thresh, 10);
 	restore(p.score_thresh, 0);			/* score positive */
 
 	#undef restore
@@ -156,7 +156,7 @@ ggsea_conf_t *ggsea_conf_init(
 
 	/* init alignment context */
 	conf->gaba = gaba_init(GABA_PARAMS(
-		/*.popcnt = p.popcnt_thresh,*/
+		.filter_thresh = p.gapless_thresh,
 		.xdrop = p.xdrop,
 		.score_matrix = p.score_matrix));
 	if(conf->gaba == NULL) {
@@ -914,6 +914,11 @@ int64_t ggsea_cmp_result(
 		rarr[karr[i].idx]->score, rarr[karr[i].idx]->score,
 		rarr[karr[i].idx]->sec[0].aid, rarr[karr[i].idx]->sec[0].bid,
 		rarr[karr[j].idx]->sec[0].aid, rarr[karr[j].idx]->sec[0].bid);
+
+	/**
+	 *
+	 */
+
 	return(rarr[karr[i].idx]->score - rarr[karr[j].idx]->score);
 }
 
@@ -1100,7 +1105,7 @@ unittest()
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1),
 		.xdrop = 10));
 
-	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 3 ));
+	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_acv_t *acv = gref_freeze_pool(pool);
 	gref_idx_t *idx = gref_build_index(acv);
@@ -1143,7 +1148,7 @@ unittest(with_default_conf())
 	omajinai();
 
 	/* build sequence pool */
-	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 3 ));
+	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool));
 

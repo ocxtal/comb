@@ -42,7 +42,7 @@ struct ggsea_params_s {
 	int64_t overlap_thresh;			/* depth */
 
 	/* popcnt filter thresh */
-	int64_t popcnt_thresh;			/* threshold */
+	int64_t gapless_thresh;			/* threshold */
 
 	/* score thresh */
 	int64_t score_thresh;
