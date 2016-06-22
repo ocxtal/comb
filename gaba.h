@@ -73,12 +73,12 @@ typedef struct gaba_score_s gaba_score_t;
  * @brief input parameters of gaba_init
  */
 struct gaba_params_s {
-	/** input options */
-	uint8_t reserved[2];
-
 	/** output options */
 	int16_t head_margin;		/** margin at the head of gaba_res_t */
 	int16_t tail_margin;		/** margin at the tail of gaba_res_t */
+
+	/** filtering options */
+	int16_t filter_thresh;		/** popcnt filter threshold, set zero if you want to disable it */
 
 	/** score parameters */
 	int16_t xdrop;
@@ -335,6 +335,9 @@ gaba_result_t *gaba_dp_trace(
  * @fn gaba_dp_print_cigar
  *
  * @brief convert path string to cigar.
+ * @detail
+ * fprintf must accept ("%" PRId64 "M") and ("%" PRId64 "%c") format string
+ * otherwise can be ignored.
  */
 typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
 int64_t gaba_dp_print_cigar(
