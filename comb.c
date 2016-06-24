@@ -52,7 +52,7 @@ char const *comb_help_message =
 	"\n"
 	"  Options and defaults\n"
 	"    Global option\n"
-	"      -t<int>  [0] Number of threads.\n"
+	"      -t<int>  [0]  Number of threads.\n"
 	"\n"
 	"    Seeding option\n"
 	"      -k<int>  [14] k-mer length in indexing and matching.\n"
