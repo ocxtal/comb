@@ -25,17 +25,6 @@
 #define _roundup(x, base)			( ((x) + (base) - 1) & ~((base) - 1) )
 
 /**
- * @struct rbtree_vec_s
- */
-struct rbtree_vec_s {
-	struct rbtree_vec_s *next;
-	struct rbtree_vec_s *prev;
-	int64_t cnt;
-	int64_t pad;
-	uint8_t v[];
-};
-
-/**
  * @struct rbtree_s
  */
 struct rbtree_s {
@@ -46,9 +35,7 @@ struct rbtree_s {
 	struct rbtree_params_s params;
 
 	/* vector pointers */
-	uint8_t *v;
-	int64_t vrem;
-	struct rbtree_vec_s *vhead, *vroot;
+	lmm_pool_t *pool;
 
 	/* working buffer */
 	rbtree_walk_t fn;
@@ -88,12 +75,11 @@ void rbtree_clean(
 	struct rbtree_s *tree = (struct rbtree_s *)_tree;
 	if(tree == NULL) { return; }
 
+	/* cleanup object pool */
+	lmm_pool_clean(tree->pool);
+
+	/* cleanup tree object */
 	lmm_t *lmm = tree->lmm;
-	struct rbtree_vec_s *v = tree->vroot;
-	while(v != NULL) {
-		struct rbtree_vec_s *vnext = v->next;
-		lmm_free(lmm, v); v = vnext;
-	}
 	lmm_free(lmm, tree->lmm_iter);
 	lmm_free(lmm, tree);
 	return;
@@ -126,20 +112,8 @@ rbtree_t *rbtree_init(
 	tree->object_size = _roundup(object_size, 16);
 	tree->params = *params;
 
-	/* init vector */
-	tree->vhead = tree->vroot = (struct rbtree_vec_s *)lmm_malloc(lmm,
-		sizeof(struct rbtree_vec_s) + RBTREE_INIT_ELEM_CNT * tree->object_size);
-	tree->vhead->next = NULL;			/* dual linked list */
-	tree->vhead->prev = NULL;
-	tree->vhead->cnt = RBTREE_INIT_ELEM_CNT;
-
-	tree->v = tree->vhead->v;
-	tree->vrem = tree->vhead->cnt;
-
-	/* init free list */
-	ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-	tail->key = (int64_t)NULL;
-	debug("vector inited, v(%p), head(%p), root(%p)", tree->v, tree->vhead, tree->vroot);
+	/* init node pool */
+	tree->pool = lmm_pool_init(lmm, tree->object_size, RBTREE_INIT_ELEM_CNT);
 
 	/* init tree */
 	ngx_rbtree_init(&tree->t, &tree->sentinel, ngx_rbtree_insert_value);
@@ -158,18 +132,10 @@ void rbtree_flush(
 	struct rbtree_s *tree = (struct rbtree_s *)_tree;
 	if(tree == NULL) { return; }
 
-	/* init v */
-	tree->vhead = tree->vroot;
+	/* flush object pool */
+	lmm_pool_flush(tree->pool);
 
-	tree->v = tree->vhead->v;
-	tree->vrem = tree->vhead->cnt;
-
-	/* init free list */
-	ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-	tail->key = (int64_t)NULL;
-	debug("vector inited, v(%p), head(%p), root(%p)", tree->v, tree->vhead, tree->vroot);
-
-	/* init tree */
+	/* flush tree */
 	ngx_rbtree_init(&tree->t, &tree->sentinel, ngx_rbtree_insert_value);
 	tree->sentinel.data = 0xff;
 	return;
@@ -184,47 +150,8 @@ rbtree_node_t *rbtree_create_node(
 	rbtree_t *_tree)
 {
 	struct rbtree_s *tree = (struct rbtree_s *)_tree;
-	ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-	ngx_rbtree_node_t *node = NULL;
-
-	/* check the recycle list */
-	if((ngx_rbtree_node_t *)tail->key != NULL) {
-		/* recycle removed space */
-		node = (ngx_rbtree_node_t *)tail->key;
-		debug("node recycled, node(%p)", node);
-
-		/* update root of the freed list */
-		tail->key = node->key;
-	} else {
-		/* add new node */
-		node = tail;
-		tree->v += tree->object_size;
-
-		if(--tree->vrem <= 0) {
-			if(tree->vhead->next == NULL) {
-				/* add new vector */
-				int64_t next_cnt = tree->vhead->cnt * 2;
-				struct rbtree_vec_s *v = tree->vhead->next = (struct rbtree_vec_s *)lmm_malloc(
-					tree->lmm, sizeof(struct rbtree_vec_s) + next_cnt * tree->object_size);
-				v->next = NULL;
-				v->prev = tree->vhead;
-				v->cnt = next_cnt;
-			}
-
-			/* follow the forward link */
-			tree->vhead = tree->vhead->next;
-
-			/* init v and vrem */
-			tree->v = tree->vhead->v;
-			tree->vrem = tree->vhead->cnt;
-			debug("added new vector, v(%p), vhead(%p), vroot(%p)", tree->v, tree->vhead, tree->vroot);
-		}
-
-		/* copy root of free list */
-		ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-		tail->key = node->key;
-		debug("new node created, node(%p)", node);
-	}
+	ngx_rbtree_node_t *node = (ngx_rbtree_node_t *)lmm_pool_create_object(
+		tree->pool);
 
 	/* mark node */
 	node->data = 0xff;
@@ -262,9 +189,7 @@ void rbtree_remove(
 
 	if(node->data == 0xff) {
 		/* append node to the head of freed list */
-		ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-		node->key = tail->key;
-		tail->key = (int64_t)node;
+		lmm_pool_delete_object(tree->pool, node);
 	}
 	return;
 }
@@ -443,9 +368,7 @@ void ivtree_remove(
 
 	if(node->data == 0xff) {
 		/* append node to the head of freed list */
-		ngx_rbtree_node_t *tail = (ngx_rbtree_node_t *)tree->v;
-		node->key = tail->key;
-		tail->key = (int64_t)node;
+		lmm_pool_delete_object(tree->pool, node);
 	}
 	return;
 }

@@ -182,6 +182,180 @@ char *lmm_strdup(
 	return(s);
 }
 
+
+/* object pool implementation */
+
+/**
+ * @struct lmm_pool_block_s
+ */
+struct lmm_pool_block_s {
+	struct lmm_pool_block_s *next;
+	struct lmm_pool_block_s *prev;
+	int64_t cnt;
+	int64_t pad;
+	uint8_t mem[];
+};
+
+/**
+ * @struct lmm_pool_object_s
+ */
+struct lmm_pool_object_s {
+	struct lmm_pool_object_s *next;
+};
+
+/**
+ * @struct lmm_pool_s
+ */
+struct lmm_pool_s {
+	lmm_t *lmm;
+	struct lmm_pool_block_s *curr;
+	struct lmm_pool_block_s *root;
+	struct lmm_pool_object_s *tail;
+	int64_t rem;
+	int64_t object_multiplier;
+};
+typedef struct lmm_pool_s lmm_pool_t;
+
+/**
+ * @fn lmm_pool_init
+ */
+static inline
+lmm_pool_t *lmm_pool_init(
+	lmm_t *lmm,
+	uint64_t object_size,
+	uint64_t init_object_cnt)
+{
+	object_size = _lmm_roundup(object_size, sizeof(struct lmm_pool_object_s));
+	struct lmm_pool_s *pool = lmm_malloc(lmm,
+		  sizeof(struct lmm_pool_s) + sizeof(struct lmm_pool_block_s)
+		+ init_object_cnt * object_size);
+	if(pool == NULL) {
+		return(NULL);
+	}
+
+	struct lmm_pool_block_s *blk = (struct lmm_pool_block_s *)(pool + 1);
+
+	/* init pool object */
+	pool->lmm = lmm;
+	pool->curr = blk;
+	pool->root = blk;
+	pool->tail = (struct lmm_pool_object_s *)blk->mem;
+	pool->rem = init_object_cnt;
+	pool->object_multiplier = object_size / sizeof(struct lmm_pool_object_s);
+
+	/* init first block */
+	blk->next = NULL;
+	blk->prev = NULL;
+	blk->cnt = init_object_cnt;
+
+	/* init free list */
+	pool->tail->next = NULL;
+
+	return((lmm_pool_t *)pool);
+}
+
+/**
+ * @fn lmm_pool_clean
+ */
+static inline
+void lmm_pool_clean(
+	lmm_pool_t *_pool)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_block_s *blk = pool->root->next;
+	lmm_t *lmm = pool->lmm;
+
+	while(blk != NULL) {
+		struct lmm_pool_block_s *next_blk = blk->next;
+		lmm_free(lmm, blk); blk = next_blk;
+	}
+	lmm_free(lmm, pool);
+	return;
+}
+
+/**
+ * @fn lmm_pool_flush
+ */
+static inline
+void lmm_pool_flush(
+	lmm_pool_t *_pool)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	if(pool == NULL) { return; }
+
+	pool->curr = pool->root;
+	pool->tail = (struct lmm_pool_object_s *)pool->root->mem;
+	pool->rem = pool->root->cnt;
+	pool->tail->next = NULL;
+	return;
+}
+
+/**
+ * @fn lmm_pool_add_block
+ */
+static inline
+void lmm_pool_add_block(
+	struct lmm_pool_s *pool)
+{
+	if(pool->curr->next == NULL) {
+		int64_t next_cnt = 2 * pool->curr->cnt;
+		struct lmm_pool_block_s *blk = pool->curr->next =
+			(struct lmm_pool_block_s *)lmm_malloc(pool->lmm,
+				  sizeof(struct lmm_pool_block_s)
+				+ next_cnt * sizeof(struct lmm_pool_object_s) * pool->object_multiplier);
+		blk->next = NULL;
+		blk->prev = pool->curr;
+		blk->cnt = next_cnt;
+	}
+
+	pool->curr = pool->curr->next;
+	pool->tail = (struct lmm_pool_object_s *)pool->curr->mem;
+	pool->rem = pool->curr->cnt;
+	return;
+}
+
+/**
+ * @fn lmm_pool_create_object
+ */
+static inline
+void *lmm_pool_create_object(
+	lmm_pool_t *_pool)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_object_s *obj = NULL;
+
+	if(pool->tail->next != NULL) {
+		obj = pool->tail->next;
+		pool->tail->next = obj->next;
+	} else {
+		obj = pool->tail;
+		pool->tail += pool->object_multiplier;
+
+		if(--pool->rem <= 0) {
+			lmm_pool_add_block(pool);
+		}
+
+		*pool->tail = *obj;
+	}
+	return((void *)obj);
+}
+
+/**
+ * @fn lmm_pool_delete_object
+ */
+static inline
+void lmm_pool_delete_object(
+	lmm_pool_t *_pool,
+	void *_obj)
+{
+	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
+	struct lmm_pool_object_s *obj = (struct lmm_pool_object_s *)_obj;
+
+	obj->next = pool->tail->next;
+	pool->tail->next = obj;
+	return;
+}
+
 /**
  * kvec.h from https://github.com/ocxtal/kvec.h
  * the original implementation of kvec.h is found at
