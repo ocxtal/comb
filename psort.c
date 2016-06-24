@@ -119,7 +119,7 @@ void *psort_dispatcher(
 #define p 					_p
 #define e 					_e
 #define UNITTEST_UNIQUE_ID	SUFFIX
-#include "psort_radix_intl.c"
+#include "psort_radix_internal.c"
 // #include "psort_quick_intl.c"
 
 /* 32bit */
@@ -131,7 +131,7 @@ void *psort_dispatcher(
 #define p 					_p
 #define e 					_e
 #define UNITTEST_UNIQUE_ID	SUFFIX
-#include "psort_radix_intl.c"
+#include "psort_radix_internal.c"
 // #include "psort_quick_intl.c"
 
 /* 64bit */
@@ -143,7 +143,7 @@ void *psort_dispatcher(
 #define p 					_p
 #define e 					_e
 #define UNITTEST_UNIQUE_ID	SUFFIX
-#include "psort_radix_intl.c"
+#include "psort_radix_internal.c"
 // #include "psort_quick_intl.c"
 
 /* 128bit */
@@ -155,7 +155,7 @@ void *psort_dispatcher(
 #define p 					p_128
 #define e 					e_128
 #define UNITTEST_UNIQUE_ID	SUFFIX
-#include "psort_radix_intl.c"
+#include "psort_radix_internal.c"
 // #include "psort_quick_intl.c"
 
 /**
@@ -223,7 +223,7 @@ int psort_partial(
 #define UNITTEST_UNIQUE_ID 		61
 unittest_config(
 	.name = "psort",
-	.depends_on = { "psort_radix_intl" }
+	.depends_on = { "psort_radix_internal" }
 );
 
 #define UNITTEST_ARR_LEN		100
