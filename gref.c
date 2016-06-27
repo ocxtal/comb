@@ -28,6 +28,14 @@
 #include "gref.h"
 
 
+/* constants */
+#define K_MIN_BASE					( 2 )
+#define K_MIN						( 1<<K_MIN_BASE )
+
+#define K_MAX_BASE					( 5 )
+#define K_MAX 						( 1<<K_MAX_BASE )
+
+
 /* inline directive */
 #define _force_inline				inline
 
@@ -319,7 +327,7 @@ gref_pool_t *gref_init_pool(
 	#undef restore
 
 	/* check sanity */
-	if(p.k < 4 || p.k > 32) { return(NULL); }
+	if(p.k < K_MIN || p.k > K_MAX) { return(NULL); }
 	if((uint8_t)p.seq_format > GREF_4BIT) { return(NULL); }
 	if((uint8_t)p.copy_mode > GREF_NOCOPY) { return(NULL); }
 	p.seq_head_margin = _roundup(p.seq_head_margin, 16);
@@ -898,16 +906,6 @@ gref_acv_t *gref_freeze_pool(
 		goto _gref_freeze_pool_error_handler;
 	}
 
-	/*
-	struct gref_section_intl_s const *sec = 
-		(struct gref_section_intl_s const *)hmap_get_object(pool->hmap, 0);
-	for(int64_t j = 0; j < pool->sec_cnt; j++) {
-		for(int64_t i = 0; i < sec[0].fw_sec.len; i++) {
-			debug("%p, %x", sec[0].fw_sec.base, sec[0].fw_sec.base[i]);
-		}
-	}
-	*/
-
 	/* build link array */
 	if(gref_build_link_idx_table(gref) != 0) {
 		/* sort failed */
@@ -973,12 +971,16 @@ struct gref_iter_stack_s {
 	/* previous stack */
 	struct gref_iter_stack_s *prev_stack;
 
-	/* current section info */
+	/* current section id */
 	uint32_t sec_gid;
-	uint32_t link_idx;
-	uint8_t const *seq_ptr;
 
-	/* sequence info */
+	/* link */
+	uint32_t link_depth;
+	uint32_t link_ridx, link_len;
+	uint32_t const *link_base;
+
+	/* sequence */
+	uint8_t const *seq_ptr;
 	uint32_t rem_len;
 	int8_t incr;
 	uint8_t conv_table;
@@ -996,6 +998,7 @@ struct gref_iter_stack_s {
 	uint64_t cnt_arr;
 	uint64_t kmer[];
 };
+_static_assert(sizeof(struct gref_iter_stack_s) == 64);
 
 /**
  * @struct gref_iter_s
@@ -1023,10 +1026,60 @@ struct gref_iter_s {
 _static_assert(sizeof(struct gref_iter_s) == 96);
 
 /**
- * @fn gref_iter_add_stack
+ * @fn gref_iter_init_stack
  */
 static _force_inline
-struct gref_iter_stack_s *gref_iter_add_stack(
+struct gref_iter_stack_s *gref_iter_init_stack(
+	struct gref_iter_s *iter,
+	struct gref_iter_stack_s *stack)
+{
+	uint32_t gid = iter->base_gid;
+	uint32_t len = iter->hsec[gid].sec.len;
+	debug("init_stack called, stack(%p), gid(%u), len(%u)", stack, gid, len);
+
+	/* init stack */
+	stack->prev_stack = NULL;
+
+	/* current section info */
+	stack->sec_gid = gid;
+
+	/* link info */
+	int64_t link_idx_base = iter->hsec[gid].link_idx_base;
+	int64_t link_idx_tail = iter->hsec[gid + 1].link_idx_base;
+	uint32_t link_len = (uint32_t)(link_idx_tail - link_idx_base);
+
+	stack->link_depth = K_MAX_BASE;
+	stack->link_ridx = link_len;
+	stack->link_len = link_len;
+	stack->link_base = iter->link_table + link_idx_base;
+
+	/* seq info */
+	uint8_t const *base = iter->hsec[gid].sec.base;
+
+	stack->seq_ptr = (base < iter->seq_lim)
+		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
+	stack->rem_len = len;
+	stack->incr = (base < iter->seq_lim) ? 1 : -1;
+	stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	stack->global_rem_len = iter->seed_len - 1;
+	stack->shift_len = iter->shift_len;
+	stack->len = len - iter->seed_len;
+
+	/* init buffer and counter */
+	stack->kmer_idx = 0;
+	stack->kmer_table_size = 1;
+	stack->cnt_arr = 0;
+	stack->kmer[0] = 0;
+
+	debug("init_stack finished, stack(%p), rem_len(%u), table_size(%u)", stack, stack->rem_len, stack->kmer_table_size);
+	return(stack);
+}
+
+/**
+ * @fn gref_iter_push_stack
+ */
+static _force_inline
+struct gref_iter_stack_s *gref_iter_push_stack(
 	struct gref_iter_s *iter,
 	struct gref_iter_stack_s *stack)
 {
@@ -1037,29 +1090,57 @@ struct gref_iter_stack_s *gref_iter_add_stack(
 	debug("stack(%p), kmer_table_size(%u), new_stack(%p)",
 		stack, stack->kmer_table_size, new_stack);
 
+	/* load next gid, adjust len for path encoding */
+	int64_t link_idx = stack->link_len - stack->link_ridx;
+	uint32_t gid = stack->link_base[link_idx];
+	stack->len += link_idx<<stack->link_depth;
+	stack->link_ridx--;
+
 	/* link to previous stack */
 	new_stack->prev_stack = stack;
 
-	/* copy from previous stack */
-	new_stack->global_rem_len = stack->global_rem_len;
+	/* section id */
+	new_stack->sec_gid = gid;
 
-	/* constant */
+
+	/* link info */
+	int64_t link_idx_base = iter->hsec[gid].link_idx_base;
+	int64_t link_idx_tail = iter->hsec[gid + 1].link_idx_base;
+	uint32_t link_len = (uint32_t)(link_idx_tail - link_idx_base);
+
+	new_stack->link_depth = stack->link_depth + K_MAX_BASE;
+	new_stack->link_ridx = link_len;
+	new_stack->link_len = link_len;
+	new_stack->link_base = iter->link_table + link_idx_base;
+
+	/* init seq info */
+	uint8_t const *base = iter->hsec[gid].sec.base;
+	uint32_t rem_len = MIN2(stack->global_rem_len, iter->hsec[gid].sec.len);
+	uint32_t global_rem_len = stack->global_rem_len - rem_len;
+
+	new_stack->seq_ptr = (base < iter->seq_lim)
+		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
+	new_stack->rem_len = rem_len;
+	new_stack->incr = (base < iter->seq_lim) ? 1 : -1;
+	new_stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	new_stack->global_rem_len = global_rem_len;
 	new_stack->shift_len = stack->shift_len;
+	new_stack->len = stack->len + rem_len;
 
-	/* copy buffer */
-	new_stack->len = stack->len;
+	/* copy kmer buffer */
 	new_stack->kmer_idx = 0;
 	new_stack->kmer_table_size = stack->kmer_table_size;
 	new_stack->cnt_arr = stack->cnt_arr;
 	memcpy(&new_stack->kmer, &stack->kmer, stack->kmer_table_size * sizeof(uint64_t));
+
 	return(new_stack);
 }
 
 /**
- * @fn gref_iter_remove_stack
+ * @fn gref_iter_pop_stack
  */
 static _force_inline
-struct gref_iter_stack_s *gref_iter_remove_stack(
+struct gref_iter_stack_s *gref_iter_pop_stack(
 	struct gref_iter_stack_s *stack)
 {
 	debug("remove_stack called stack(%p)", stack);
@@ -1067,10 +1148,23 @@ struct gref_iter_stack_s *gref_iter_remove_stack(
 }
 
 /**
- * @fn gref_iter_append_base
+ * @fn gref_iter_fetch_base_intl
  */
 static _force_inline
-int gref_iter_append_base(
+uint8_t gref_iter_fetch_base_intl(
+	struct gref_iter_stack_s *stack)
+{
+	uint8_t c = *stack->seq_ptr;
+	stack->rem_len--;
+	stack->seq_ptr += stack->incr;
+	return(c);
+}
+
+/**
+ * @fn gref_iter_update_table
+ */
+static _force_inline
+int gref_iter_update_table(
 	struct gref_iter_stack_s *stack,
 	uint8_t c)
 {
@@ -1100,6 +1194,7 @@ int gref_iter_append_base(
 		{},
 	};
 
+	/* update count array */
 	uint64_t pcnt = popcnt_table[c];
 	stack->cnt_arr = (stack->cnt_arr>>2) | (pcnt<<(stack->shift_len + 2));
 	uint64_t table_size = stack->kmer_table_size;
@@ -1148,13 +1243,47 @@ int gref_iter_append_base(
  * @fn gref_iter_fetch_base
  */
 static _force_inline
-uint8_t gref_iter_fetch_base(
+struct gref_iter_stack_s *gref_iter_fetch_base(
+	struct gref_iter_s *iter,
 	struct gref_iter_stack_s *stack)
 {
-	uint8_t c = *stack->seq_ptr;
-	stack->rem_len--;
-	stack->seq_ptr += stack->incr;
-	return(c);
+	uint8_t c = gref_iter_fetch_base_intl(stack);
+	gref_iter_update_table(stack, c);
+
+	/* stack pointer does not chainge in this function */
+	return(stack);
+}
+
+/**
+ * @fn gref_iter_fetch_link
+ */
+static _force_inline
+struct gref_iter_stack_s *gref_iter_fetch_link(
+	struct gref_iter_s *iter,
+	struct gref_iter_stack_s *stack)
+{
+	/* return if no more seq remains */
+	if(stack->global_rem_len == 0) {
+		debug("reached tail");
+		stack = stack->prev_stack;
+	}
+
+	/* remove stack if no more link remains */
+	while(stack->link_ridx == 0) {
+		if((stack = gref_iter_pop_stack(stack)) == NULL) {
+			/* root (reached the end of enumeration) */
+			debug("reached NULL");
+			return(NULL);
+		}
+	}
+
+	/* add stack for the next section */
+	stack = gref_iter_push_stack(iter, stack);
+	debug("stack added, gid(%u), seq_ptr(%p), len(%u), rem_len(%u), global_rem_len(%u)",
+		gid, stack->seq_ptr, stack->len, stack->rem_len, stack->global_rem_len);
+
+	/* fetch seq */
+	return(gref_iter_fetch_base(iter, stack));
 }
 
 /**
@@ -1168,57 +1297,10 @@ struct gref_iter_stack_s *gref_iter_fetch(
 	debug("iter_fetch called, check rem_len(%u)", stack->rem_len);
 	if(stack->rem_len > 0) {
 		/* fetch seq */
-		gref_iter_append_base(stack, gref_iter_fetch_base(stack));
-		return(stack);
+		return(gref_iter_fetch_base(iter, stack));
 	} else if(stack->rem_len == 0) {
-		debug("stack(%p), gid(%u), link_idx(%u), link_idx_base(%u), global_rem_len(%d)",
-			stack, stack->sec_gid, stack->link_idx, iter->hsec[stack->sec_gid + 1].link_idx_base, stack->global_rem_len);
-		/* return if no more seq remains */
-		if(stack->global_rem_len == 0) {
-			debug("reached tail");
-			stack = stack->prev_stack;
-		}
-
-		/* remove stack if no more link remains */
-		while(stack->link_idx == iter->hsec[stack->sec_gid + 1].link_idx_base) {
-			debug("stack(%p), gid(%u), link_idx(%u), link_idx_base(%u)",
-				stack, stack->sec_gid, stack->link_idx, iter->hsec[stack->sec_gid + 1].link_idx_base);
-			if((stack = gref_iter_remove_stack(stack)) == NULL) {
-				/* root (reached the end of enumeration) */
-				debug("reached NULL");
-				return(NULL);
-			}
-		}
-
-		/* load next gid */
-		uint32_t gid = iter->link_table[stack->link_idx++];
-
-		/* add stack for the next section */
-		stack = gref_iter_add_stack(iter, stack);
-		debug("stack added");
-
-		/* init link info */
-		stack->sec_gid = gid;
-		stack->link_idx = iter->hsec[gid].link_idx_base;
-
-		/* init seq info */
-		uint8_t const *base = iter->hsec[gid].sec.base;
-		stack->seq_ptr = (base < iter->seq_lim)
-			? base : (iter->seq_lim + (iter->seq_lim - base - 1));
-		stack->rem_len = MIN2(stack->global_rem_len, iter->hsec[gid].sec.len);
-		stack->incr = (base < iter->seq_lim) ? 1 : -1;
-		stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
-
-		/* adjust global_rem_len and len */
-		stack->global_rem_len -= stack->rem_len;
-		stack->len += stack->rem_len;
-
-		debug("gid(%u), seq_ptr(%p), len(%u), rem_len(%u), global_rem_len(%u)",
-			gid, stack->seq_ptr, stack->len, stack->rem_len, stack->global_rem_len);
-
-		/* fetch seq */
-		gref_iter_append_base(stack, gref_iter_fetch_base(stack));
-		return(stack);
+		/* reached the end of the section, fetch the head of succeeding section */
+		return(gref_iter_fetch_link(iter, stack));
 	}
 
 	/* never reaches here */
@@ -1226,53 +1308,32 @@ struct gref_iter_stack_s *gref_iter_fetch(
 }
 
 /**
- * @fn gref_iter_init_stack
+ * @fn gref_iter_prepare_stack
  */
 static _force_inline
-struct gref_iter_stack_s *gref_iter_init_stack(
-	struct gref_iter_s *iter,
-	struct gref_iter_stack_s *stack)
+struct gref_iter_stack_s *gref_iter_prepare_stack(
+	struct gref_iter_s *iter)
 {
-	uint32_t gid = iter->base_gid;
-	uint32_t len = iter->hsec[gid].sec.len;
-	debug("init_stack called, stack(%p), gid(%u), len(%u)", stack, gid, len);
-
 	/* init stack */
-	stack->prev_stack = NULL;
+	do {
+		struct gref_iter_stack_s *stack = gref_iter_init_stack(iter,
+			(struct gref_iter_stack_s *)(iter + 1));
 
-	/* current section info */
-	stack->sec_gid = gid;
-	stack->link_idx = iter->hsec[gid].link_idx_base;
+		/* skip the head of the section */
+		for(int64_t i = 0; i < iter->seed_len && stack != NULL; i++) {
+			debug("init fetch, stack(%p), stack->prev_stack(%p), rem_len(%u)", stack, stack->prev_stack, stack->rem_len);
+			stack = gref_iter_fetch(iter, stack);
+		}
 
-	/* seq info */
-	uint8_t const *base = iter->hsec[gid].sec.base;
-	stack->seq_ptr = (base < iter->seq_lim)
-		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
-	stack->rem_len = len;
-	stack->incr = (base < iter->seq_lim) ? 1 : -1;
-	stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+		/* check if init_stack succeeded */
+		if(stack != NULL) {
+			debug("stack(%p), iter(%p), len(%u)", stack, iter, iter->hsec[iter->base_gid].sec.len);
+			return(stack);
+		}
+	} while((iter->base_gid += iter->step_gid) < iter->tail_gid);
 
-	/* global info */
-	stack->global_rem_len = iter->seed_len - 1;
-	stack->shift_len = iter->shift_len;
-
-	/* seq info (cont'd) */
-	stack->len = len - iter->seed_len;
-
-	/* init buffer and counter */
-	stack->kmer_idx = 0;
-	stack->kmer_table_size = 1;
-	stack->cnt_arr = 0;
-	stack->kmer[0] = 0;
-
-	for(int64_t i = 0; i < iter->seed_len && stack != NULL; i++) {
-		debug("init fetch, stack(%p), stack->prev_stack(%p), rem_len(%u)", stack, stack->prev_stack, stack->rem_len);
-		stack = gref_iter_fetch(iter, stack);
-	}
-	debug("init_stack finished, stack(%p), rem_len(%u), table_size(%u)", stack, stack->rem_len, stack->kmer_table_size);
-	return(stack);
+	return(NULL);
 }
-
 
 /**
  * @fn gref_iter_init
@@ -1316,20 +1377,15 @@ gref_iter_t *gref_iter_init(
 	iter->link_table = acv->link_table;
 	iter->hsec = (struct gref_section_half_s const *)hmap_get_object(acv->hmap, 0);
 
-	/* init stack */
-	do {
-		iter->stack = gref_iter_init_stack(iter, (struct gref_iter_stack_s *)(iter + 1));
+	struct gref_iter_stack_s *stack = gref_iter_prepare_stack(iter);
+	if(stack == NULL) {
+		debug("no valid stack created");
+		lmm_free(iter->lmm, (void *)iter);
+		return(NULL);
+	}
 
-		/* check if init_stack succeeded */
-		if(iter->stack != NULL) {
-			debug("stack(%p), iter(%p), len(%u)", iter->stack, iter, iter->hsec[iter->base_gid].sec.len);
-			return((gref_iter_t *)iter);
-		}
-	} while((iter->base_gid += iter->step_gid) < iter->tail_gid);
-
-	debug("no valid stack created");
-	lmm_free(iter->lmm, (void *)iter);
-	return(NULL);
+	iter->stack = stack;
+	return((gref_iter_t *)iter);
 }
 
 /**
@@ -1362,17 +1418,17 @@ struct gref_kmer_tuple_s gref_iter_next(
 	}
 
 	/* if no kmer ramains in the table, fetch the next */
-	if((iter->stack = stack = gref_iter_fetch(iter, stack)) != NULL) {
+	if((stack = gref_iter_fetch(iter, stack)) != NULL) {
+		iter->stack = stack;
 		return_kmer(iter, stack);
 	}
 
 	debug("stack == NULL, stack(%p)", stack);
-	/* update gid and stack for the next section */
-	while((iter->base_gid += iter->step_gid) < iter->tail_gid) {
-		iter->stack = stack = gref_iter_init_stack(iter, (struct gref_iter_stack_s *)(iter + 1));
+	if((iter->base_gid += iter->step_gid) < iter->tail_gid) {
+		stack = gref_iter_prepare_stack(iter);
 
-		/* check if init_stack succeeded */
 		if(stack != NULL) {
+			iter->stack = stack;
 			debug("base_gid(%u), tail_gid(%u), stack(%p)", iter->base_gid, iter->tail_gid, stack);
 			return_kmer(iter, stack);
 		}
@@ -1442,13 +1498,11 @@ int64_t *gref_build_kmer_idx_table(
 
 		/* sequence update detected */
 		for(uint64_t j = prev_kmer + 1; j < kmer + 1; j++) {
-			// debug("fill gaps j(%llx)", j);
 			lmm_kv_push(acv->lmm, kmer_idx, i);
 		}
 		prev_kmer = kmer;
 	}
 	for(uint64_t j = prev_kmer; j < kmer_idx_size; j++) {
-		// debug("fill tail gaps j(%llx)", j);
 		lmm_kv_push(acv->lmm, kmer_idx, size);
 	}
 	return(lmm_kv_ptr(kmer_idx));
@@ -2087,14 +2141,14 @@ unittest()
 	t = _f(iter); assert(_check_kmer(t, "ACAC", 0, 3), _print_kmer(t));
 
 	/* sec0-sec2 */
-	t = _f(iter); assert(_check_kmer(t, "GAAA", 0, 1), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "GGAA", 0, 1), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AAAC", 0, 2), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "GAAC", 0, 2), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GAAA", 0, 1 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GGAA", 0, 1 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AAAC", 0, 2 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GAAC", 0, 2 + K_MAX), _print_kmer(t));
 
-	t = _f(iter); assert(_check_kmer(t, "AACA", 0, 3), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AACC", 0, 3), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AACG", 0, 3), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACA", 0, 3 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACC", 0, 3 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACG", 0, 3 + K_MAX), _print_kmer(t));
 
 	/* sec1-sec2 */
 	t = _f(iter); assert(_check_kmer(t, "AACA", 1, 0), _print_kmer(t));
@@ -2244,14 +2298,14 @@ unittest()
 	t = _f(iter); assert(_check_kmer(t, "ACAC", 0, 3), _print_kmer(t));
 
 	/* sec0-sec2 */
-	t = _f(iter); assert(_check_kmer(t, "GAAA", 0, 1), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "GGAA", 0, 1), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AAAC", 0, 2), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "GAAC", 0, 2), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GAAA", 0, 1 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GGAA", 0, 1 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AAAC", 0, 2 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GAAC", 0, 2 + K_MAX), _print_kmer(t));
 
-	t = _f(iter); assert(_check_kmer(t, "AACA", 0, 3), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AACC", 0, 3), _print_kmer(t));
-	t = _f(iter); assert(_check_kmer(t, "AACG", 0, 3), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACA", 0, 3 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACC", 0, 3 + K_MAX), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AACG", 0, 3 + K_MAX), _print_kmer(t));
 
 	/* sec1-sec2 */
 	t = _f(iter); assert(_check_kmer(t, "AACA", 1, 0), _print_kmer(t));
