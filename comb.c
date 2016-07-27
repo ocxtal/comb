@@ -129,7 +129,7 @@ struct comb_worker_args_s {
 struct comb_worker_item_s {
 	lmm_t *lmm;
 	struct sr_gref_s *q;
-	struct ggsea_result_s aln;
+	struct ggsea_result_s *res;
 };
 
 
@@ -435,7 +435,7 @@ void comb_clean_params(
  * @fn comb_worker_init
  */
 static _force_inline
-struct comb_worker_args_s *comb_worker_init(
+struct comb_worker_args_s **comb_worker_init(
 	struct comb_params_s const *params,
 	ggsea_conf_t const *conf,
 	sr_t *ref,
@@ -443,11 +443,19 @@ struct comb_worker_args_s *comb_worker_init(
 	aw_t *aw)
 {
 	int64_t num_worker = MAX2(1, params->num_threads);
-	struct comb_worker_args_s *w = (struct comb_worker_args_s *)malloc(
-		(num_worker + 1) * sizeof(struct comb_worker_args_s));
+	struct comb_worker_args_s **w = (struct comb_worker_args_s **)malloc(
+		  (num_worker + 1) * sizeof(struct comb_worker_args_s *)
+		+ (num_worker + 1) * sizeof(struct comb_worker_args_s));
+	struct comb_worker_args_s *base = (struct comb_worker_args_s *)(w + num_worker + 1);
 
+	/* set pointers */
+	for(int64_t i = 0; i < num_worker + 1; i++) {
+		w[i] = &base[i];
+	}
+
+	/* init worker object */
 	for(int64_t i = 0; i < num_worker; i++) {
-		w[i] = (struct comb_worker_args_s){
+		base[i] = (struct comb_worker_args_s){
 			.params = params,
 			.ctx = ggsea_ctx_init(conf, sr_get_index(ref)->gref),
 			.ref = ref,
@@ -455,7 +463,7 @@ struct comb_worker_args_s *comb_worker_init(
 			.aw = aw
 		};
 	}
-	memset(&w[num_worker], 0, sizeof(struct comb_worker_args_s));
+	memset(&base[num_worker], 0, sizeof(struct comb_worker_args_s));
 	return(w);
 }
 
@@ -464,13 +472,13 @@ struct comb_worker_args_s *comb_worker_init(
  */
 static _force_inline
 void comb_worker_clean(
-	struct comb_worker_args_s *w)
+	struct comb_worker_args_s **w)
 {
 	if(w == NULL) { return; }
 
-	for(struct comb_worker_args_s *p = w; p->params != NULL; p++) {
-		ggsea_ctx_clean(p->ctx);
-		memset(p, 0, sizeof(struct comb_worker_args_s));
+	for(struct comb_worker_args_s **p = w; (*p)->params != NULL; p++) {
+		ggsea_ctx_clean((*p)->ctx);
+		memset(*p, 0, sizeof(struct comb_worker_args_s));
 	}
 	free(w);
 	return;
@@ -488,7 +496,7 @@ void *comb_source(
 	/* get the next iterator */
 	struct sr_gref_s *q = NULL;
 	while((q = sr_get_iter(a->query)) != NULL) {
-		debug("iterator fetched q(%p), iter(%p)", q, q->iter);
+		debug("iterator fetched a(%p), q(%p), iter(%p)", a, q, q->iter);
 
 		if(q->iter != NULL) {
 			/* valid iterator was returned, create worker_item object */
@@ -520,7 +528,8 @@ void *comb_worker(
 	struct comb_worker_item_s *i = (struct comb_worker_item_s *)item;
 
 	/* do alignment */
-	i->aln = ggsea_align(a->ctx, i->q->gref, i->q->iter);
+	debug("align a(%p), i(%p), iter(%p)", a, i, i->q->iter);
+	i->res = ggsea_align(a->ctx, i->q->gref, i->q->iter, i->lmm);
 	return((void *)i);
 }
 
@@ -536,10 +545,10 @@ void comb_drain(
 	struct comb_worker_item_s *i = (struct comb_worker_item_s *)item;
 
 	/* append to result queue */
-	aw_append_alignment(a->aw, i->aln.ref, i->aln.query, i->aln.aln, i->aln.cnt);
+	aw_append_alignment(a->aw, i->res->ref, i->res->query, i->res->aln, i->res->cnt);
 
 	/* cleanup */
-	ggsea_aln_free(i->aln);
+	ggsea_aln_free(i->res);
 
 	/* lmm must be freed before gref_free */
 	struct sr_gref_s *q = i->q;
@@ -579,7 +588,7 @@ int comb_align(
 	sr_t *ref = NULL;
 	sr_t *query = NULL;
 	aw_t *aw = NULL;
-	struct comb_worker_args_s *w = NULL;
+	struct comb_worker_args_s **w = NULL;
 	ptask_t *pt = NULL;
 
 	#define comb_align_error(expr, ...) { \
@@ -594,6 +603,7 @@ int comb_align(
 	conf = ggsea_conf_init(GGSEA_PARAMS(
 		.xdrop = params->xdrop,
 		.score_matrix = GABA_SCORE_SIMPLE(params->m, params->x, params->gi, params->ge),
+		.k = params->k,
 		.kmer_cnt_thresh = params->kmer_cnt_thresh,
 		.overlap_thresh = params->overlap_thresh,
 		.gapless_thresh = params->gapless_thresh,
@@ -633,11 +643,11 @@ int comb_align(
 
 	/* initialize parallel task dispatcher */
 	w = comb_worker_init(params, conf, ref, query, aw);
-	pt = ptask_init(comb_worker, (void **)&w, params->num_threads, 2048);
+	pt = ptask_init(comb_worker, (void **)w, params->num_threads, 2048);
 	comb_align_error(w != NULL && pt != NULL, "Failed to initialize parallel worker threads.");
 
 	/* run tasks */
-	ptask_stream(pt, comb_source, (void *)w, comb_drain, (void *)w, 512);
+	ptask_stream(pt, comb_source, (void *)*w, comb_drain, (void *)*w, 512);
 
 	/* destroy objects */
 	ret = 0;
