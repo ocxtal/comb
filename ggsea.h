@@ -30,7 +30,10 @@ typedef struct ggsea_ctx_s ggsea_ctx_t;
  * @struct ggsea_params_s
  */
 struct ggsea_params_s {
-	/** score parameters */
+	/* local memory manager */
+	void *lmm;
+
+	/* score parameters */
 	int16_t xdrop;
 	gaba_score_t const *score_matrix;
 
@@ -59,10 +62,12 @@ typedef struct ggsea_params_s ggsea_params_t;
  * @struct ggsea_result_s
  */
 struct ggsea_result_s {
+	void *reserved1;
 	gref_idx_t const *ref;
 	gref_acv_t const *query;
-	struct gaba_result_s const *const *aln;
-	int64_t cnt;
+	struct gaba_alignment_s const *const *aln;
+	uint32_t cnt;
+	uint32_t reserved2;
 };
 typedef struct ggsea_result_s ggsea_result_t;
 
@@ -102,16 +107,17 @@ void ggsea_ctx_clean(
  * @fn ggsea_align
  * @brief do pairwise local alignment between reference in the context and given query
  */
-struct ggsea_result_s ggsea_align(
+ggsea_result_t *ggsea_align(
 	ggsea_ctx_t *_ctx,
 	gref_acv_t const *query,
-	gref_iter_t *iter);
+	gref_iter_t *iter,
+	void *lmm);
 
 /**
  * @fn ggsea_aln_free
  */
 void ggsea_aln_free(
-	ggsea_result_t aln);
+	ggsea_result_t *aln);
 
 
 #endif /* _GGSEA_H_INCLUDED */
