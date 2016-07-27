@@ -201,11 +201,6 @@ ivtree_node_t *ivtree_next(ivtree_iter_t *iter);
 void ivtree_iter_clean(ivtree_iter_t *iter);
 
 /**
- * @fn ivtree_update_node
- */
-void ivtree_update_node(ivtree_t *tree, ivtree_node_t *node);
-
-/**
  * @fn ivtree_walk
  * @breif iterate over tree
  */
