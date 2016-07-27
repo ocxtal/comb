@@ -301,6 +301,36 @@ int64_t comb_atoi(
 }
 
 /**
+ * @fn comb_calc_gapless_thresh
+ */
+static _force_inline
+int64_t comb_calc_gapless_thresh(
+	struct comb_params_s const *params)
+{
+	return((int64_t)(15.0 * params->x / (params->m + params->x)));
+}
+
+/**
+ * @fn comb_calc_xdrop_thresh
+ */
+static _force_inline
+int64_t comb_calc_xdrop_thresh(
+	struct comb_params_s const *params)
+{
+	return(15 * (params->m + 2 * params->ge) + params->gi);
+}
+
+/**
+ * @fn comb_calc_score_thresh
+ */
+static _force_inline
+int64_t comb_calc_score_thresh(
+	struct comb_params_s const *params)
+{
+	return(100 * params->m);
+}
+
+/**
  * @fn comb_parse_args
  */
 static
@@ -319,11 +349,11 @@ struct comb_params_s *comb_parse_args(
 		.k = 14,
 		.kmer_cnt_thresh = 30,
 		.overlap_thresh = 3,
-		.gapless_thresh = 10,
-		.xdrop = 60,
-		.m = 1, .x = 1, .gi = 1, .ge = 1,
+		.gapless_thresh = 0,
+		.xdrop = 0,		/* default xdrop threshold is derived from scoring parameters */
+		.m = 1, .x = 2, .gi = 2, .ge = 1,
 		.clip = 'S',
-		.score_thresh = 10
+		.score_thresh = 0
 	};
 
 	static struct option const opts_long[] = {
@@ -378,6 +408,17 @@ struct comb_params_s *comb_parse_args(
 			/* unknown option */
 			default: comb_print_unknown_option(c); break;
 		}
+	}
+
+	/* restore default params */
+	if(params->gapless_thresh == 0) {
+		params->gapless_thresh = comb_calc_gapless_thresh(params);
+	}
+	if(params->xdrop == 0) {
+		params->xdrop = comb_calc_xdrop_thresh(params);
+	}
+	if(params->score_thresh == 0) {
+		params->score_thresh = comb_calc_score_thresh(params);
 	}
 
 	/* positional arguments */
