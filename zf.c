@@ -204,11 +204,15 @@ zf_t *zfopen(
 	/* determine format */
 	char *path_dup = (char *)path;
 	char *mode_dup = (char *)mode;
-	char const *path_tail = path + strlen(path);
+
+	int64_t path_len = strlen(path);
+	char const *path_tail = path + path_len;
 	char const *mode_tail = mode + strlen(mode);
 	struct zf_functions_s const *fn = &fn_table[0];
 	for(int64_t i = 1; i < sizeof(fn_table) / sizeof(struct zf_functions_s); i++) {
-		
+		/* skip if ext string is longer than path string */
+		if(path_len < strlen(fn_table[i].ext)) { continue; }
+
 		/* check path */
 		if(strncmp(path_tail - strlen(fn_table[i].ext),
 			fn_table[i].ext,
