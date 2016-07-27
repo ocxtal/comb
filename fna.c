@@ -279,8 +279,13 @@ fna_t *fna_init(
 	 * 1. determine file format from the path extension
 	 */
 	if(fna->file_format == 0) {
-		char const *path_tail = fna->fp->path + strlen(fna->fp->path);
+		int64_t path_len = strlen(fna->fp->path);
+		char const *path_tail = fna->fp->path + path_len;
 		for(ep = ext; ep->ext != NULL; ep++) {
+			/* skip if path string is shorter than extension string */
+			if(path_len < strlen(ep->ext)) { continue; }
+
+			/* compare ext */
 			if(strncmp(path_tail - strlen(ep->ext), ep->ext, strlen(ep->ext)) == 0) {
 				fna->file_format = ep->file_format; break;
 			}
