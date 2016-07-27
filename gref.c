@@ -31,9 +31,13 @@
 /* constants */
 #define K_MIN_BASE					( 2 )
 #define K_MIN						( 1<<K_MIN_BASE )
+_static_assert(K_MIN_BASE == GREF_K_MIN_BASE);
+_static_assert(K_MIN == GREF_K_MIN);
 
 #define K_MAX_BASE					( 5 )
 #define K_MAX 						( 1<<K_MAX_BASE )
+_static_assert(K_MAX_BASE == GREF_K_MAX_BASE);
+_static_assert(K_MAX == GREF_K_MAX);
 
 
 /* inline directive */

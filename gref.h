@@ -110,6 +110,15 @@ typedef struct gref_params_s gref_params_t;
 #define GREF_PARAMS(...)			( &((struct gref_params_s const) { __VA_ARGS__ }) )
 
 /**
+ * k max and min
+ */
+#define GREF_K_MIN_BASE				( 2 )
+#define GREF_K_MIN					( 1<<GREF_K_MIN_BASE )
+
+#define GREF_K_MAX_BASE				( 5 )
+#define GREF_K_MAX 					( 1<<GREF_K_MAX_BASE )
+
+/**
  * @struct gref_iter_params_s
  */
 struct gref_iter_params_s {
