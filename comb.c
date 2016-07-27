@@ -624,7 +624,7 @@ int comb_align(
 		SR_PARAMS(
 			.k = params->k,
 			.seq_direction = SR_FW_ONLY,
-			.num_threads = params->num_threads
+			// .num_threads = params->num_threads
 		));
 	comb_align_error(query != NULL, "Failed to open query file `%s'.", params->query_name);
 
