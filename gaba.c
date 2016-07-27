@@ -49,15 +49,17 @@
 #include <stddef.h>				/* offsetof */
 #include <string.h>				/* memset, memcpy */
 #include "gaba.h"
-#include "arch/arch.h"
+#include "log.h"
+#include "lmm.h"
+#include "bench.h"
+#include "sassert.h"
 
+/* architecture dependent */
+#include "arch/arch.h"
 
 /* aliasing vector macros */
 #define _VECTOR_ALIAS_PREFIX		v32i8
 #include "arch/vector_alias.h"
-
-#include "bench.h"
-#include "sassert.h"
 
 
 /* add suffix */
@@ -112,8 +114,9 @@ _static_assert(sizeof(struct gaba_score_s) == 20);
 _static_assert(sizeof(struct gaba_params_s) == 16);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
-_static_assert(sizeof(struct gaba_path_section_s) == 32);
-_static_assert(sizeof(struct gaba_result_s) == 32);
+_static_assert(sizeof(struct gaba_path_section_s) == 40);
+_static_assert(sizeof(struct gaba_path_s) == 8);
+_static_assert(sizeof(struct gaba_alignment_s) == 64);
 _static_assert(sizeof(vec_masku_t) == 4);
 
 
@@ -128,9 +131,9 @@ struct gaba_dp_context_s;
  */
 union gaba_dir_u {
 	struct gaba_dir_dynamic {
-		uint32_t array;			/** (4) dynamic band */
 		int8_t acc;				/** (1) accumulator (v[0] - v[BW-1]) */
 		int8_t _pad[3];			/** (3) */
+		uint32_t array;			/** (4) dynamic band */
 	} dynamic;
 	struct gaba_dir_guided {
 		uint8_t *ptr;			/** (8) guided band */
@@ -287,6 +290,22 @@ struct gaba_merge_tail_s {
 _static_assert(sizeof(struct gaba_merge_tail_s) == 128);
 
 /**
+ * @struct gaba_path_intl_s
+ */
+struct gaba_path_intl_s {
+	uint32_t *head, *tail;
+	uint32_t hofs, tofs;
+};
+
+/**
+ * @struct gaba_sec_arr_s
+ */
+struct gaba_sec_arr_s {
+	struct gaba_path_section_s *head;
+	struct gaba_path_section_s *tail;
+};
+
+/**
  * @struct gaba_reader_work_s
  *
  * @brief (internal) abstract sequence reader
@@ -317,47 +336,42 @@ struct gaba_writer_work_s {
 	/* reserved to avoid collision with alim and blim */
 	uint8_t const *alim, *blim;			/** (16) unused in writer */
 
-	/* section info */
-	struct gaba_path_section_s *sec;	/** (8) section base pointer */
-	uint32_t fw_sec_idx, rv_sec_idx;	/** (8) current section indices */
-	uint32_t tail_sec_idx;				/** (4) tail index */
-
-	/* path string info */
-	int16_t fw_rem, rv_rem;				/** (4) */
-	uint32_t *fw_path, *rv_path;		/** (16) */
-	uint32_t *tail_path;				/** (8) */
-	/** 64, 64 */
-
-	/** 64byte aligned */
-	/** block pointers */
-	struct gaba_joint_tail_s const *tail;/** (8) current tail */
-	struct gaba_block_s const *blk;		/** (8) current block */
-
 	/** section info */
+	struct gaba_joint_tail_s const *tail;/** (8) current tail */
 	struct gaba_joint_tail_s const *atail;/** (8) */
 	struct gaba_joint_tail_s const *btail;/** (8) */
 
-	/** lengths and ids */
-	int32_t alen, blen;					/** (8) section lengths */
-	uint32_t aid, bid;					/** (8) */
-
-	/* indices */
-	int32_t aidx, bidx;					/** (8) indices of the current trace */
-	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
-	/** 64, 128 */
+	/** path pointers */
+	struct gaba_path_intl_s spath;		/** (24) */
+	/** 64, 64 */
 
 	/** 64byte aligned */
-	/* p-coordinates */
-	int64_t psum;						/** (8) */
+	struct gaba_path_intl_s cpath;		/** (24) */
+
+	/** block pointers */
+	struct gaba_block_s const *blk;		/** (8) current block */
+
+	/** work */
+	int32_t aidx, bidx;					/** (8) indices of the current trace */
 	int32_t p;							/** (4) */
 	int32_t q;							/** (4) */
 
-	/* path length info */
-	uint32_t *spath;					/** (8) */
-	uint32_t srem;						/** (4) */
-	uint32_t pspos;						/** (4) */
+	uint64_t _pad1[2];					/** (16) */
+	/** 64, 128 */
 
-	uint64_t _pad2[4];					/** (32) */
+	/** 64byte aligned */
+	/** save */
+	int32_t alen, blen;					/** (8) section lengths */
+	uint32_t aid, bid;					/** (8) */
+	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
+	int64_t psum;						/** (8) */
+	int64_t pspos;						/** (8) */
+
+	/* section info */
+	struct gaba_sec_arr_s sec;			/** (16) */
+	uint64_t _pad2;						/** (8) */
+
+	/** 64, 192 */
 };
 _static_assert(sizeof(struct gaba_writer_work_s) == 192);
 
@@ -423,8 +437,10 @@ struct gaba_dp_context_s {
 	struct gaba_score_vec_s scv;		/** (80) substitution matrix and gaps */
 	/** 80, 336 */
 
-	int16_t tx;							/** (2) xdrop threshold */
-	uint16_t tf;						/** (2) ungapped alignment filter threshold */
+	int8_t m;							/** (1) match award */
+	int8_t x;							/** (1) mismatch penalty (neg.int) */
+	int8_t tx;							/** (1) xdrop threshold */
+	uint8_t tf;							/** (1) ungapped alignment filter threshold */
 
 	/** output options */
 	int16_t head_margin;				/** (2) margin at the head of gaba_res_t */
@@ -526,7 +542,7 @@ void gaba_aligned_free(
 }
 
 
-
+/* matrix fill functions */
 /* direction macros */
 #define DYNAMIC 		( 1 )
 #if DYNAMIC
@@ -621,6 +637,23 @@ void gaba_aligned_free(
 }
 
 #endif
+
+
+/**
+ * @macro _match
+ * @brief alias to sequence matcher macro
+ */
+#ifndef _match
+#  if BIT == 2
+#    define _match				_or 		/* for 2bit encoded */
+#    define _match_v16i8		_or_v16i8
+#    define _match_v32i8		_or_v32i8
+#  else
+#    define _match				_and		/* for 4bit encoded */
+#    define _match_v16i8		_and_v16i8
+#    define _match_v32i8		_and_v32i8
+#  endif
+#endif /* _match */
 
 /**
  * seqreader macros
@@ -1024,40 +1057,87 @@ int32_t fill_gapless_filter(
 	int32_t stat)
 {
 	v16i8_t const load_mask = _set_v16i8(0x0f);
-	v16i8_t const match_mask = _bsl_v16i8(_set_v16i8(0xff), 1);
+
+	#if BIT == 2
+		static int8_t const match_mask_arr[16] = {
+			0, 0xff, 0xff, 0xff,
+			0xff, 0, 0xff, 0xff,
+			0xff, 0xff, 0, 0xff,
+			0xff, 0xff, 0xff, 0
+		};
+		v16i8_t const match_mask = _load_v16i8(match_mask_arr);
+	#else
+		v16i8_t const match_mask = _bsl_v16i8(_set_v16i8(0xff), 1);
+	#endif
 
 	/* load char vectors */
 	v16i8_t a = _load_v16i8(&blk->ch.w[0]);
 	v16i8_t b = _load_v16i8(&blk->ch.w[16]);
 
+	debug("a(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+		blk->ch.w[15] & 0x0f,
+		blk->ch.w[14] & 0x0f,
+		blk->ch.w[13] & 0x0f,
+		blk->ch.w[12] & 0x0f,
+		blk->ch.w[11] & 0x0f,
+		blk->ch.w[10] & 0x0f,
+		blk->ch.w[9] & 0x0f,
+		blk->ch.w[8] & 0x0f,
+		blk->ch.w[7] & 0x0f,
+		blk->ch.w[6] & 0x0f,
+		blk->ch.w[5] & 0x0f,
+		blk->ch.w[4] & 0x0f,
+		blk->ch.w[3] & 0x0f,
+		blk->ch.w[2] & 0x0f,
+		blk->ch.w[1] & 0x0f,
+		blk->ch.w[0] & 0x0f);
+	debug("b(%d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d, %d)",
+		blk->ch.w[16]>>4,
+		blk->ch.w[17]>>4,
+		blk->ch.w[18]>>4,
+		blk->ch.w[19]>>4,
+		blk->ch.w[20]>>4,
+		blk->ch.w[21]>>4,
+		blk->ch.w[22]>>4,
+		blk->ch.w[23]>>4,
+		blk->ch.w[24]>>4,
+		blk->ch.w[25]>>4,
+		blk->ch.w[26]>>4,
+		blk->ch.w[27]>>4,
+		blk->ch.w[28]>>4,
+		blk->ch.w[29]>>4,
+		blk->ch.w[30]>>4,
+		blk->ch.w[31]>>4);
+
 	v16i8_t a0 = _swap_v16i8(_and_v16i8(load_mask, a));
 	v16i8_t b0 = _bsr_v16i8(_and_v16i8(load_mask, _shr_v16i8(b, 4)), 1);
 
 	/* make shifted vectors */
-	v16i8_t a1 = _bsr_v16i8(a0, 1), a2 = _bsr_v16i8(a0, 2);
-	v16i8_t b1 = _bsr_v16i8(b0, 1), b2 = _bsr_v16i8(b0, 2);
+	v16i8_t a1 = _bsr_v16i8(a0, 1); //, a2 = _bsr_v16i8(a0, 2);
+	v16i8_t b1 = _bsr_v16i8(b0, 1); //, b2 = _bsr_v16i8(b0, 2);
 
 	_print_v16i8(a0);
 	_print_v16i8(a1);
-	_print_v16i8(a2);
+	// _print_v16i8(a2);
 	_print_v16i8(b0);
 	_print_v16i8(b1);
-	_print_v16i8(b2);
+	// _print_v16i8(b2);
 
 	/* ungapped alignment */
-	v16i8_t m0 = _shuf_v16i8(match_mask, _and_v16i8(a0, b2));
-	v16i8_t m1 = _shuf_v16i8(match_mask, _and_v16i8(a0, b1));
-	v16i8_t m2 = _shuf_v16i8(match_mask, _and_v16i8(a0, b0));
-	v16i8_t m3 = _shuf_v16i8(match_mask, _and_v16i8(a1, b2));
-	v16i8_t m4 = _shuf_v16i8(match_mask, _and_v16i8(a2, b2));
+	// v16i8_t m0 = _shuf_v16i8(match_mask, _match_v16i8(a0, b2));
+	v16i8_t m1 = _shuf_v16i8(match_mask, _match_v16i8(a0, b1));
+	v16i8_t m2 = _shuf_v16i8(match_mask, _match_v16i8(a0, b0));
+	v16i8_t m3 = _shuf_v16i8(match_mask, _match_v16i8(a1, b0));
+	// v16i8_t m4 = _shuf_v16i8(match_mask, _match_v16i8(a2, b0));
 
-	_print_v16i8(m0);
+	// _print_v16i8(m0);
 	_print_v16i8(m1);
 	_print_v16i8(m2);
 	_print_v16i8(m3);
-	_print_v16i8(m4);
+	// _print_v16i8(m4);
 
-	v16i8_t cnt_mask = _or_v16i8(_or_v16i8(_or_v16i8(m0, m1), m2), _or_v16i8(m3, m4));
+	// v16i8_t cnt_mask = _or_v16i8(_or_v16i8(_or_v16i8(m0, m1), m2), _or_v16i8(m3, m4));
+	v16i8_t cnt_mask = _or_v16i8(_or_v16i8(m1, m2), m3);
 	int64_t cnt = popcnt(((v16i8_masku_t){ .mask = _mask_v16i8(cnt_mask) }).all);
 
 	_print_v16i8(cnt_mask);
@@ -1200,19 +1280,6 @@ struct gaba_joint_tail_s *fill_create_tail(
 	tail->stat = stat | _mask_v2i32(_eq_v2i32(ridx, z));
 	return(tail);
 }
-
-/**
- * @macro _match
- * @brief alias to sequence matcher macro
- */
-#ifndef _match
-#  if BIT == 2
-#    define _match		_or 		/* for 2bit encoded */
-#  else
-#    define _match		_and		/* for 4bit encoded */
-#  endif
-#endif /* _match */
-
 
 /**
  * @macro _fill_load_contexts
@@ -1495,25 +1562,6 @@ int64_t fill_bulk_test_seq_bound(
 )
 
 /**
- * @fn fill_bulk_test_p_bound
- * @brief returns negative if p-bound (for the bulk fill) is invaded
- */
-static _force_inline
-int64_t fill_bulk_test_p_bound(
-	struct gaba_dp_context_s const *this,
-	int64_t p)
-{
-	return(this->w.r.plim - p - BW);
-}
-static _force_inline
-int64_t fill_cap_test_p_bound(
-	struct gaba_dp_context_s const *this,
-	int64_t p)
-{
-	return(this->w.r.plim - p);
-}
-
-/**
  * @fn fill_bulk_block
  * @brief fill a block
  */
@@ -1631,44 +1679,6 @@ struct gaba_joint_block_s fill_bulk_seq_bounded(
 }
 
 /**
- * @fn fill_bulk_seq_p_bounded
- * @brief fill blocks with ij-bound and p-bound test
- */
-static _force_inline
-struct gaba_joint_block_s fill_bulk_seq_p_bounded(
-	struct gaba_dp_context_s *this,
-	struct gaba_block_s *blk)
-{
-	int32_t stat = CONT;
-
-	/* init local coordinate */
-	int64_t p = 0;
-
-	/* bulk fill loop */
-	while(1) {
-		/* check termination */
-		if((fill_test_xdrop(this, blk - 1)
-		  | fill_bulk_test_seq_bound(this, blk - 1)
-		  | fill_bulk_test_p_bound(this, p)) < 0) {
-			break;
-		}
-		
-		/* bulk fill */
-		debug("blk(%p)", blk);
-		fill_bulk_block(this, blk++);
-		
-		/* update p-coordinate */
-		p += BLK;
-	}
-	if(fill_test_xdrop(this, blk - 1) < 0) { stat = TERM; }
-	return((struct gaba_joint_block_s){
-		.blk = blk,
-		.p = p,
-		.stat = stat 		/* < 0 if stat == TERM */
-	});
-}
-
-/**
  * @fn fill_cap_seq_bounded
  * @brief fill blocks with cap test
  */
@@ -1755,94 +1765,6 @@ _fill_cap_seq_bounded_finish:;
 }
 
 /**
- * @fn fill_cap_seq_p_bounded
- * @brief fill blocks with cap test
- */
-static _force_inline
-struct gaba_joint_block_s fill_cap_seq_p_bounded(
-	struct gaba_dp_context_s *this,
-	struct gaba_block_s *blk)
-{
-	int32_t stat = CONT;
-	int64_t p = 0;
-
-	while(1) {
-		/* check xdrop termination */
-		if(fill_test_xdrop(this, blk - 1) < 0) {
-			stat = TERM; goto _fill_cap_seq_bounded_finish;
-		}
-		/* fetch sequence */
-		fill_cap_fetch(this, blk);
-
-		/* vectors on registers inside this block */ {
-			_fill_cap_test_seq_bound_init(blk);
-			_fill_load_contexts(blk);
-
-			/* update diff vectors */
-			uint64_t i = 0;
-			for(i = 0; i < BLK; i++) {
-				/* determine direction */
-				_dir_fetch(dir);
-
-				if(_dir_is_right(dir)) {
-					/* update sequence coordinate and then check term */
-					_fill_right_update_ptr();
-					
-					if((_fill_cap_test_seq_bound()
-					  | fill_cap_test_p_bound(this, ++p)) < 0) {
-						_fill_right_windback_ptr();
-						_dir_windback(dir);
-						break;
-					}
-
-					/* update band */
-					_fill_right();
-				} else {
-					/* update sequence coordinate and then check term */
-					_fill_down_update_ptr();
-					
-					if((_fill_cap_test_seq_bound()
-					  | fill_cap_test_p_bound(this, ++p)) < 0) {
-						_fill_down_windback_ptr();
-						_dir_windback(dir);
-						break;
-					}
-
-					/* update band */
-					_fill_down();
-				}
-			}
-			/* adjust dir remainder */
-			_dir_adjust_remainder(dir, i);
-			
-			/* update seq offset */
-			_fill_update_offset();
-			
-			/* store mask and vectors */
-			v2i32_t cnt = _fill_store_vectors(blk);
-
-			/* update section */
-			fill_update_section(this, blk, cnt);
-
-			/* update block pointer and p-coordinate */
-			blk += (i != 0);
-
-			/* break if not filled full length */
-			if(i != BLK) { stat = UPDATE; break; }
-		}
-	}
-
-	debug("blk(%p), p(%lld), stat(%x)", blk, p, stat);
-
-_fill_cap_seq_bounded_finish:;
-	return((struct gaba_joint_block_s){
-		.blk = blk,
-		.p = p,
-		.stat = stat
-	});
-}
-
-/**
  * @fn calc_max_bulk_blocks_mem
  * @brief calculate maximum number of blocks (limited by stack size)
  */
@@ -1855,15 +1777,6 @@ uint64_t calc_max_bulk_blocks_mem(
 	debug("calc_max_block_mem, stack_top(%p), stack_end(%p), mem_size(%llu), cnt(%llu)",
 		this->stack_top, this->stack_end, mem_size, (blk_cnt > 3) ? (blk_cnt - 3) : 0);
 	return(((blk_cnt > 3) ? blk_cnt : 3) - 3);
-
-	/*
-	uint64_t const rem = sizeof(struct gaba_joint_tail_s)
-					   + 3 * sizeof(struct gaba_block_s);
-	uint64_t mem_size = this->stack_end - this->stack_top;
-	debug("calc_max_block_mem, stack_top(%p), stack_end(%p), mem_size(%llu), rem(%llu), cnt(%llu)",
-		this->stack_top, this->stack_end, mem_size, rem, (mem_size - rem) / sizeof(struct gaba_block_s));
-	return((mem_size - rem) / sizeof(struct gaba_block_s));
-	*/
 }
 
 /**
@@ -1913,62 +1826,6 @@ uint64_t calc_min_expected_blocks_tail(
 		this->w.r.blen - tail->bpos);
 	return((p + p/2) / BLK);
 }
-
-#if 0
-/**
- * @fn calc_max_bulk_blocks_seq
- * @brief calculate maximum number of blocks (limited by seq bounds)
- */
-static _force_inline
-uint64_t calc_max_bulk_blocks_seq_blk(
-	struct gaba_dp_context_s const *this,
-	struct gaba_block_s const *blk)
-{
-	uint64_t max_bulk_p = MIN2(
-		(blk - 1)->aridx,
-		(blk - 1)->bridx);
-	return(max_bulk_p / BLK);
-}
-static _force_inline
-uint64_t calc_max_bulk_blocks_seq_tail(
-	struct gaba_dp_context_s const *this,
-	struct gaba_joint_tail_s const *tail)
-{
-	uint64_t max_bulk_p = MIN2(
-		this->w.r.alen - tail->apos,
-		this->w.r.blen - tail->bpos);
-	return(max_bulk_p / BLK);
-}
-
-/**
- * @fn calc_max_bulk_blocks_seq_p
- * @brief calculate maximum number of blocks (limited by seq bounds)
- */
-static _force_inline
-uint64_t calc_max_bulk_blocks_seq_p_blk(
-	struct gaba_dp_context_s const *this,
-	struct gaba_block_s const *blk,
-	int64_t psum)
-{
-	uint64_t max_bulk_p = MIN3(
-		(blk - 1)->aridx,
-		(blk - 1)->bridx,
-		this->w.r.plim - psum);
-	return(max_bulk_p / BLK);
-}
-static _force_inline
-uint64_t calc_max_bulk_blocks_seq_p_tail(
-	struct gaba_dp_context_s const *this,
-	struct gaba_joint_tail_s const *tail,
-	int64_t psum)
-{
-	uint64_t max_bulk_p = MIN3(
-		this->w.r.alen - tail->apos,
-		this->w.r.blen - tail->bpos,
-		this->w.r.plim - psum);
-	return(max_bulk_p / BLK);
-}
-#endif
 
 /**
  * @fn fill_mem_bounded
@@ -2031,50 +1888,6 @@ _fill_seq_bounded_finish:;
 	return(fill_create_tail(this, prev_tail, stat.blk, psum, stat.stat));
 }
 
-#if 0
-/**
- * @fn fill_seq_p_bounded
- * @brief fill blocks with seq bound tests, adding head and tail
- */
-static _force_inline
-struct gaba_joint_tail_s *fill_seq_p_bounded(
-	struct gaba_dp_context_s *this,
-	struct gaba_joint_tail_s const *prev_tail)
-{
-	struct gaba_joint_block_s stat = fill_create_phantom_block(this, prev_tail);
-	int64_t psum = stat.p;
-
-	/* check if term detected in init fetch */
-	if(stat.stat != CONT) {
-		goto _fill_seq_p_bounded_finish;
-	}
-
-	/* calculate block size */
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p_blk(this, stat.blk, psum);
-	while(seq_bulk_blocks > MIN_BULK_BLOCKS) {
-		/* bulk fill without ij-bound test */
-		psum += (stat = fill_bulk_predetd_blocks(this, stat.blk, seq_bulk_blocks)).p;
-		if(stat.stat != CONT) {
-			goto _fill_seq_p_bounded_finish;	/* skip cap */
-		}
-		seq_bulk_blocks = calc_max_bulk_blocks_seq_p_blk(this, stat.blk, psum);
-	}
-
-	/* bulk fill with ij-bound test */
-	psum += (stat = fill_bulk_seq_p_bounded(this, stat.blk)).p;
-
-	if(stat.stat != CONT) {
-		goto _fill_seq_p_bounded_finish;	/* skip cap */
-	}
-
-	/* cap fill (without p-bound test) */
-	psum += (stat = fill_cap_seq_p_bounded(this, stat.blk)).p;
-
-_fill_seq_p_bounded_finish:;
-	return(fill_create_tail(this, prev_tail, stat.blk, psum, stat.stat));
-}
-#endif
-
 /**
  * @fn fill_section_seq_bounded
  * @brief fill dp matrix inside section pairs
@@ -2093,8 +1906,6 @@ struct gaba_joint_tail_s *fill_section_seq_bounded(
 	struct gaba_joint_tail_s *tail = _tail(prev_tail);
 
 	/* calculate block sizes */
-	// uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	// uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_tail(this, tail);
 	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
 	uint64_t seq_bulk_blocks = calc_max_expected_blocks_tail(this, tail);
 
@@ -2132,54 +1943,6 @@ struct gaba_joint_tail_s *fill_section_seq_bounded(
 	return(fill_seq_bounded(this, tail));
 }
 
-#if 0
-/**
- * @fn fill_section_seq_p_bounded
- * @brief fill dp matrix inside section pairs
- */
-static _force_inline
-struct gaba_joint_tail_s *fill_section_seq_p_bounded(
-	struct gaba_dp_context_s *this,
-	struct gaba_joint_tail_s const *prev_tail,
-	struct gaba_section_s const *a,
-	struct gaba_section_s const *b,
-	int64_t plim)
-{
-	/* init section and restore sequence reader buffer */
-	fill_load_section(this, a, b, plim);
-
-	/* init tail pointer */
-	struct gaba_joint_tail_s *tail = _tail(prev_tail);
-
-	/* calculate block sizes */
-	uint64_t mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	uint64_t seq_bulk_blocks = calc_max_bulk_blocks_seq_p_tail(this, tail, 0);
-
-	/* extra large bulk fill (with stack allocation) */
-	while(_unlikely(mem_bulk_blocks < seq_bulk_blocks)) {
-		if(mem_bulk_blocks > MIN_BULK_BLOCKS) {
-			if((tail = fill_mem_bounded(this, tail, mem_bulk_blocks))->stat != CONT) {
-				return(tail);
-			}
-
-			/* fill-in area has changed */
-			seq_bulk_blocks = calc_max_bulk_blocks_seq_p_tail(this, tail, 0);
-		}
-
-		/* malloc the next stack and set pointers */
-		gaba_dp_add_stack(this, 0);
-
-		/* stack size has changed */
-		mem_bulk_blocks = calc_max_bulk_blocks_mem(this);
-	}
-
-	debug("v(%p), psum(%lld), p(%d)", _last_block(tail)->md, tail->psum, tail->p);
-
-	/* bulk fill with seq bound check */
-	return(fill_seq_p_bounded(this, tail));
-}
-#endif
-
 /**
  * @fn gaba_dp_fill_root
  *
@@ -2210,77 +1973,31 @@ struct gaba_fill_s *suffix(gaba_dp_fill)(
 	struct gaba_section_s const *b)
 {
 	struct gaba_joint_tail_s const *tail = _tail(prev_sec);
-
-	debug("%s", dump(tail, sizeof(struct gaba_joint_tail_s)));
-
-	#if 0
-	/* check if the tail is merge_tail */
-	if(tail->v == NULL) {
-		/* tail is merge_tail */
-		if(tail->rem_len > 0) {
-			#if 0
-			/* aとbをclipする */
-			ca = clip_to_bw(a);
-			cb = clip_to_bw(b);
-
-			/* バンドに対応するseqが揃うまでfillを続ける */
-			new_tail = gaba_dp_smalloc(sizeof(struct gaba_merge_tail_s));
-			for(i = 0; i < tail->num_tail; i++) {
-				new_tail->tail[i] = fill_section_seq_bounded(
-					this, tail->tail[i], ca, cb);
-			}
-
-			/* rem_lenを更新し、0になったらpを揃えるモードに移る */
-			if(tail->rem_len == 0) {
-				tail->prem = ...;
-			}
-			#endif
-		} else {
-			#if 0
-			/* pが揃うまでfillを続ける */
-			new_tail = gaba_dp_smalloc(sizeof(struct gaba_merge_tail_s));
-			for(i = 0; i < tail->num_tail; i++) {
-				if(tail->prem[i] != tail->p) {
-					new_tail->tail[i] = fill_section_seq_p_bounded(
-						this, tail->tail[i], a, b, tail->prem[i]);
-				} else {
-					new_tail->tail[i] = tail->tail[i];
-				}
-			}
-
-			/* pが揃ったかチェック */
-			if(p_is_aligned) {
-				return(merge(this, tail));
-			}
-			#endif
-		}
-		#if 0
-		/* merge-tail内のsectionとmaxの情報を更新する */
-		tail->max = calc_max();
-		tail->p = ...;
-		#endif
-	} else {
-		/* tail is not merge_tail */
-		return(_fill(fill_section_seq_bounded(this, tail, a, b)));
-	}
-	#endif
-
 	return(_fill(fill_section_seq_bounded(this, tail, a, b)));
-
-	/* never reach here */
-	return(NULL);
 }
 
+
+/* trace leaf search functions */
 /**
- * @fn trace_load_max_mask
+ * @struct gaba_leaf_s
  */
-struct trace_max_mask_s {
+struct gaba_leaf_s {
+	struct gaba_joint_tail_s const *tail;
+	struct gaba_block_s const *blk;
+	uint32_t aridx, bridx;
+	int32_t p, q;
+};
+
+/**
+ * @fn leaf_load_max_mask
+ */
+struct leaf_max_mask_s {
 	vec_t max;
 	int64_t offset;
 	uint32_t mask_max;
 };
 static _force_inline
-struct trace_max_mask_s trace_load_max_mask(
+struct leaf_max_mask_s leaf_load_max_mask(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail)
 {
@@ -2301,7 +2018,7 @@ struct trace_max_mask_s trace_load_max_mask(
 	_print_v32i16(_set_v32i16(tail->max - offset));
 	_print_v32i16(_add_v32i16(_load_v32i16(_last_block(tail)->md), _cvt_v32i8_v32i16(max)));
 
-	return((struct trace_max_mask_s){
+	return((struct leaf_max_mask_s){
 		.max = max,
 		.offset = offset,
 		.mask_max = mask_max
@@ -2309,16 +2026,16 @@ struct trace_max_mask_s trace_load_max_mask(
 }
 
 /**
- * @fn trace_detect_max_block
+ * @fn leaf_detect_max_block
  */
-struct trace_max_block_s {
+struct leaf_max_block_s {
 	vec_t max;
 	struct gaba_block_s *blk;
 	int32_t p;
 	uint32_t mask_max;
 };
 static _force_inline
-struct trace_max_block_s trace_detect_max_block(
+struct leaf_max_block_s leaf_detect_max_block(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail,
 	int64_t offset,
@@ -2360,7 +2077,7 @@ struct trace_max_block_s trace_detect_max_block(
 	}
 
 	debug("loop break: blk(%p), p(%d), mask_max(%u)", blk, p, mask_max);
-	return((struct trace_max_block_s){
+	return((struct leaf_max_block_s){
 		.max = max,
 		.blk = blk,
 		.p = p,
@@ -2369,10 +2086,10 @@ struct trace_max_block_s trace_detect_max_block(
 }
 
 /**
- * @fn trace_refill_block
+ * @fn leaf_refill_block
  */
 static _force_inline
-void trace_refill_block(
+void leaf_refill_block(
 	struct gaba_dp_context_s *this,
 	vec_masku_t *mask_max_ptr,
 	int64_t len,
@@ -2409,14 +2126,14 @@ void trace_refill_block(
 }
 
 /**
- * @fn trace_detect_max_pos
+ * @fn leaf_detect_max_pos
  */
-struct trace_max_pos_s {
+struct leaf_max_pos_s {
 	int32_t p;
 	int32_t q;
 };
 static _force_inline
-struct trace_max_pos_s trace_detect_max_pos(
+struct leaf_max_pos_s leaf_detect_max_pos(
 	struct gaba_dp_context_s *this,
 	vec_masku_t *mask_max_ptr,
 	int64_t len,
@@ -2425,10 +2142,7 @@ struct trace_max_pos_s trace_detect_max_pos(
 	for(int64_t i = 0; i < len; i++) {
 		uint32_t mask_update = mask_max_ptr[i].all & mask_max;
 		if(mask_update != 0) {
-			debug("i(%lld), p(%lld), q(%d)",
-				i, this->w.l.p + i, tzcnt(mask_update) - BW/2);
-
-			return((struct trace_max_pos_s){
+			return((struct leaf_max_pos_s){
 				.p = i,
 				.q = tzcnt(mask_update)
 			});
@@ -2437,53 +2151,26 @@ struct trace_max_pos_s trace_detect_max_pos(
 
 	/* not found in the block (never reaches here) */
 	debug("max pos NOT found.");
-	return((struct trace_max_pos_s){
+	return((struct leaf_max_pos_s){
 		.p = 0,
 		.q = 0
 	});
 }
 
 /**
- * @fn trace_save_section
+ * @fn leaf_save_coordinates
  */
 static _force_inline
-void trace_save_section(
+void leaf_save_coordinates(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail,
-	struct gaba_block_s const *blk)
-{
-	/* store tail and block pointer */
-	this->w.l.tail = tail;
-	this->w.l.blk = blk;
-	this->w.l.atail = tail;
-	this->w.l.btail = tail;
-
-	#if 0
-	/* copy ids and lengths */
-	v2i32_t len = _load_v2i32(&tail->alen);
-	v2i32_t id = _load_v2i32(&tail->aid);
-	_store_v2i32(&this->w.l.alen, len);
-	_store_v2i32(&this->w.l.aid, id);
-	#else
-	/* init ids and lengths with invalid */
-	_store_v2i32(&this->w.l.alen, _zero_v2i32());
-	_store_v2i32(&this->w.l.aid, _set_v2i32(-1));
-	#endif
-	return;
-}
-
-/**
- * @fn trace_save_coordinates
- */
-static _force_inline
-void trace_save_coordinates(
-	struct gaba_dp_context_s *this,
-	struct gaba_joint_tail_s const *tail,
+	struct gaba_leaf_s *leaf,
 	struct gaba_block_s const *blk,
 	int32_t p,
 	int32_t q)
 {
-	trace_save_section(this, tail, blk);
+	leaf->tail = tail;
+	leaf->blk = blk;
 
 	/* calc ridx */
 	int64_t mask_idx = p & (BLK - 1);
@@ -2493,83 +2180,70 @@ void trace_save_coordinates(
 	v2i32_t ridx = _add_v2i32(
 		_load_v2i32(&(blk - 1)->aridx),
 		_seta_v2i32((BLK - 1 - q) - bcnt, q - acnt));
-
-	debug("acnt(%d), bcnt(%d)", acnt, bcnt);
-	_print_v2i32(_load_v2i32(&(blk - 1)->aridx));
-	_print_v2i32(_seta_v2i32((BLK - 1 - q) - bcnt, q - acnt));
-	_print_v2i32(ridx);
-
-	/* convert to idx */
-	v2i32_t len = _load_v2i32(&this->w.l.alen);
-	_store_v2i32(&this->w.l.aidx, _sub_v2i32(len, ridx));
-	_store_v2i32(&this->w.l.asidx, _sub_v2i32(len, ridx));
-
-	/* i \in [0 .. BLK) */
-	/* adjust global coordinates with local coordinate */
-	this->w.l.psum = tail->psum - tail->p + p;
-	this->w.l.p = p;
-	this->w.l.q = q;
+	_store_v2i32(&leaf->aridx, ridx);
+	
+	/* store p and q */
+	leaf->p = p;
+	leaf->q = q;
 	return;
 }
 
 /**
- * @fn trace_save_phantom_coordinates
+ * @fn leaf_save_phantom_coordinates
  */
 static _force_inline
-void trace_save_phantom_coordinates(
+void leaf_save_phantom_coordinates(
 	struct gaba_dp_context_s *this,
 	struct gaba_joint_tail_s const *tail,
+	struct gaba_leaf_s *leaf,
 	struct gaba_block_s const *blk,
 	uint32_t mask_max)
 {
-	trace_save_section(this, tail, blk);
-
-	/* convert to idx */
-	_store_v2i32(&this->w.l.aidx, _zero_v2i32());
-	_store_v2i32(&this->w.l.asidx, _zero_v2i32());
-
-	/* i \in [0 .. BLK) */
-	/* adjust global coordinates with local coordinate */
-	this->w.l.psum = tail->psum - tail->p - 1;
-	this->w.l.p = -1;
-	this->w.l.q = tzcnt(mask_max);
+	leaf->tail = tail;
+	leaf->blk = blk;
+	_store_v2i32(&leaf->aridx, _zero_v2i32());
+	leaf->p = -1;
+	leaf->q = tzcnt(mask_max);
 	return;
 }
 
 /**
- * @fn trace_search_max
+ * @fn leaf_search
  */
 static _force_inline
-void trace_search_max(
+void leaf_search(
 	struct gaba_dp_context_s *this,
-	struct gaba_joint_tail_s const *tail)
+	struct gaba_joint_tail_s const *tail,
+	struct gaba_leaf_s *leaf)
 {
 	/* load max vector and create mask */
-	struct trace_max_mask_s m = trace_load_max_mask(this, tail);
+	struct leaf_max_mask_s m = leaf_load_max_mask(this, tail);
 
 	/* search block */
-	struct trace_max_block_s b = trace_detect_max_block(
+	struct leaf_max_block_s b = leaf_detect_max_block(
 		this, tail, m.offset, m.mask_max, m.max);
 	debug("check p(%d)", b.p);
 	if(b.p == -1) {
-		trace_save_phantom_coordinates(this, tail, b.blk, b.mask_max);
+		leaf_save_phantom_coordinates(this, tail, leaf, b.blk, b.mask_max);
 		return;
 	}
 
 	/* refill detected block */
 	int64_t len = MIN2(tail->p - b.p, BLK);
 	vec_masku_t mask_max_arr[BLK];
-	trace_refill_block(this, mask_max_arr, len, b.blk, b.max);
+	leaf_refill_block(this, mask_max_arr, len, b.blk, b.max);
 
 	/* detect pos */
-	struct trace_max_pos_s l = trace_detect_max_pos(
+	struct leaf_max_pos_s l = leaf_detect_max_pos(
 		this, mask_max_arr, len, b.mask_max);
 
 	/* calculate ij-coordinates */
-	trace_save_coordinates(this, tail, b.blk, b.p + l.p, l.q);
+	leaf_save_coordinates(this, tail, leaf, b.blk, b.p + l.p, l.q);
 	return;
 }
 
+
+/* path trace functions */
 /**
  * @fn trace_load_section_a, trace_load_section_b
  */
@@ -2634,7 +2308,7 @@ void trace_load_section_b(
  */
 #if MODEL == LINEAR
 #define _trace_declare_mask() \
-	uint32_t register mask_h, mask_v;
+	uint32_t mask_h, mask_v;
 #define _trace_load_mask() { \
 	mask_v = mask_ptr->pair.v.all; \
 	mask_h = mask_ptr->pair.h.all; \
@@ -2642,7 +2316,7 @@ void trace_load_section_b(
 }
 #else /* MODEL == AFFINE */
 #define _trace_declare_mask() \
-	uint32_t register mask_h, mask_v, mask_e, mask_f;
+	uint32_t mask_h, mask_v, mask_e, mask_f;
 #define _trace_load_mask() { \
 	mask_f = mask_ptr->pair.f.all; \
 	mask_e = mask_ptr->pair.e.all; \
@@ -2659,26 +2333,26 @@ void trace_load_section_b(
 #define _trace_load_context(t) \
 	v2i32_t idx = _load_v2i32(&(t)->w.l.aidx); \
 	struct gaba_block_s const *blk = (t)->w.l.blk; \
-	int64_t register p = (t)->w.l.p; \
-	int64_t register q = (t)->w.l.q; \
+	int64_t p = (t)->w.l.p; \
+	int64_t q = (t)->w.l.q; \
 	int64_t psave = p; \
+	uint64_t prev_array = path[0]; \
+	uint64_t path_array = 0; \
 	union gaba_dir_u dir = _dir_load(blk, p & (BLK - 1)); \
 	union gaba_mask_pair_u const *mask_ptr = &blk->mask[p & (BLK - 1)]; \
-	uint64_t register prev_array = path[0]; \
-	uint64_t register path_array = 0; \
 	_trace_declare_mask(); \
 	_trace_load_mask(); \
 	debug("p(%lld), q(%lld), mask_h(%x), mask_v(%x), path_array(%llx), prev_array(%llx)", \
 		p, q, mask_h, mask_v, path_array, prev_array);
 
 #define _trace_forward_load_context(t) \
-	uint32_t *path = (t)->w.l.fw_path; \
-	int64_t rem = (t)->w.l.fw_rem; \
+	uint32_t *path = (t)->w.l.cpath.head; \
+	int64_t ofs = (t)->w.l.cpath.hofs; \
 	_trace_load_context(t);
 
 #define _trace_reverse_load_context(t) \
-	uint32_t *path = (t)->w.l.rv_path; \
-	int64_t rem = (t)->w.l.rv_rem; \
+	uint32_t *path = (t)->w.l.cpath.tail; \
+	int64_t ofs = (t)->w.l.cpath.tofs; \
 	_trace_load_context(t);
 
 
@@ -2709,22 +2383,22 @@ void trace_load_section_b(
 #define _trace_forward_cap_update_path(_traced_count) { \
 	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
 	path_array = path_array<<(BLK - (_traced_count)); \
-	path[0] = (uint32_t)(prev_array | (path_array>>rem)); \
-	path[-1] = (uint32_t)(path_array<<(BLK - rem)); \
+	path[0] = (uint32_t)(prev_array | (path_array>>ofs)); \
+	path[-1] = (uint32_t)(path_array<<(BLK - ofs)); \
 	debug("path[0](%x), path[-1](%x)", path[0], path[-1]); \
-	path -= ((rem + (_traced_count)) & BLK) != 0; \
-	rem = (rem + (_traced_count)) & (BLK - 1); \
+	path -= ((ofs + (_traced_count)) & BLK) != 0; \
+	ofs = (ofs + (_traced_count)) & (BLK - 1); \
 	path_array = 0; \
 	prev_array = (uint64_t)path[0]; \
 }
 #define _trace_reverse_cap_update_path(_traced_count) { \
 	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
 	path_array = path_array>>(BLK - (_traced_count)); \
-	path[0] = (uint32_t)(prev_array | (path_array<<rem)); \
-	path[1] = (uint32_t)(path_array>>(BLK - rem)); \
+	path[0] = (uint32_t)(prev_array | (path_array<<ofs)); \
+	path[1] = (uint32_t)(path_array>>(BLK - ofs)); \
 	debug("path[0](%x), path[1](%x)", path[0], path[1]); \
-	path += ((rem + (_traced_count)) & BLK) != 0; \
-	rem = (rem + (_traced_count)) & (BLK - 1); \
+	path += ((ofs + (_traced_count)) & BLK) != 0; \
+	ofs = (ofs + (_traced_count)) & (BLK - 1); \
 	path_array = 0; \
 	prev_array = (uint64_t)path[0]; \
 }
@@ -2735,14 +2409,14 @@ void trace_load_section_b(
  */
 #define _trace_forward_bulk_update_path() { \
 	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
-	*path-- = (uint32_t)(prev_array | (path_array>>rem)); \
-	prev_array = (uint64_t)(*path = (uint32_t)(path_array<<(BLK - rem))); \
+	*path-- = (uint32_t)(prev_array | (path_array>>ofs)); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array<<(BLK - ofs))); \
 	path_array = 0; \
 }
 #define _trace_reverse_bulk_update_path() { \
 	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
-	*path++ = (uint32_t)(prev_array | (path_array<<rem)); \
-	prev_array = (uint64_t)(*path = (uint32_t)(path_array>>(BLK - rem))); \
+	*path++ = (uint32_t)(prev_array | (path_array<<ofs)); \
+	prev_array = (uint64_t)(*path = (uint32_t)(path_array>>(BLK - ofs))); \
 	path_array = 0; \
 }
 
@@ -2993,18 +2667,21 @@ void trace_load_section_b(
 	debug("p(%lld), psum(%lld), q(%llu)", p, (t)->w.l.psum, q); \
 }
 #define _trace_forward_save_context(t) { \
-	(t)->w.l.fw_path = path; \
-	(t)->w.l.fw_rem = rem; \
+	(t)->w.l.cpath.head = path; \
+	(t)->w.l.cpath.hofs = ofs; \
 	_trace_save_context(t); \
 }
 #define _trace_reverse_save_context(t) { \
-	(t)->w.l.rv_path = path; \
-	(t)->w.l.rv_rem = rem; \
+	(t)->w.l.cpath.tail = path; \
+	(t)->w.l.cpath.tofs = ofs; \
 	_trace_save_context(t); \
 }
 
-static
-void trace_forward_trace(
+/**
+ * @fn trace_forward_body
+ */
+static _force_inline
+void trace_forward_body(
 	struct gaba_dp_context_s *this)
 {
 	#define _trace_forward_gap_loop(t, _type, _next, _label) { \
@@ -3100,9 +2777,11 @@ _trace_forward_index_break:;
 	return;
 }
 
-
-static
-void trace_reverse_trace(
+/**
+ * @fn trace_reverse_body
+ */
+static _force_inline
+void trace_reverse_body(
 	struct gaba_dp_context_s *this)
 {
 	#define _trace_reverse_gap_loop(t, _type, _next, _label) { \
@@ -3198,57 +2877,56 @@ _trace_reverse_index_break:;
 	return;
 }
 
-
 /**
  * @fn trace_forward_push
  */
-static
+static _force_inline
 void trace_forward_push(
 	struct gaba_dp_context_s *this)
 {
+	/* windback pointer */
+	this->w.l.sec.head--;
+
 	/* load section info */
 	v2i32_t id = _load_v2i32(&this->w.l.aid);
 	v2i32_t idx = _load_v2i32(&this->w.l.aidx);
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path length */
-	int64_t plen = 32 * (this->w.l.spath - this->w.l.fw_path)
-		+ (this->w.l.fw_rem - this->w.l.srem);
+	int64_t plen = 32 * (this->w.l.spath.head - this->w.l.cpath.head)
+		+ (this->w.l.cpath.hofs - this->w.l.spath.hofs);
 
 	/* store section info */	
-	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].aid, id);
-	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].apos, idx);
-	_store_v2i32(&this->w.l.sec[this->w.l.fw_sec_idx].alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec.head->aid, id);
+	_store_v2i32(&this->w.l.sec.head->apos, idx);
+	_store_v2i32(&this->w.l.sec.head->alen, _sub_v2i32(sidx, idx));
 
 	/* store path length */
-	this->w.l.sec[this->w.l.fw_sec_idx].plen = plen;
-	this->w.l.sec[this->w.l.fw_sec_idx].ppos = 0;
+	this->w.l.sec.head->plen = plen;
+	this->w.l.sec.head->ppos = 0;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%lld)",
-		this->w.l.sec[this->w.l.fw_sec_idx].aid,
-		this->w.l.sec[this->w.l.fw_sec_idx].apos,
-		this->w.l.sec[this->w.l.fw_sec_idx].alen,
-		this->w.l.sec[this->w.l.fw_sec_idx].bid,
-		this->w.l.sec[this->w.l.fw_sec_idx].bpos,
-		this->w.l.sec[this->w.l.fw_sec_idx].blen,
+		this->w.l.sec.head->aid,
+		this->w.l.sec.head->apos,
+		this->w.l.sec.head->alen,
+		this->w.l.sec.head->bid,
+		this->w.l.sec.head->bpos,
+		this->w.l.sec.head->blen,
 		plen);
 
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path and rem */
-	this->w.l.spath = this->w.l.fw_path;
-	this->w.l.srem = this->w.l.fw_rem;
-
-	/* windback pointer */
-	this->w.l.fw_sec_idx--;
+	this->w.l.spath.head = this->w.l.cpath.head;
+	this->w.l.spath.hofs = this->w.l.cpath.hofs;
 	return;
 }
 
 /**
  * @fn trace_reverse_push
  */
-static
+static _force_inline
 void trace_reverse_push(
 	struct gaba_dp_context_s *this)
 {
@@ -3260,78 +2938,122 @@ void trace_reverse_push(
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path pos and len */
-	int64_t plen = 32 * (this->w.l.rv_path - this->w.l.spath)
-		+ (this->w.l.rv_rem - this->w.l.srem);
+	int64_t plen = 32 * (this->w.l.cpath.tail - this->w.l.spath.tail)
+		+ (this->w.l.cpath.tofs - this->w.l.spath.tofs);
 	int64_t ppos = this->w.l.pspos;
 
 	/* store revcomped section */
-	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].aid, _xor_v2i32(id, mask));
-	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].apos, _sub_v2i32(len, sidx));
-	_store_v2i32(&this->w.l.sec[this->w.l.rv_sec_idx].alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec.tail->aid, _xor_v2i32(id, mask));
+	_store_v2i32(&this->w.l.sec.tail->apos, _sub_v2i32(len, sidx));
+	_store_v2i32(&this->w.l.sec.tail->alen, _sub_v2i32(sidx, idx));
 
 	/* store path length */
-	this->w.l.sec[this->w.l.rv_sec_idx].plen = plen;
-	this->w.l.sec[this->w.l.rv_sec_idx].ppos = ppos;
+	this->w.l.sec.tail->plen = plen;
+	this->w.l.sec.tail->ppos = ppos;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%lld)",
-		this->w.l.sec[this->w.l.rv_sec_idx].aid,
-		this->w.l.sec[this->w.l.rv_sec_idx].apos,
-		this->w.l.sec[this->w.l.rv_sec_idx].alen,
-		this->w.l.sec[this->w.l.rv_sec_idx].bid,
-		this->w.l.sec[this->w.l.rv_sec_idx].bpos,
-		this->w.l.sec[this->w.l.rv_sec_idx].blen,
+		this->w.l.sec.tail->aid,
+		this->w.l.sec.tail->apos,
+		this->w.l.sec.tail->alen,
+		this->w.l.sec.tail->bid,
+		this->w.l.sec.tail->bpos,
+		this->w.l.sec.tail->blen,
 		ppos, plen);
 
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path, rem, and pspos */
-	this->w.l.spath = this->w.l.rv_path;
-	this->w.l.srem = this->w.l.rv_rem;
+	this->w.l.spath.tail = this->w.l.cpath.tail;
+	this->w.l.spath.tofs = this->w.l.cpath.tofs;
 	this->w.l.pspos = ppos + plen;
 
 	/* windback pointer */
-	this->w.l.rv_sec_idx++;
+	this->w.l.sec.tail++;
 	return;
 }
 
 /**
- * @fn trace_forward and trace_reverse
+ * @fn trace_init_work
  */
-#define TRACE_FORWARD 		( 0 )
-#define TRACE_REVERSE 		( 1 )
 static _force_inline
-void trace_generate_path(
+void trace_init_work(
 	struct gaba_dp_context_s *this,
-	struct gaba_joint_tail_s const *tail,
-	uint64_t dir)
+	struct gaba_leaf_s const *leaf,
+	struct gaba_path_intl_s const *path,
+	struct gaba_sec_arr_s const *sec)
 {
-	debug("trace_init_start_pos tail(%p), p(%d), psum(%lld), ssum(%d)",
-		tail, tail->p, tail->psum, tail->ssum);
+	/* store tail pointers */
+	struct gaba_joint_tail_s const *tail = leaf->tail;
+	this->w.l.tail = tail;
+	this->w.l.atail = tail;
+	this->w.l.btail = tail;
 
-	// if(tail->psum < 0) {
-	if(tail->psum < 2) {
-		debug("valid block not found, psum(%lld)", tail->psum);
-		return;
-	}
+	/* store path object and section array object */
+	this->w.l.cpath = this->w.l.spath = *path;
+	struct gaba_block_s const *blk = leaf->blk;
+	this->w.l.blk = blk;
 
-	/* search max block, determine pos in the block */
-	trace_search_max(this, tail);
+	#if 0
+	/* copy ids and lengths */
+	v2i32_t len = _load_v2i32(&tail->alen);
+	v2i32_t id = _load_v2i32(&tail->aid);
+	_store_v2i32(&this->w.l.alen, len);
+	_store_v2i32(&this->w.l.aid, id);
 
-	/* initialize function pointers */
-	void (*body)(struct gaba_dp_context_s *this) = (
-		(dir == TRACE_FORWARD) ? trace_forward_trace : trace_reverse_trace
-	);
-	void (*push)(struct gaba_dp_context_s *this) = (
-		(dir == TRACE_FORWARD) ? trace_forward_push : trace_reverse_push
-	);
+	v2i32_t ridx = _load_v2i32(&leaf->aridx);
+	_store_v2i32(&this->w.l.aidx, _sub_v2i32(len, ridx));
+	_store_v2i32(&this->w.l.asidx, _sub_v2i32(len, ridx));
+	#else
+	/* init ids and lengths with invalid */
+	_store_v2i32(&this->w.l.alen, _zero_v2i32());
+	_store_v2i32(&this->w.l.aid, _set_v2i32(-1));
 
-	/* initialize path length info */
-	this->w.l.spath = (dir == TRACE_FORWARD) ? this->w.l.fw_path : this->w.l.rv_path;
-	this->w.l.srem = 0;
+	v2i32_t idx = _sub_v2i32(_zero_v2i32(), _load_v2i32(&leaf->aridx));
+	_store_v2i32(&this->w.l.aidx, idx);
+	_store_v2i32(&this->w.l.asidx, idx);
+	#endif
+
+	/* i \in [0 .. BLK) */
+	/* adjust global coordinates with local coordinate */
+	this->w.l.p = leaf->p;
+	this->w.l.q = leaf->q;
+
+	this->w.l.psum = tail->psum - tail->p + leaf->p;
 	this->w.l.pspos = 0;
 
-	/* until the pointer reaches the root of the matrix */
+	/* save section info */
+	this->w.l.sec = *sec;
+	return;
+}
+
+/**
+ * @fn trace_clean_work
+ */
+static _force_inline
+void trace_clean_work(
+	struct gaba_dp_context_s *this,
+	struct gaba_leaf_s const *leaf,
+	struct gaba_path_intl_s *path,
+	struct gaba_sec_arr_s *sec)
+{
+	*path = this->w.l.cpath;
+	*sec = this->w.l.sec;
+	return;
+}
+
+/**
+ * @fn trace_forward_generate_alignment, trace_reverse_generate_alignment
+ */
+static _force_inline
+void trace_forward_generate_alignment(
+	struct gaba_dp_context_s *this,
+	struct gaba_leaf_s const *leaf,
+	struct gaba_path_intl_s *path,
+	struct gaba_sec_arr_s *sec)
+{
+	trace_init_work(this, leaf, path, sec);
+
 	while(this->w.l.psum >= 0) {
 		/* update section info */
 		if(this->w.l.aidx <= 0) {
@@ -3342,29 +3064,221 @@ void trace_generate_path(
 		}
 
 		/* fragment trace */
-		body(this);
+		trace_forward_body(this);
 		debug("p(%d), psum(%lld), q(%d)", this->w.l.p, this->w.l.psum, this->w.l.q);
 
 		/* push section info to section array */
-		push(this);
+		trace_forward_push(this);
 	}
+
+	trace_clean_work(this, leaf, path, sec);
+	return;
+}
+static _force_inline
+void trace_reverse_generate_alignment(
+	struct gaba_dp_context_s *this,
+	struct gaba_leaf_s const *leaf,
+	struct gaba_path_intl_s *path,
+	struct gaba_sec_arr_s *sec)
+{
+	trace_init_work(this, leaf, path, sec);
+
+	while(this->w.l.psum >= 0) {
+		/* update section info */
+		if(this->w.l.aidx <= 0) {
+			trace_load_section_a(this);
+		}
+		if(this->w.l.bidx <= 0) {
+			trace_load_section_b(this);
+		}
+
+		/* fragment trace */
+		trace_reverse_body(this);
+		debug("p(%d), psum(%lld), q(%d)", this->w.l.p, this->w.l.psum, this->w.l.q);
+
+		/* push section info to section array */
+		trace_reverse_push(this);
+	}
+
+	trace_clean_work(this, leaf, path, sec);
 	return;
 }
 
 /**
- * @fn trace_init_work
+ * @fn trace_finalize_path
  */
 static _force_inline
-void trace_init_work(
+struct gaba_path_s *trace_finalize_path(
+	struct gaba_path_intl_s p)
+{
+	uint32_t *head = p.head, *tail = p.tail;
+	int64_t len = 32 * (p.tail - p.head) + p.tofs;	/* p.hofs must be zero */
+
+	debug("head(%p), tail(%p), hofs(%u), tofs(%u)", p.head, p.tail, p.hofs, p.tofs);
+
+
+	/* add terminator at the end of path array */
+	*tail |= 0x01<<p.tofs;
+
+	#if 0
+	/* make the pointer 8byte aligned */
+	uint32_t ofs = 0;
+	if(((uint64_t)head & sizeof(uint32_t)) != 0) {
+		debug("fix pointer, %p, %p", head, head - 1);
+
+		head--;
+		ofs += 32;
+	}
+	#endif
+
+	/* create path object */
+	struct gaba_path_s *path = (struct gaba_path_s *)(
+		(uint8_t *)head - sizeof(struct gaba_path_s));
+	path->len = len;
+	return(path);
+}
+
+/**
+ * @fn trace_cat_path
+ */
+static _force_inline
+void trace_cat_path(
 	struct gaba_dp_context_s *this,
-	struct gaba_fill_s const *fw_tail,
-	struct gaba_fill_s const *rv_tail,
-	struct gaba_clip_params_s const *clip)
+	struct gaba_path_intl_s *dst,
+	struct gaba_path_intl_s const *src)
+{
+	/* load pointers */
+	uint32_t const *sh = src->head;
+	uint32_t const *st = src->tail;
+	uint32_t *dt = dst->tail;
+
+	/* concatenate heads */
+	uint64_t prev_array = *dt;
+	uint64_t curr_array = ((uint64_t)*sh++)>>(32 - src->hofs);
+
+	dt[0] = prev_array | (curr_array<<dst->tofs);
+	dt[1] = curr_array>>(32 - dst->tofs);
+
+	debug("dt[0](%x), dt[1](%x), dh[0](%x), dh[1](%x)", dt[0], dt[1], dst->head[0], dst->head[1]);
+
+	dt += (((dst->tofs + src->hofs) & 32) != 0) ? 1 : 0;
+	uint64_t ofs = (dst->tofs + src->hofs) & (32 - 1);
+
+	/* cat */
+	if(sh <= st) {
+		/* load the first element */
+		prev_array = *dt;
+
+		while(sh <= st) {
+			curr_array = *sh++;
+			*dt++ = prev_array | (curr_array<<ofs);
+			prev_array = curr_array>>(32 - ofs);
+
+			debug("sh(%p), dt(%p), curr_array(%llx), prev_array(%llx)", sh, dt, curr_array, prev_array);
+		}
+
+		/* write back last element */
+		*dt = prev_array;
+
+		/* fix tail offset */
+		dt -= (((ofs + src->tofs) & 32) != 0) ? 1 : 0;
+		ofs = (ofs + src->tofs) & (32 - 1);
+	}
+
+	/* fix dst path object */
+	dst->tail = dt;
+	dst->tofs = ofs;
+
+	debug("head(%p), tail(%p), ofs(%u)", dst->head, dst->tail, dst->tofs);
+	return;
+}
+
+/**
+ * @fn trace_cat_section
+ */
+struct trace_boundary_s {
+	struct gaba_path_section_s const *ptr;
+	int64_t ppos;
+};
+static _force_inline
+struct trace_boundary_s trace_cat_section(
+	struct gaba_dp_context_s *this,
+	struct gaba_sec_arr_s *dst,
+	struct gaba_sec_arr_s const *src)
+{
+	/* load pointers */
+	struct gaba_path_section_s *dh = dst->head;
+	struct gaba_path_section_s *dt = dst->tail;
+	struct gaba_path_section_s const *sh = src->head;
+	struct gaba_path_section_s const *st = src->tail;
+
+	debug("dh(%p), dt(%p), sh(%p), st(%p)", dh, dt, sh, st);
+
+	/*
+	 * load tail ppos, supposing dt[-1] is all zeros when dh == dt.
+	 */
+	// int64_t ppos = (dh == dt) ? 0 : dt[-1].ppos + dt[-1].plen;
+	int64_t ppos = dt[-1].ppos + dt[-1].plen;
+
+	/* check if two sections can be merged */
+	// int merged = 0;
+	struct trace_boundary_s b = {
+		.ptr = dt - (sh == st),
+		.ppos = (sh == st) ? dt[-1].plen : 0
+	};
+	debug("init, ptr(%p), ppos(%lld)", b.ptr, b.ppos);
+
+	if(dh != dt && sh != st && sh->apos != 0 && sh->bpos != 0) {
+		// merged = 1;
+		b.ptr--;
+		b.ppos = b.ptr->plen;
+
+		debug("dst: id(%u, %u), pos(%u, %u), len(%u, %u)", dt->bid, dt->aid, dt->bpos, dt->apos, dt->blen, dt->alen);
+		debug("src: id(%u, %u), pos(%u, %u), len(%u, %u)", sh->bid, sh->aid, sh->bpos, sh->apos, sh->blen, sh->alen);
+
+		dt[-1].alen += sh->alen;
+		dt[-1].blen += sh->blen;
+		dt[-1].plen += sh->plen;
+		ppos += sh++->plen;
+	}
+	debug("adjust, ptr(%p), ppos(%lld)", b.ptr, b.ppos);
+
+	/* copy sections */
+	while(sh < st) {
+		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%u)", dt, sh, dt->plen, sh->plen, ppos);
+		*dt = *sh;
+		dt++->ppos = ppos;
+		ppos += sh++->plen;
+	}
+
+	/* write back pointer */
+	dst->tail = dt;
+	return(b);
+}
+
+/**
+ * @struct gaba_result_s
+ */
+struct gaba_result_s {
+	struct gaba_alignment_s *aln;
+	struct gaba_sec_arr_s rv_sec, fw_sec;
+	struct gaba_path_intl_s rv_path, fw_path;
+};
+
+/**
+ * @fn trace_init_alignment
+ */
+static _force_inline
+struct gaba_result_s trace_init_alignment(
+	struct gaba_dp_context_s *this,
+	struct gaba_joint_tail_s const *fw_tail,
+	struct gaba_joint_tail_s const *rv_tail,
+	struct gaba_trace_params_s const *params)
 {
 	/* calculate array lengths */
-	uint64_t ssum = _tail(fw_tail)->ssum + _tail(rv_tail)->ssum;
-	uint64_t psum = _roundup(_tail(fw_tail)->psum + BLK, 32)
-				  + _roundup(_tail(rv_tail)->psum + BLK, 32);
+	uint64_t ssum = fw_tail->ssum + rv_tail->ssum;
+	uint64_t psum = _roundup(MAX2(fw_tail->psum, 1), 32)
+				  + _roundup(MAX2(rv_tail->psum, 1), 32);
 
 	/* malloc trace working area */
 	uint64_t sec_len = 2 * ssum;
@@ -3372,173 +3286,188 @@ void trace_init_work(
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	/* malloc pointer */
-	uint64_t sec_size = sizeof(struct gaba_path_section_s) * sec_len;
-	uint64_t path_size = sizeof(uint32_t) * path_len;
-	struct gaba_result_s *res = (struct gaba_result_s *)(gaba_dp_malloc(this,
-		  sizeof(struct gaba_result_s) + path_size + sec_size
-		+ this->head_margin + this->tail_margin) + this->head_margin);
+	uint64_t sec_size = sizeof(struct gaba_path_section_s) * (sec_len + 1);
+	uint64_t path_size = sizeof(uint32_t) * (path_len + 4);
+	uint64_t size = sizeof(struct gaba_alignment_s) + path_size + sec_size
+			+ this->head_margin + this->tail_margin;
 
-	/* set section array info */
-	struct gaba_path_section_s *sec_base = (struct gaba_path_section_s *)(res + 1);
-	this->w.l.sec = sec_base;
-	this->w.l.fw_sec_idx = sec_len - 1;
-	this->w.l.rv_sec_idx = 0;
-	this->w.l.tail_sec_idx = sec_len - 1;
+	lmm_t *lmm = (lmm_t *)params->lmm;
+	/*
+	struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin
+		+ ((lmm == NULL) ? gaba_dp_malloc(this, size) : lmm_malloc(lmm, size)));
+	*/
+	struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin + lmm_malloc(lmm, size));
 
-	/* set path array info */
-	this->w.l.fw_rem = 0;
-	this->w.l.rv_rem = 0;
+	debug("malloc trace mem(%p), lmm(%p)", aln, lmm);
 
-	uint32_t *path_base = (uint32_t *)&sec_base[sec_len];
-	this->w.l.fw_path = path_base + path_len - 1;
-	this->w.l.rv_path = path_base;
-	this->w.l.tail_path = path_base + path_len - 1;
+	aln->lmm = (void *)lmm;
+	aln->score = fw_tail->max + rv_tail->max + this->m * params->k;
+	aln->reserved[0] = this->head_margin;
 
-	/* clear path array */
-	this->w.l.fw_path[0] = 0;
-	this->w.l.fw_path[1] = 0x01;			/* terminator */
-	this->w.l.fw_path[2] = 0;
-	this->w.l.rv_path[0] = 0;
+	/* set pointers */
+	struct gaba_path_section_s *msec = (struct gaba_path_section_s *)(aln + 1);
+	*msec = (struct gaba_path_section_s){ 0 };
+	struct gaba_sec_arr_s rv_sec = {
+		.head = msec + 1,
+		.tail = msec + 1
+	};
+	struct gaba_sec_arr_s fw_sec = {
+		.head = rv_sec.tail + sec_len,
+		.tail = rv_sec.tail + sec_len
+	};
 
-	return;
+	uint32_t *mpath = (uint32_t *)fw_sec.tail + 1;
+	struct gaba_path_intl_s rv_path = {
+		.head = mpath + 1,
+		.tail = mpath + 1,
+		.hofs = 0,
+		.tofs = 0
+	};
+	struct gaba_path_intl_s fw_path = {
+		.head = rv_path.head + path_len,
+		.tail = rv_path.head + path_len,
+		.hofs = 0,
+		.tofs = 0
+	};
+
+	/* clear array */
+	*mpath = 0;
+	*rv_path.head = 0;
+	*fw_path.tail = 0;
+
+	return((struct gaba_result_s){
+		.aln = aln,
+		.rv_sec = rv_sec,
+		.fw_sec = fw_sec,
+		.rv_path = rv_path,
+		.fw_path = fw_path
+	});
 }
 
 /**
- * @fn trace_concatenate_path
+ * @fn trace_refine_alignment
  */
 static _force_inline
-struct gaba_result_s *trace_concatenate_path(
+struct gaba_alignment_s *trace_refine_alignment(
 	struct gaba_dp_context_s *this,
-	struct gaba_fill_s const *fw_tail,
-	struct gaba_fill_s const *rv_tail,
-	struct gaba_clip_params_s const *clip)
+	struct gaba_alignment_s *aln,
+	struct gaba_sec_arr_s rv_sec,
+	struct gaba_sec_arr_s fw_sec,
+	struct gaba_path_intl_s rv_path,
+	struct gaba_path_intl_s fw_path,
+	struct gaba_trace_params_s const *params)
 {
-	debug("fw_path(%p), rv_path(%p), fw_sec(%u), rv_sec(%u)",
-		this->w.l.fw_path, this->w.l.rv_path, this->w.l.fw_sec_idx, this->w.l.rv_sec_idx);
-	debug("fw_rem(%d), rv_rem(%d)", this->w.l.fw_rem, this->w.l.rv_rem);
+	if(params->sec != NULL) {
+		/* set root section info */
+		aln->rapos = params->sec[0].apos;
+		aln->rbpos = params->sec[0].bpos;
+		// aln->rppos = rv_sec.tail[-1].plen;		/* tail[-1].plen == 0 when head == tail */
+		// aln->rsid = rv_sec.tail - rv_sec.head;
 
-	/* recover res pointer */
-	struct gaba_result_s *res = ((struct gaba_result_s *)this->w.l.sec) - 1;
+		/* cat sections */
+		struct trace_boundary_s b = trace_cat_section(this, &rv_sec,
+			&((struct gaba_sec_arr_s const){
+				.head = (struct gaba_path_section_s *)params->sec,
+				.tail = (struct gaba_path_section_s *)params->sec + params->slen
+			}));
+		aln->rppos = b.ppos;
+		aln->rsid = b.ptr - rv_sec.head;
+		trace_cat_section(this, &rv_sec, &fw_sec);
 
-	/* store score */
-	int64_t score_adj = 0;					/* score adjustment at the root is not implemented */
-	res->score = fw_tail->max + rv_tail->max + score_adj;
+		/* cat paths */
+		uint32_t seed = 0x55555555;
+		trace_cat_path(this, &rv_path,
+			&((struct gaba_path_intl_s const){
+				.head = &seed,
+				.tail = &seed,
+				.hofs = 2 * params->k,
+				.tofs = 0
+			}));
+		trace_cat_path(this, &rv_path, &fw_path);
 
-	/* store section pointer and section length */
-	uint32_t sflen = this->w.l.tail_sec_idx - this->w.l.fw_sec_idx;
-	uint32_t srlen = this->w.l.rv_sec_idx;
-	res->sec = this->w.l.sec;
-	res->slen = sflen + srlen;
-	// res->slen = this->w.l.rv_sec_idx + (this->w.l.tail_sec_idx - this->w.l.fw_sec_idx);
-	// res->reserved = this->head_margin;		/* use reserved */
-
-	/* load section pointers */
-	struct gaba_path_section_s *fw_sec = this->w.l.sec + this->w.l.fw_sec_idx + 1;
-	struct gaba_path_section_s *rv_sec = this->w.l.sec + this->w.l.rv_sec_idx - 1;
-	struct gaba_path_section_s *tail_sec = this->w.l.sec + this->w.l.tail_sec_idx;
-	
-	/* load base path pos */
-	uint32_t ppos = this->w.l.pspos;
-
-	debug("sflen(%u), srlen(%u)", sflen, srlen);
-	if(sflen > 0 && srlen > 0 && fw_sec->apos != 0 && fw_sec->bpos != 0) {
-		debug("apos(%u), bpos(%u)", fw_sec->apos, fw_sec->bpos);
-
-		/* merge the root sections */
-		rv_sec->alen += fw_sec->alen;
-		rv_sec->blen += fw_sec->blen;
-		rv_sec->plen += fw_sec->plen;
-		ppos += fw_sec->plen;
-		fw_sec++; res->slen--;
-	}
-
-	/* copy forward section */
-	while(fw_sec <= tail_sec) {
-		*++rv_sec = *fw_sec;
-		rv_sec->ppos = ppos;
-		ppos += fw_sec++->plen;
-	}
-
-	/* push forward path and update rem */
-	uint64_t fw_rem = this->w.l.fw_rem;
-	uint64_t rv_rem = this->w.l.rv_rem;
-	uint32_t *fw_path = this->w.l.fw_path;
-	uint32_t *rv_path = this->w.l.rv_path;
-	uint32_t *fw_path_base = this->w.l.tail_path;
-	uint32_t *rv_path_base = (uint32_t *)&this->w.l.sec[this->w.l.tail_sec_idx + 1];
-
-	/* concatenate the heads */
-	uint64_t prev_array = *fw_path;
-	uint64_t path_array = *rv_path--<<(BLK - rv_rem);
-
-	debug("fw_path_array(%llx), rv_path_array(%llx)", prev_array, path_array);
-
-	fw_path[0] = prev_array | (path_array>>fw_rem);
-	fw_path[-1] = path_array<<(BLK - fw_rem);
-	debug("path_array(%x), prev_array(%x)", fw_path[0], fw_path[-1]);
-
-	debug("dec fw_path(%d), fw_rem(%llu), rv_rem(%llu), rem(%llu)",
-		(((fw_rem + rv_rem) & BLK) != 0) ? 1 : 0,
-		fw_rem, rv_rem, (fw_rem + rv_rem) & (BLK - 1));
-	fw_path -= (((fw_rem + rv_rem) & BLK) != 0) ? 1 : 0;
-	fw_rem = (fw_rem + rv_rem) & (BLK - 1);
-
-	if(rv_path >= rv_path_base) {
-		/* load array */
-		prev_array = fw_path[0];
-
-		while(rv_path >= rv_path_base) {
-			path_array = *rv_path--;
-			*fw_path-- = prev_array | (path_array>>fw_rem);
-			prev_array = path_array<<(BLK - fw_rem);
-			debug("rv_path(%llx), path_array(%x), prev_array(%llx)", path_array, fw_path[1], prev_array);
+	} else {
+		/* set root section info */
+		if(fw_sec.head == fw_sec.tail) {
+			aln->rapos = rv_sec.tail[-1].apos + rv_sec.tail[-1].alen;
+			aln->rbpos = rv_sec.tail[-1].bpos + rv_sec.tail[-1].blen;
+			// aln->rppos = rv_sec.tail[-1].plen;
+			// aln->rsid = rv_sec.tail - rv_sec.head - 1;
+		} else {
+			aln->rapos = fw_sec.head->apos;
+			aln->rbpos = fw_sec.head->bpos;
+			// aln->rppos = rv_sec.tail[-1].plen;
+			// aln->rsid = rv_sec.tail - rv_sec.head;
 		}
 
-		/* store array */
-		fw_path[0] = prev_array;
+		/* append forward section */
+		struct trace_boundary_s b = trace_cat_section(this, &rv_sec, &fw_sec);
+		aln->rppos = b.ppos;
+		aln->rsid = b.ptr - rv_sec.head;
+		trace_cat_path(this, &rv_path, &fw_path);
 	}
+	debug("ridx(%x), rppos(%x), rapos(%x), rbpos(%x)",
+		aln->rsid, aln->rppos, aln->rapos, aln->rbpos);
 
-	/* create path info container */
-	struct gaba_path_s *path = (struct gaba_path_s *)(fw_path + (fw_rem == 0)) - 1;
-
-	/* calc path length */
-	int64_t fw_path_block_len = fw_path_base - fw_path;
-	int64_t path_len = 32 * fw_path_block_len + fw_rem;
-
-	/* store path info */
-	path->len = path_len;
-	path->offset = (32 - fw_rem) & 31;
-	res->path = path;
-
-	debug("sec(%p), path(%p), path_array(%x, %x, %x, %x), rem(%llu), slen(%u), plen(%lld)",
-		fw_sec, fw_path, fw_path[0], fw_path[1], fw_path[2], fw_path[3], fw_rem, res->slen, path_len);
-	return(res);
+	/* set pointer fields in aln object */
+	aln->slen = rv_sec.tail - rv_sec.head;
+	aln->sec = rv_sec.head;
+	aln->path = trace_finalize_path(rv_path);
+	return(aln);
 }
 
 /**
  * @fn gaba_dp_trace
  */
-struct gaba_result_s *suffix(gaba_dp_trace)(
+struct gaba_alignment_s *suffix(gaba_dp_trace)(
 	struct gaba_dp_context_s *this,
 	struct gaba_fill_s const *fw_tail,
 	struct gaba_fill_s const *rv_tail,
-	struct gaba_clip_params_s const *clip)
+	struct gaba_trace_params_s const *params)
 {
 	/* substitute tail if NULL */
 	fw_tail = (fw_tail == NULL) ? _fill(&this->tail) : fw_tail;
 	rv_tail = (rv_tail == NULL) ? _fill(&this->tail) : rv_tail;
 
-	/* init */
-	trace_init_work(this, fw_tail, rv_tail, clip);
+	/* restore default params if NULL */
+	struct gaba_trace_params_s const default_params = {
+		.lmm = NULL,
+		.sec = NULL,
+		.slen = 0,
+		.k = 0
+	};
+	params = (params == NULL) ? &default_params : params;
 
-	/* forward trace */
-	trace_generate_path(this, _tail(fw_tail), TRACE_FORWARD);
+	/* search */
+	struct gaba_leaf_s fw_leaf, rv_leaf;
+	leaf_search(this, _tail(fw_tail), &fw_leaf);
+	leaf_search(this, _tail(rv_tail), &rv_leaf);
 
-	/* reverse trace */
-	trace_generate_path(this, _tail(rv_tail), TRACE_REVERSE);
+	/* create alignment object */
+	struct gaba_result_s res = trace_init_alignment(this,
+		_tail(fw_tail), _tail(rv_tail), params);
 
-	/* concatenate */
-	return(trace_concatenate_path(this, fw_tail, rv_tail, clip));
+	/* generate paths */
+	trace_forward_generate_alignment(this, &fw_leaf, &res.fw_path, &res.fw_sec);
+	trace_reverse_generate_alignment(this, &rv_leaf, &res.rv_path, &res.rv_sec);
+
+	/* concatenate paths */
+	return(trace_refine_alignment(this,
+		res.aln,
+		res.rv_sec, res.fw_sec,
+		res.rv_path, res.fw_path,
+		params));
+}
+
+/**
+ * @fn gaba_dp_res_free
+ */
+void suffix(gaba_dp_res_free)(
+	struct gaba_alignment_s *aln)
+{
+	if(aln->lmm != NULL) {
+		lmm_t *lmm = (lmm_t *)aln->lmm;
+		lmm_free(lmm, (void *)((uint8_t *)aln - aln->reserved[0]));
+	}
 }
 
 /**
@@ -3751,17 +3680,6 @@ int64_t suffix(gaba_dp_dump_cigar)(
 		if((ridx -= g) <= 0 || b > blim) { break; }
 	}
 	return(b - buf);
-}
-
-/**
- * @fn gaba_dp_set_qual
- */
-void suffix(gaba_dp_set_qual)(
-	gaba_result_t *res,
-	int32_t qual)
-{
-	res->qual = qual;
-	return;
 }
 
 /**
@@ -4124,6 +4042,8 @@ gaba_t *suffix(gaba_init)(
 
 			/* score vectors */
 			.scv = gaba_init_create_score_vector(params_intl.score_matrix),
+			.m = extract_max(params_intl.score_matrix->score_sub),
+			.x = extract_min(params_intl.score_matrix->score_sub),
 			.tx = params_intl.xdrop,
 			.tf = params_intl.filter_thresh,
 
@@ -4260,44 +4180,6 @@ int32_t gaba_dp_add_stack(
 	this->stack_end = (uint8_t *)this->curr_mem + this->curr_mem->size - MEM_MARGIN_SIZE;
 	return(GABA_SUCCESS);
 }
-
-#if 0
-/**
- * @fn gaba_dp_add_stack
- */
-static _force_inline
-int32_t gaba_dp_add_stack(
-	struct gaba_dp_context_s *this,
-	uint64_t size)
-{
-	uint8_t *ptr = this->mem_array[this->mem_cnt];
-	size += MEM_MARGIN_SIZE + MEM_ALIGN_SIZE;
-	size = MAX2(size, MEM_INIT_SIZE<<(this->mem_cnt + 1));
-
-	/* if next mem block is not malloc'd, malloc and store size at the head */
-	if(ptr == NULL || *((uint64_t *)ptr) < size) {
-		free(ptr);
-		ptr = (uint8_t *)gaba_aligned_malloc(size, MEM_ALIGN_SIZE);
-		*((uint64_t *)ptr) = size;
-		debug("memory block added ptr(%p)", ptr);
-	} else {
-		size = *((uint64_t *)ptr);
-	}
-
-	/* check errors */
-	if(ptr == NULL) {
-		return(GABA_ERROR_OUT_OF_MEM);
-	}
-
-	/* set stack pointers */
-	this->mem_array[this->mem_cnt++] = ptr;
-	this->stack_top = ptr + MEM_ALIGN_SIZE;
-	this->stack_end = this->stack_top + size - MEM_MARGIN_SIZE;
-	debug("stack_top(%p), stack_end(%p), size(%llu)",
-		this->stack_top, this->stack_end, size);
-	return(GABA_SUCCESS);
-}
-#endif
 
 /**
  * @fn gaba_dp_flush
@@ -4481,6 +4363,7 @@ struct unittest_sections_s {
 	uint64_t alen, blen;
 	struct gaba_section_s afsec, aftail, bfsec, bftail;
 	struct gaba_section_s arsec, artail, brsec, brtail;
+	struct gaba_section_s assec, bssec;
 };
 
 /**
@@ -4588,7 +4471,11 @@ void *unittest_build_seqs(void *params)
 		.arsec = gaba_build_section(1, _rev(ca + alen - 1, alim), alen),
 		.artail = gaba_build_section(3, _rev(ca + atot - 1, alim), 20),
 		.brsec = gaba_build_section(5, _rev(cb + blen - 1, blim), blen),
-		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20)
+		.brtail = gaba_build_section(7, _rev(cb + btot - 1, blim), 20),
+
+		/* seed section */
+		.assec = gaba_build_section(100, ca, 14),
+		.bssec = gaba_build_section(102, cb, 14)
 	};
 	return((void *)sec);
 }
@@ -4624,27 +4511,29 @@ void unittest_clean_seqs(void *ctx)
 #define print_tail(_t) \
 	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%u)", \
 	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
-#define check_result(_r, _score, _plen, _offset, _slen) ( \
+#define check_result(_r, _score, _plen, _slen, _rsid, _rppos, _rapos, _rbpos) ( \
 	   (_r) != NULL \
 	&& (_r)->sec != NULL \
 	&& (_r)->path != NULL \
 	&& (_r)->path->len == (_plen) \
-	&& (_r)->path->offset == (_offset) \
 	&& (_r)->slen == (_slen) \
 	&& (_r)->score == (_score) \
+	&& (_r)->rsid == (_rsid) \
+	&& (_r)->rppos == (_rppos) \
+	&& (_r)->rapos == (_rapos) \
+	&& (_r)->rbpos == (_rbpos) \
 )
 #define print_result(_r) \
-	"res(%p), score(%lld), plen(%u), offset(%u), slen(%u)", \
-	(_r), (_r)->score, (_r)->path->len, (_r)->path->offset, (_r)->slen
+	"res(%p), score(%lld), plen(%u), slen(%u), rsid(%u), rppos(%u), rapos(%u), rbpos(%u)", \
+	(_r), (_r)->score, (_r)->path->len, (_r)->slen, (_r)->rsid, (_r)->rppos, (_r )->rapos, (_r)->rbpos
 
 static
 int check_path(
-	struct gaba_result_s const *res,
+	struct gaba_alignment_s const *aln,
 	char const *str)
 {
-	int64_t plen = res->path->len, slen = strlen(str);
-	uint32_t const *p = &res->path->array[_roundup(plen, 32) / 32 - 1];
-	char const *s = &str[slen - 1];
+	int64_t plen = aln->path->len, slen = strlen(str);
+	uint32_t const *p = aln->path->array;
 	debug("%s", str);
 
 	/* first check length */
@@ -4655,16 +4544,17 @@ int check_path(
 
 	/* next compare encoded string (bit string) */
 	while(plen > 0) {
-		int64_t i = 0;
 		uint32_t array = 0;
-		for(i = 0; i < 32; i++) {
-			if(plen-- == 0) { break; }
-			array = (array<<1) | ((*s-- == 'D') ? 1 : 0);
-			debug("%c, %x", s[1], array);
+		for(int64_t i = 0; i < 32; i++) {
+			if(plen-- == 0) {
+				array = (array>>(32 - i)) | ((uint64_t)0x01<<i);
+				break;
+			}
+			array = (array>>1) | ((*str++ == 'D') ? 0x80000000 : 0);
+			debug("%c, %x", str[-1], array);
 		}
-		array <<= 32 - i;
-		debug("path(%x), array(%x), i(%lld)", *p, array, i);
-		if(*p-- != array) {
+		debug("path(%x), array(%x)", *p, array);
+		if(*p++ != array) {
 			return(0);
 		}
 	}
@@ -4673,15 +4563,14 @@ int check_path(
 
 static
 int check_cigar(
-	struct gaba_result_s const *res,
+	struct gaba_alignment_s const *aln,
 	char const *cigar)
 {
 	char buf[1024];
 
-	debug("path(%x), rem(%u), len(%u)", res->path->array[0], res->path->offset, res->path->len);
+	debug("path(%x), len(%lld)", aln->path->array[0], aln->path->len);
 
-	int64_t l = gaba_dp_dump_cigar(buf, 1024,
-		res->path->array, res->path->offset, res->path->len);
+	int64_t l = gaba_dp_dump_cigar(buf, 1024, aln->path->array, 0, aln->path->len);
 
 	debug("cigar(%s)", buf);
 
@@ -4694,19 +4583,20 @@ int check_cigar(
 
 #define decode_path(_r) ({ \
 	int64_t plen = (_r)->path->len, cnt = 0; \
-	uint32_t const *path = &(_r)->path->array[_roundup(plen, 32) / 32 - 1]; \
+	uint32_t const *path = (_r)->path->array; \
 	uint32_t path_array = *path; \
-	char *p = alloca(plen) + plen; \
-	*p-- = '\0'; \
-	while(plen-- > 0) { \
-		*p-- = (path_array & 0x80000000) ? 'D' : 'R'; \
-		path_array <<= 1; \
+	char *ptr = alloca(plen); \
+	char *p = ptr; \
+ 	while(plen-- > 0) { \
+		*p++ = (path_array & 0x01) ? 'D' : 'R'; \
+		path_array >>= 1; \
 		if(++cnt == 32) { \
-			path_array = *--path; \
+			path_array = *++path; \
 			cnt = 0; \
 		} \
 	} \
-	(p + 1); \
+	*p = '\0'; \
+	ptr; \
 })
 #define print_path(_r)			"%s", decode_path(_r)
 #define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen, _ppos, _plen) ( \
@@ -5192,23 +5082,23 @@ unittest(with_seq_pair("A", "A"))
 	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
 
 	/* forward-only traceback */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
 
 	/* section added */
 	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 
 	/* forward-only traceback */
 	r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
 
 	gaba_dp_clean(d);
 }
@@ -5224,8 +5114,8 @@ unittest(with_seq_pair("A", "A"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* forward-only traceback */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 4, 4, 28, 2), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 4, 4, 2, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 1, s->bfsec, 0, 1, 0, 2), print_section(r->sec[0]));
@@ -5233,7 +5123,7 @@ unittest(with_seq_pair("A", "A"))
 
 	/* reverse-only traceback */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 4, 4, 28, 2), print_result(r));
+	assert(check_result(r, 4, 4, 2, 1, 2, 1, 1), print_result(r));
 	assert(check_path(r, "DRDR"), print_path(r));
 	assert(check_cigar(r, "2M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
@@ -5241,13 +5131,32 @@ unittest(with_seq_pair("A", "A"))
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 8, 8, 24, 4), print_result(r));
+	assert(check_result(r, 8, 8, 4, 2, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "4M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
 	assert(check_section(r->sec[2], s->afsec, 0, 1, s->bfsec, 0, 1, 4, 2), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 6, 2), print_section(r->sec[3]));
+
+	/* forward-reverse traceback with seed */
+	r = gaba_dp_trace(d, f, f, GABA_TRACE_PARAMS(
+		.sec = &((struct gaba_path_section_s){
+			.aid = 100, .bid = 102,
+			.apos = 0, .bpos = 0,
+			.alen = 14, .blen = 14,
+			.ppos = 0, .plen = 14
+		}),
+		.slen = 1,
+		.k = 14));
+	assert(check_result(r, 36, 36, 5, 2, 0, 0, 0), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "18M"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->assec, 0, 14, s->bssec, 0, 14, 4, 14), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 18, 2), print_section(r->sec[3]));
+	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 0, 1, 20, 2), print_section(r->sec[4]));
 
 	gaba_dp_clean(d);
 }
@@ -5263,8 +5172,8 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 48, 48, 16, 2), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 48, 48, 2, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5272,7 +5181,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 48, 48, 16, 2), print_result(r));
+	assert(check_result(r, 48, 48, 2, 1, 24, 12, 12), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "24M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 12, s->brsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5280,7 +5189,7 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 96, 96, 0, 4), print_result(r));
+	assert(check_result(r, 96, 96, 4, 2, 0, 0, 0), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
@@ -5320,8 +5229,8 @@ unittest(with_seq_pair("ACGTACGTACGT", "ACGTACGTACGT"))
 	assert(check_tail(f2, 12, 21, 21, 2), print_tail(f2));
 
 	/* fw-rv */
-	struct gaba_result_s *r = gaba_dp_trace(d, f1, f2, NULL);
-	assert(check_result(r, 24, 24, 8, 1), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f1, f2, NULL);
+	assert(check_result(r, 24, 24, 1, 0, 12, 6, 6), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "12M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 12, s->bfsec, 0, 12, 0, 24), print_section(r->sec[0]));
@@ -5340,8 +5249,8 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */	
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 22, 32, 3, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
@@ -5350,7 +5259,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3, 2, 16, 9, 8), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 2, 7, s->brsec, 0, 7, 0, 14), print_section(r->sec[0]));
@@ -5359,7 +5268,7 @@ unittest(with_seq_pair("GAAAAAAAA", "AAAAAAAA"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 44, 64, 0, 6), print_result(r));
+	assert(check_result(r, 44, 64, 6, 3, 0, 0, 0), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"),
@@ -5387,8 +5296,8 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 22, 32, 3, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 8, 0, 16), print_section(r->sec[0]));
@@ -5397,7 +5306,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 22, 32, 0, 3), print_result(r));
+	assert(check_result(r, 22, 32, 3, 2, 16, 8, 9), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "16M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 7, s->brsec, 2, 7, 0, 14), print_section(r->sec[0]));
@@ -5406,7 +5315,7 @@ unittest(with_seq_pair("TTTTTTTT", "CTTTTTTTT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 44, 64, 0, 6), print_result(r));
+	assert(check_result(r, 44, 64, 6, 3, 0, 0, 0), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"
 		"DRDRDRDRDRDRDRDRDRDRDRDRDRDRDRDR"), print_path(r));
@@ -5432,8 +5341,8 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 20, 34, 2, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1D8M1D8M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 9, s->bfsec, 0, 8, 0, 17), print_section(r->sec[0]));
@@ -5441,7 +5350,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2, 1, 17, 9, 8), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"), print_path(r));
 	assert(check_cigar(r, "8M1D8M1D"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
@@ -5450,7 +5359,7 @@ unittest(with_seq_pair("GACGTACGT", "ACGTACGT"))
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
 	/* fixme!! continuous gaps at the root must be concatenated! */
-	assert(check_result(r, 40, 68, 28, 4), print_result(r));
+	assert(check_result(r, 40, 68, 4, 2, 0, 0, 0), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"
 		"RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
@@ -5475,8 +5384,8 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
 
 	/* fw */
-	struct gaba_result_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 20, 34, 2, 0, 0, 0, 0), print_result(r));
 	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
 	assert(check_cigar(r, "1I8M1I8M"), print_path(r));
 	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 9, 0, 17), print_section(r->sec[0]));
@@ -5484,7 +5393,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	/* rv */
 	r = gaba_dp_trace(d, NULL, f, NULL);
-	assert(check_result(r, 20, 34, 30, 2), print_result(r));
+	assert(check_result(r, 20, 34, 2, 1, 17, 8, 9), print_result(r));
 	assert(check_path(r, "DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"), print_path(r));
 	assert(check_cigar(r, "8M1I8M1I"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
@@ -5492,7 +5401,7 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 
 	/* fw-rv */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 40, 68, 28, 4), print_result(r));
+	assert(check_result(r, 40, 68, 4, 2, 0, 0, 0), print_result(r));
 	assert(check_path(r,
 		"DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"
 		"DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
@@ -6057,10 +5966,10 @@ unittest()
 			debug("refill f2(%lld, %u)", f2->max, f2->status);
 		}
 
-		/* trace */
-		struct gaba_result_s *r = gaba_dp_trace(d, m, NULL, NULL);
+		/* generate trace */
+		struct gaba_alignment_s *r = gaba_dp_trace(d, m, NULL, NULL);
 
-		/* check scores */
+		/* check results */
 		assert(r->score == n.score, "m->max(%lld), r->score(%lld), n.score(%d)",
 			m->max, r->score, n.score);
 		assert(check_path(r, n.path), "\n%s\n%s\n%s",
@@ -6079,30 +5988,6 @@ unittest()
 	}
 }
 #else
-#if 0
-"GACGCCTAATAATGTAGAAGACGGATCGTAACTTGATTGCTCGTTTTACTCATTGAGCAGCCTACAGAAATCGTGCCCCCCGACGGGACTGTAAGCCGTTAGGACATCGTTCTAGTCCTTACTTGCTCCGCCCCCGACGGGCGATCCAGCTCGGTAACAACAAACATAGTTGTACCATCTGCGAGTTTGAGACTTAAGCCGGACGCGCAAGCGGCTGGGCGGTTTAGAAGGATTTACTGACGATTTATATTCTATTCCACCAGTGCTTCAGCACTGGGCGCGTGGGATACGAACATTCAAAGCGGATACTATCCATAGTGAAGGGGCCGTGCTGGTTTAAAGAGGAGGCGTACTATATGTAGCTTGCTTTGCCGCGGGGGCAGCCAGAGGGAACCATGACAGGATAGACACCGGAGTCCCGATCAAACGTCTTCATAGTTTGCATTATCGTCAGCGTCTCGGATAGTCACAGTAGTTAAGTTACTTTCTTAGCACAATGTGTTGGAGTTGGCAATTCTCCTCAGGCCCAGTGATATCCCGGTGTTGACTAAAAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAGGAACGGTTTAGATGCCAAAGGGAGGATCCGTTCCAACACTGGTATACAATATACCGTCGCGACGACCTCGCGAACGGCTGAAAATATGTAGCTATGAGTCCTACTTGGGAGGGACCCAGATCACGCTGACAATTGATAGGGCTGTTGCATTACTCCCCGTCTCGACCTTCGGGGGATCCACCAGAACGTCCCCAGGCCTGAATCTCCAGTCGCTCTGAAGTAGACCCAATAGGTGAATAGGCCCCATTAGACAATAGCTCGCGAAATTTGGGAAACTGGACTCCGCGAGAATATCCGACGGTGACATTCCTATACCCGGAAGCTACCTAAAGCGTTGAGTGGACGTGACGGGCCGTCGCAATCTAAGATCAACCCTCCCGGTTTACGGACTAAGGCTAAAGACGAGTGATACCTACATTGGCGTACCCGGGCTGTGCACAGCTTTACTCGACTATCATCGCCCCCCCCCCCCCCCCCCCCC",
-"GACGACCTAATAATGTACAAAACGGCTCGTATGCTAGATTCCCGTGTACTCATTGAAGCAGTCTACAGAAATCTTGCACCACCACGGGACTTACAAGCCGTCTAGGACATCGTTTCTAGTCCTTGACTTGCCCGCCCCCGACGAGCGATCAAGCTCGGTAACAACAAACATAGTTTCACCATCTAGCGACTTTGAGACTAATCCGGACGCGCAAGCGGCTGGGCGAGTTTAAGAGGATATACTGACGATTTATATTCCTTATTCCACCTAGTGATTCAGCACAGTGCGTGTGGGATCGAACATTCGAGCTTGATACTGTCCATAGTGAAGGGACCGTGACTCGTTTAAAGAGGAGGCGTACTATATGTTGCCTGTTGCCGCGGGGCAGCCAAGGGTCCCATGACACCATAAGACACGGAGTCCCGCCAAACGTCTTCATTGTTTGCATCTCGTCCGCGTCTCGGCATAGTCACTGTAGTTAAGTTACTTCTTAGCACATTTTGAGGTTGTGCAATTCTCCCTCGGCCCAGTGGTACCCGGGTTTGTGACTAATCAGCTTGGAAACCGACTCGAACTCGTGGCCCCTCTGATTAATTCCAGCTAAAGGAGACGGTTTAGATGCCCAAGGAGGATCCGTCCAACACTGGTATACAATAATACCGTAGCGACGACCCGCGACACGGATAAAATCTAGCTATGGTCCTACTTGGGAGGGACCCAATCACGGGACAATTGATAGGGCAGTTGCATTACTCCGCGTGACGCCTTCGGGGGATCCACCACAACTCCCCAGGCCTGAATCTCCAGTCGCTCTGAATTAGACCCAGTAGGCAATAGGCCCCGTTAGACAAATAGCTCGCGGAAAGTTTGGGATAACTGGAGCTCCGCGAGAATAACCGCGGTGACATTCCATATCCCGGAAGCTACCTTAAAGCCGCTGAGTGACTGTACGGGCCGTCGGCATCTGTACATCAACCCTCCCGGTTTACGGACTAAGGCTGAATGTCCCCGTAAGGCCTGTGCACTGCTCTTACTCTCCGGACTGTTTGCTCTTATAGTTGTTTGGGGGGGGGGGGGGGGGGGG"
-"AACACGGCACCCACACAGTAGGCGCCGGACACTGGCGGCCATCGACCGCTGGCACTCTGTTGTGTCCGAATGTTTAGTCCAACTAAGCAGTCCGAGGTATTACCGATAAACGAGAAGGCTACGCCGTTTTCGAATCCGATGCGTCCGTGATGTGGTTTATACACGATATAGTACCCCCTGGATAGATTCCCCTCTTGGTTTTTCAGATCCTAGTCTATCTCAAGGCCTGGCCGATAGTGGTGTAATACGTCGGTGATAGAAGACGTTACATGAGAGTGATAAACTTCTTCGAGCCGCATGAACCGGGACACCAAGATAGAGAAAACTTGGATGCCGTTCGCGAGTCGTTGACCGTTGGCTACAAAATGGAGATCGGCATGATAGACGTCAGTGGGTCTTGTTCGGGAGGCGTAAGATAATTAGATGCAGATGTCCTATTCACGTAGGAGGCTAATGTGGATGAGAGCTTAGCGATGGTAGGTATGGTAAATTTGGAGTACGAGCCCACGTGAGATCGGTAGACAGCTAACGGGTTATTCCGTACCTGATAGTACGAAAGGAAGGCACGGGTGTGACCAGCCACAACTTTTCTCGACGCAGTCCTAGCCTGTGGCATCCCTGTAGAGTCGGCTCGAATAGCTGGAGTTGGTGTGTTCGCACCTTTAGCAGTCATAGTGCAGATAGATCGTTCGCGGTGCTCCCCACTTGCCCGTTCAGACCTTGGAGCGCACTTTATCAGGTTCCTGTCTGATGAGCTTGAGGTGTTTAAGTATCGAGTCCATTATAATTTGCGGTTCTGATCACCAGCATGCTCGGCCAGTCCCGTTAGGTGCTTAGTTTCTTGGGATCCTGTGCTAGCTCTATGGTCTTACATGGATGTGGTTGTAGCTGACTCTAGAGAGTCGATACTTGTAAGGGGTGGCTGAGCCCTCATTCGTACTCTAAGTGTCGTGGTGGTTTGAGCACATATTAGTAATGTTTTTAACGTTTTATGAACTGGGGAAGCTTGTTGTGGAAGTGGAGAGAGAACCTAAATCGGTCAGAATCGATGACACTATACACCACCCCCCCCCCCCCCCCCCCC",
-"AACACGGCACACACACAGTAGGCGGCGGACACTATGGCGGCCCTCGACGGCTGGCACTCTGTTATGTCGGAATGTTTAGTCCAAACTAAGCAGTCCGAGGTATTCCGATCAACGCGAAGGGCTGCCCGTTTTCGAATCCGAGGCGTTCGTGATGTGTTTATACACGAATAGTACCCCTGGACAGTTCCCCTCTATGGTTTTCGGATCCTGTCTATCTACAAGGCCTGGGCCGTTGTGGTTATTACCTCGGTGATAGAAGACGTTACATGAGATGATAACACTCCTTCGCGCCGACAGGAACGGGGACAACAAGTAGATAAAACTTGGAAGCCGTTCGCGACGTCGTTGACCGTTGCCACAAAAATGGTAGATTGGCAGACAGACTCCGGGGTCTTGTTCGGGAGCGTAAGATAGTTAGATGTCAATTTTCCATTCACGAGGAGCCTAATGTGGATGAGAGTTTCGCGATGGTGGATGGTAAATTTGGCGTACGAGCCACGTGACATCGGTAGACAGCTAACATTTATTCCTACCGAAGTACGAAAGAGAAGGAGCGGTGTGACTCAGCCCAACTTTTCTCGAGCAGTCCTAGCTGTGGCATCTTGTAGAGTCGGATCCGAATAAGCTGGAGTTTGTGTGTTCGATCTTTCGCGCCAGTATTGCAGATAGAATCGTTCGACGGTGCTCCTCACTTGCCCGTCTCAACCTTGGAGCGCACTTTTTCAGGTTTGCTGTCTGATGAGCATGGAGGTGCTTAAGTATCAAGGCCTTATAATTTGCGGTGTCTAGTCACCGCAGGCTCAGTATCACCGTTAGGTGCTTGGTTTCTTGGATCTGGGCTAGCTCTAGGTCTTACACGGTTGTGGTTGTAGCTGAGCTCGATAGAGTCGATACTTGTACGGGGTGGCTGAGCCCTCATTCTTCTCTAGTGTCGTGGTGGTTTCAGCACATATTAGTAATGTTTTTAACGTCTTTAGTGAAATGTGTACCGAATCGAGCTGTGGATTCAATCCATATACAGTTTGGAGGAGATACCAGCCTCAGATTTTCAGGTATCTAAAGAAGGGGGGGGGGGGGGGGGGGG"
-"GTTCACGGATACCCAGAGGATACATTCGTTTAACCTGAAAGATCATGCGGATTTGAATCGGTCAATTCCCTGTCGCCCTATACACGCCGCGTGCTAATTAGCATCCTGTGATGTTTTGTCGGGCCAGTATTTGCATGAAAACTATGGCATGGTCCCGGAAAGCGAATAAGCGTATAGCTACATAGGGAATAGGCCTTGGATCCTCGTCGGTCATTGCACCAAGCCGCATACAGCGTGATCTTAAAAGACATTAGAGCCCTCTAACACCCGAACGGTCCAGAAAGTTCATACGTAGATTCATGCAATGGCTAAAGTCCTACCATAACGCGAAAGAACGTTTGCTAAGGGTGAGCAGCGCATGTTAGTCTCCGCTAGATGTAAGACTCATGTTTTGTCGAGCATCTGAAAACATGACCCCATCAACTTTTGTTGGATTAATCGGAGAAGGTCATAAGAGGGTAGTTCATACTTACCCTCACAATAACCTTTAAGACCATCCTTGGCCTGTGGAATTCAGAACCAATTGTCACGTGCGCTTGATTAACACGATGGGAGCCTATCACTCGATGTCGCTTCAGTTGGGAGCAGGCGGGGAGCCTATACCGCTTGAGGCATCTAATACTGGCGACACCATCACTCGTTGAAGTTGGCCTGGCGGCTTCTTGTAATACATCAAAACATCGCAATTCCCTTTAGCGTGGCATCGTACATGACTATAACAAGTGCCAGTCGGGCTTGATCTAATCGGATGACGAAAGGTCCCCTTGCTCGTTAAATCGCTATTCTGGTGGTGCTCTCGCTCGGGCAGAGTCCTCCGAACGGACCCGCGATACCGTTCATCTTTAACTGGTCGTAATCCGAGGAACGCTAGTAGCGTTAGTCAAGACGACGGACATACTGTACACAGTGGAATATCCCTAGCCAATGTGAAAAAGTTCTTCAGTAGGCGGGTAGAAGCAGTACTAAATGGGCCGACCTGGGATGTTGTTTTCGTTTACCTGAGCCGGTTTTGAAGGAACGTGAACGCCACTATGTGGACCATCGTATATCCCAACACGTTTCCTCCCCCCCCCCCCCCCCCCCC",
-"TTCAAAGGATACCAAGAAGATACAACCTTTAACCTGAAAGATCATGCGATTTGGATGGCTCAATTCCCTGTCCGCCCTATACACGCCCGCGTGCTATTAGCATCCTGTGAGGGTTTTGTACTCGGCCAGTATATGCATGAAAACTATGCATGGTACCGGACAAGCGAAGTAAGCGTTTGCTACTAGGAAGATTGGCCTTGGATCCTTGCTGTGACTGCACCATCCGCATGCAGCATGATCTCAATAAGACACTAGCCCCCTATAACACCCGAACGGCCAAAAGTTTCGTTAACGCAGATTCATGCCATGGTTAAAGCCTCCTACCAGAACGCGAAAGAACGTCTGCTAAGGGTGAGCAGCGCATGTTAGTCTCCGCTAGATGTAGTCTCATGTTTTGCGGAAGCATCGATACATGACCCCATAAACTTTTGTTGGATAATCGGAGAAGGTCAATAGAGGGTAGACTTAATTACCCACGACAATAACCTCTAAGACCATCCTTGGCCGTGGAATTCAAACAATTGTCACGTGCGCTTGATTAACACGATGGGAGCCGATACTCTATCGTGCCCTTCAGTTGGAGCGGGGGGGACCTATAGTCCCTTGAGGCATCTGAATAGTGGGACACCATCACTCTTGAAGTTGCCGTGGCGGGTTCCTTGTATACATAAAATCATCACAATTCCTTTAGCGTGGCTCGTACATGACTAAAAAAAGTAGCCAATCGCGGCTTGATCTAATCCGGATGACCAAACGTCCCCTTGCTCGTCTTAAATCGCTATTCGGTGGTGCCTCGCGTGCTGGCGAGTCCTCCTACACTGACCGCGATACCGTTCACTTTAACTAGTCGTATCGAGAGGAACGCTGTAGCGATTGTAAGACGAACGACATACTGTACCGTGAATATCCCGAAGCGTATCTGAAAAAGTTCTTCAGGAGCGGGTACGAACGCAGTACTAATCGCCCGACATGGGAGTTGTTTCAGTTTATCTTGTACGCCGAAGGAACAGGTCGTCGTGAAGTGTTGGAACTGCTAATCAATTAGGTACCGGGGAAGTGTAGTTGGGGGGGGGGGGGGGGGGGG"
-"CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
-"CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"
-"CCGCGTCTTCGCGGGCTTGGATCGCCAAGAGGCGTGTCCATGTTGAGCTGCTCCATAAGGGCGCGCGACTAGCCCACAGTTCTGCCCACCCCTGGGTTATTGCTGGCGTTCTGAATGTATAATGCTTAATCTCGCAGGGCCAACTGCAGAGGGCACTATCCTAATGGCGGTTGGTACCCTTTTTGTAGGTAGTGCAAACGCTTATTGAAGGTGAAAGTGTCGGGCTATATGCATTCGGGGAGATCCTCGTTCGGAGTGGTTTTCCGGGTCTGAAGAATCTCCCTATACCGACTTTCATTATTATCCTTATCACAGAGATTTGCAGCAAGTCTTGAGTTCGATCTATTGTCCGATATTTACCCTTTTAGATTTTGACGATTGAAGAGATTCCTTACAACAGTAGCCCGATCACACGACATAAAGAGATCCGAGTCGTGCGAGGTCGCCCTACGGATAACTGCTTCCATTCTCGCCCTCTCCGCCCCCATTTGCCGCTGTGGGAGCGAATTAGTAGTGTCGTCTGGGTATCCCAAATGTCTCAAGGTGCCGCGAATACCACAGAATGCAACAACGAGGTCGTGCGCGACCAAGAATTCCGACGTATTCCCGGACGTCCGCAAAATTCCATACCGAGCATCCCACACAGCCTGCCTCCGTATAAACCGATGTAGAAGCATTAAGTTCAGTGCGACCAGTTCTCTACTGGGGTCAGTGACCTGTCTGGGACTCTCCGAGCTCCCATAATAATTTCACCAATCTCTTCTGACTTGCAACCACTCTGGACAGTAGCTGAGCCAGCTTATTAGGTGCGATCTAACCTGGAAGGGTACTCCATGTGATATCCTACTCTAATTCAGGTTGGAGAGGGAATCTGGCGCTGCTCTTTTGTGCGCTCGTGGTGGACGGTCTTTAGACTATGTGCCTTATTCCGGGTGAAGACCCAGGGAAAAAACTAGGGCACGTGAGGGACCGCGAGGACCGTTATATACACACATAGGGGGAGCTGCTTATGGTAGTCCGCGATGTAAAGTTTCCGGATCTGTACCGCACCGACGGAATAGGTCCCCCCCCCCCCCCCCCCCCC",
-"CCGCGGTCTTCGCGGCTTGGAGCGCCAAGAGGCAGTGTCATGATGAGCTGCCCCATAAGTTCGCTGAGCGTAGCACACAGTTCTAGCCCACCCTTGGGTTATTCCTCTGGCGTATTTGATGTATAATCCTTAATCTCGCAGGTAGTCACTGCAGTGGGCACTATCCTAATGGGGTTGGGACCCTTTTTGTAGGTAGTGCAAACGCGCTCTGTGAAGGTGTATGCTGTCGGCGATATGTATTCACGCGAGATCCTCGTGTCGGAGTGGTTTTCCGGGTCTGCAGATTTCCCTCATACTGCTTTCATTATTTTGCCTTATCACAGAATTCTGCAGCGAGTCTTGTGTTGATCTTTTGTCCTACAGTTACGTTATTAGTTTTGACGATTGAGATATTCATGACAACACGAGCCCGATCGAACGACATAAAGAGAGCCGGTCGTGCGGAGGTCTGCCCAGGGGATAACTGCTTCCCTTCTCGCCCTCTCCGCCCCCATTTGCCGTCTGTGTAGCGAATGGAATGTGCAGTCTGTGTATCCCAAATGTTTCAAGGTTCCCCGAATACCACAGAATCAACAAAGAGGTCTGCGCGACCAAGAATTCCGACGTATACCGGACGTCCGCAAAATTCCATACCGAGCATCCACACAGGCTGGCTCCGTATAAACCGATGTATAAGCATTAAGTTCAGTGCGACCAATTCTCTAATGGGGGACATACCAGTCTGGGACTTTCCCGAGCTCCCATACATCATTTCACCTATCTCGTCTGAGTTGCAACCACTCGAACAGTAGTGATTAGCTTAGTTGTGCGATCTTACCTGAATGGTACTCCATGTGTTGTCTACTCTAATTGAGCTTGGAGCGGGAACGGCGCTGCTGCTTTTCGGCGCCGGGGTGGGAACGGTCTTTAGACTAATGTGCCTTAATCCGGAGGGAGACCCAGGGAAAACAACTAAGGACGTGTGGACTGGAGACCGTTAATACCAATAGGGGGTGGACAGACATCCTCAGCTGCTTGGGACAGACTTTACAAAGGATTATTTTGCTCCGCGCCGACGCAAGCCGGGGGGGGGGGGGGGGGGGGG"
-"GCCACACGGTGCCTGATCCCGTCGGACCCCGACTGAGTCTTAACATTCACGACAACGGCGCCTAGGTCGGGACTGTGAAACCTTAAGTCCTGAAACAGCCTCGCTGACATATACCCACCAGGCATTCCCTCCTCTTGCACACGTGAACTAGGTATTGACCTATGCGTTACGGACTATACGTCGCTGGAAAACAATCGCTCAAAGTCACATCCTTACGATACGCGAACTTGCGTCGTTCGCGGCTGGCGATCCCGAAGGGGACTTGCTCAGCCCGGTGGTTGGGACATCACCGGTTATTTCCCTATAGCTCCAACTTCACGAGACATTCACGCCCAGCTCAGCGTAGTGGCGCCGGTCACGCTAGGTTGGCACGAAGGAGCGAAAGGGAAACGCACCTTCTGTAAGTTCTCGGGGAGATTTCCTCAAGAAGCTGGTAAATGTGTTGAGTAAGGGTAATCTAGTAGAATTATACGTGGCTAAAAGGTCACTGCCGATTGCGGCCTAACGGGCTTTTGGTACGTGGAGGGCTGTTCCTGTGCGCCAAACACATTGGCATTGTTACGTAGAATATGCTGTTCAATACCCTGTCCGCGCTTAAATCCGGTATCTCGAGTGCTGAGTTGTTGTCAGAGACGTGGTCGTCCTTTTATACATCCCGCGGCAAAGTTAGAAGGAGTGTAGGCGTGCGATCGGCATTATCGGAGGGAGTTGTCTGCTACCGCGAGCTTTTGCGGCGAGCGTTCGCGCTGCAATACCTTGCCGTTCTATGCTAAGCATTTAGTTTGAAGCAAAAAGTACGCAGTAAACGCGTCCATCCGATGTGCGGATGAGAAGTAACTGTATTAGAGGACATGTTTACGTAAATGATTGTACTGTCTCTGGGCCTATGATAAGAGAGGTAGCTCTGTTCCCACATGCAATTTACAGCAGTTCACAAATCTTCAATGGAAGTTCAAATAAATGTAGTATTTGGTGACCAGAATTGATCGTAGATATCAAGTCCCGCTAGTATGGAGGAGGGAAGGGCACTTAAGGCCAGTCTTCGATCCAACCCATATCTTCTGCCCCCCCCCCCCCCCCCCCC",
-"GCCACACGGGCCTGAACCACCGTCGCACGCCATTGAAGTCTTAACTATCACGACAACGCGGCCTAGGTTGAGACTGTGACATCCTTTAAGTCCTGAAACAGACTCGCTGACATTACCCACCAGGTCATTTCGCTCCTCTTACACAACTGAACTAGGTATTACCATGGAGTTATCGGACTATACGTCGCTGGTAACAAGCGCTCAAGTCACATCCTTCGCGGATCGTTCGAACTAGGGCGTCGCGGCTGAGCGATCCCGAAGGGGACTTTACATCAGCCCGGTCGGTTGGGACGATCACCGCGTTATTTTCGTATAACTCAGACGTCACGAGACATCCCGCCCACTTCAGGTAGTGGCGCCGTCACGCTAAGGTTAGCACGAGAGAGCAGAAAGGGAAACGCACCTCTGTAAGTTCTCGGTGACATTTTTCTCACGAAGTGTTAATATGTGAGTAAGGGTAGTCTAGTAGAATTATACCGTGGCTAAAAGGTCACTGCCGATTGCAGCTAACGGGCTATTGGTTCATTGGAGGGCTGTTACCTGACCGCCAGATAGTTGGCATTGTCACGAGGAATCAGCTTTTCAATACCTCGTCCGTTGCTTAAATCCAGCTATCTCGAGCTTGCGAGTCTGTGCAGCAGACTTGGTCGTCCTTTTATACATACGCTGCAAAGTTAGGAATGAGTGCTAGCGTGCGATCGGAATTATCGGAGGCGATTGTCTGCTCCCGCGAACTTTTGCCGCGAGGTTCGGCTGTAATACCTCGCCGTTACTATGCTAAGCATTGAGTTTGAAGCAACAAGTACACAGTAAACACGCCCTCGATGATGCCGGATGAGAAGACTGTATTAGGGACATGTTTACCGTCAATGATGTACTGTCTCTAAGGCCGATGAAAAGCAGAGGAGCTCTGATTCTCACATGCAATTTACTGCAGTTCAAAAATCTTCAATCGAAGTTCAAATAAATGTCAGCTTTGTGACAGAATTGATTGATAGATTCTTAACCCATCTGGCTAAATGAGGCATCTGTCACACATAAAGGACCGCTCCTCCAATTTAGAGGGGGGGGGGGGGGGGGGGGG"
-"AGCAAACTTCATTCTCGCGACATATGTCTCTGTGTTACGGATTCTCGTCTCATTTCCACTTAACGGAGTACTCTGACAATTCAGCGTAAATCGCCCGCAGGCGGACTCGCGCTCTTCCATCCGTAGCGCACCTTATGCTCGAAAAATGGTAGCGTCAATGTTGAGATTTCCATGCGGAACAGTTAATTGTTAGAGTACTTCCTTTCTGAAACAGTAGCTATCCCCCGACACTCATCTTCAACGTGATTTCCACAATACACAATGGATTCTCGCGGCGAGGTACCTAAGGTATTGAGTTACAGAAATGTTATTGTCGGATGCGCTTTTTCCGAGTGTCATATATGAATAGTGGTCGATATGCGTAGCTCGCTCCGGGCCATTAGTGCTGTGTCTTGGAGAGCAAGCAAACCCTTAAACTTTATCGACTCGAGGAGTGTTTTCTATCGCATACCAACAGAGTGATGCCTACGCGACCTCGGTATGGTCTAAGGCCCGAATATGTCTGTTATCGGGGTCTCGCTTATGCATCAGCTGCGTCCGGCACAGTTATCACGCTCACGATTGTTCCTGGCGTAAATGATGCCGAGTTGCCAGAAGCATGTAGCCAGAAATACACTTTCTACGTTACTATGTGTCTCGAGAAGGTGGTCCTAGTGTAGGCAGATGGATAAGTATCCCGTAGAGAACTTTCACTCCACTTCGATGCCCGCTCGGATCTAGTCAGGTAGGGGCTCGATCCGTGGCTATGGTGAGCCGGATGCTTTCCTCACCTCTAATGTAACGGCCGGATAGTTGCCGCGCGGCGAGTTACCGCGATACTTTGTAAAGATTTGGAACTATTATTCCGCTCCAGAATAACCCCTTGTGGGTCCGTTACGCCTCTGCAATCAAGGCAACTTATTCAATCGATATGTATCTATATGGGATGCCCGTCGGACCTACGATCCCAGAGGCAGCCAATAGGGACGGTTGTGAACAAGTGCTCGATAGGTTAGCATCAAAGCAACCCTCAACGGGACCACCCCGAGAAGCGTGAGTCATCGCTGACTCGCATATACACGTGACCCCCCCCCCCCCCCCCCCC",
-"AGCAAACTTCTTCTCGCGACATAAGTCTCTGCGTACACGCGATTCACGCTCATTTCAACTAAACGGGACTTGACAATTCATCGTAAATCGCCCGCAGTCGGACTACATGCTCCTCCCACCCGTGGCGCCGTATGGTCGAAAAATGGTAGCGTCAATGATGAGACTTCCATGCGGAACAGTTAATTGTTAGAGTGCTTCCTTCTTCAACAGTCAGCTGTACCCCCGACACTCATCTCCAAGTGATTTCCACAATACCCCAATCGATTTCTCGCGGCGAGGACCTAAGTATTGAGTTACAGAGAATGATATTGTCCGATGCGCTTTTTCCGAGTGTCATATATACATAGTGGTCGATATGCTTAGCTCGCTCCGGGTCATAGTGCTAGTGTCTATAGAGCAAGCAAGCCCTTAAACTTATCGATCCAAGGAGTGTTTTCTATCGCATACGACAGAGTGATGCCTCACGCGCCTCGAGTATCGTCTAAAGCCCGAAATGTTGTTTCTGGTCCGACTTTATGGACGAGCTGCGTCCGGAAGTTTTGACGGTCACCGATTGTTCTGGTGTAAATTGATGCCGATTGCCAGACGCATGTATGCTAGAAATAGCCTTCATACGTTACTATGTGCTCTCGAGAAGGGGAGTCTAGTATAGGCAGTACGGATCAGTATCCGTATAGAACTTTCACTCGACTTCATGCCAGCTCGAACTATCGAGTAGAGGCTCGAGCCGTGGCATGGAGAGCCGGATGCTTCTCACCTCTAATATAACGGTCTGGATAGTTGCCGCGCGCGAGTTAACGCGATACTTTGTAGTAGATTTGGAATATTATTCCGCTCCAGAGAATCACCCTTGTGGTCCGATTACGCCTTGCAATCAAGCCAAGCTTATTCAATCGATATGTATCAATATGGGTATGCCCGTGGACGTACGATCCCAGAGGCCGCCAATAGAGGACGTTGTGAACCATGTGCTCGATAGGTTAGCATTGGGGACACGGGATTTGTATATATGAGATGAATTAGGCAGAAAGGTAGACTGAGCTAAGTGAGCGCTCGATCGCGAAGGGGGGGGGGGGGGGGGGGG"
-"AACCAGAAGTTTCAAAGCCAGTGCCTGGGCCGTACATCAAGCCATTGATGGCTGTAGGGATAGGTTATTGGGTTCCCCCTTCGACCGGAGCGGGCGCGAGAAGCTTGTTTCACCTTGGAGGCTCAAGTACGACACTCATTGTCGGTTCCGATCAGTCTACCTCCCGCAAGATCTGCTCCGATATCTCAACTCATTCATTGACTTTGATGGGCGCTGCAAGAGGTGTTAAGAAATCGGATTACGCGTTCATTGGTAGAAAGTCCTTCGTATCTAATGTGAAAGGACACCTGCGCCTCACGTGCGGCCGCTGGTCGCATGATGTACGCCCTTCAGATAGTAGATCAACAAGATCGCCACAGGGGATTACCAAACCTAGTAGGAGGTCTTGCGTCGATCTTCATTCGATTAACATGGCGTCCTCAGAGCGTTCGGCGGATAAAGAAAGCGCAGAGTAAGTGTATCGTGCTGACGCTAGTTTCCGTTCTCATCTTCGCCGACGCAGGAGTCTTGAGGGAAGCCCCCCTTCGTCGGTGTGTGTTACCAGCCTGACGTCTAAAGAGGGAATCCCAAATCTATTCGAATCATTTAAGCACAACCCAATTGAGCAAATTGGCTGGGTGTCGCTAGGTTATGCCAACTTTGAGCTGCATCCCGTACTCAAAGGTCTTAATGTCGTAGACATGGACGTAGTGTCCACTCACTAAGCCCGCGCTGGGCTATCTACGAGTACTGGCAGGCTTTTGATGGTATAAAGGAGGACCTGTAAAACTTATGTGATGGGAAAAACCTATGCGAAATTGGAGATCGGCGCAGAGTCACTTGTCCCTGATGAATCACGAGAAGCTGGGGCTCTAAGAGCATTTCTGCGGCGAGTGTGTTCTGAACGCGGTAAATCCCGCCCTAACAGGGCCGCGACCACTCGCAGCGTAAAACAACTATGGGCTGGGCCCAAGCAGCCCTCCCGAATCCTTGGTCAATGAGCTGTCATGCACAGATGCATGAGGCCGGAGGTAGGGACGTACTCAGGATCGTCGATCCTCAATCGTACGAGCGTGCCTGTAAGGCCCCCCCCCCCCCCCCCCCC",
-"AAACAGGACTTTAAAAGCCAGTGCCTGGGCAGTACATCAAGCCATCAAAGGCTGTAGTGAAGGTTATTGGGTTCCCCCTTCGACCGGAGCGGCGCGATGAAGCTTGTTTCACCTTGGAGGCCTAAGTGCGACCTCGATTGTCGGTATCCACTAGACTACTCACGCGATATCTGCTCCGATATGCTTAACCCATTCATTGACTTTGATGGGGCGTGCCAGGGGACTTAAGAAATCGGAGTACGCGTTCGTTTGGTGGGAAGTCTATCCGTATCAACGTTAAAGGACACCTGCGCCTCGCGTGGGGCCGCTGGTCGATGATGTACGCCCTTCGATAGAATGAACAAATCGCCACAGGGGATTACCGAACCTAGTAGGGGGGTCTTGCGTCGATCGTCATTCGATTAACATGGCGTCCTCAGAGCGTTCGGCGGACGAAAAAAGCGCAAAGAAGTGTATCGTGCTGCCGCTAGTTCCGTCTCATCTTGACCGAGCAGGAGTCTTGAGGGAAGCCCCCCTTCGTGGTTGTGTTCCCAAGCCTGAACGTTTAAGAGCGAATCCCAAACTATTCGAATCATTTAACCACAACCCAATTAGCAAACATGGCTGGGTGTCGCTGGGTTTATTCCAACATAGCTGAATTCGTATCTCAAGGGTCTTACGTCGTAGACGTGGACGTAGTTGGTCTCCCTCACTAACCCCAGCGCTGGGCTATCGAGCGTATGTAGCTCTTATGTGGCATAAAGGAGGAAGCTGTAAAACTTAATGTGATGGCAAAAAACTATCCGAACTGGAGATCGGCGCAAGAGTCACTTGACCCGATAGAATCACGTAGAAGCTGGGCTCTTAAGCTGCAGTTCTGCGGCGAGCGTGTTCTGAACCCGGTAAATCCCGCCCTAACAGGCCGCGACCACTTGCATCGTAAAACAACTATTGCTGGGCCAAGCGCCCTCGCCGATGCTTGGTCAAGTGAAGTCTGTCATACACAGAGGATAAGTCCTCCGATTATCGTTACTGTTAAGCATCGGAGTGTGCCACAGTATCAGCTATGTGCCGCTTTTATATCTGGGGGGGGGGGGGGGGGGGG"
-"CGTAGCTGGTTCCAAGACAGGTAAACTTCAAGAATATGTCTGCTTCGCCCCTACCGAGCTAATGCTAAATGTCTGTGTTCGGCTAATCCGCACTACCGAGCGTGCGAATAAATGCGCAAAACCACATTGCATCCGCAATGATTACAGATTGCTCGTACTTTTCACCCCCCCCCCCCCCCCCCCC",
-"CGTAGCTGGTTCCAAGAATTCGTAAAACACTTCAGAATCATGGTCTCTACGCCCTACCGGGCTAATCTAAATGTCTCTTTTCGGCTATGTCCGCACTAACGCTGTGGCGATGGATTTGGTGTACAGGATCCTCACGTGAAAAATGGGTTCGTACTTGAGAACCTGGGGGGGGGGGGGGGGGGGG"
-"ATTCATAGTTTGTTCCCCACGTATGAACTGTCTTGCTCAACATACCGCATAAGCAGGTTGTCCCTTGAAGTTTTAAGTATTTCCGTATATGGGACACTAGTAGGAAATTGCCTGACCAGTCTCCCAGCTCTGAGGGCGAGCCCAACCGTCACAGAGTTACTCCTCCCCCCCCCCCCCCCCCCCC",
-"ATGTCATAGTTTGTTCCCCACCTATGACTCTCCTTGCTCAGTATATCGCATAACAGGTTCGGCCCGTTGAAGTACGAATATTTACTATATGGGACAAAGGGTGAATGCCGCAGCTGGGCCAATCGCTCCCAAAGTGATCTGGTACGGCTCCTGCTAGTTGCCCCGGGGGGGGGGGGGGGGGGGG"
-"CTACTTTGATTCCTGGAGCTCTCGTAGGCCTTCATACCTTGAGCGTTGGTAAAGTTATTTACCGGGACGGACCG",
-"GCATACCTTTGAAATTGCCACTTTGGGACGTATTGGCCTCAATGAGTCCCAGGCGAGACCCACTAGAGGCAGTG"
-#endif
 /* for debugging */
 unittest(with_seq_pair(
 "CTGCGCGAGTCTGCCATGAAATCGAGCTTACAATCCCGATCTTCTCAGCCCTATTGCGGATAGTAGTATATTCA",
