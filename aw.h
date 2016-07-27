@@ -79,7 +79,7 @@ void aw_append_alignment(
 	aw_t *aw,
 	gref_idx_t const *ref,
 	gref_acv_t const *query,
-	struct gaba_result_s const *const *aln,
+	struct gaba_alignment_s const *const *aln,
 	int64_t cnt);
 
 #endif /* _SAM_H_INCLUDED */

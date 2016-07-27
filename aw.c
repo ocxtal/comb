@@ -44,7 +44,7 @@ struct aw_conf_s {
 		aw_t *aw,
 		gref_idx_t const *r,
 		gref_acv_t const *q,
-		gaba_result_t const *aln);
+		gaba_alignment_t const *aln);
 	void (*footer)(
 		aw_t *aw,
 		gref_idx_t const *r,
@@ -293,7 +293,7 @@ void sam_print_cigar(
 		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,
 		path->array,
-		path->offset + curr->ppos,
+		curr->ppos,
 		curr->plen);
 
 	/* print clip at the tail */
@@ -443,7 +443,7 @@ void sam_write_alignment(
 	aw_t *aw,
 	gref_idx_t const *r,
 	gref_acv_t const *q,
-	gaba_result_t const *aln)
+	gaba_alignment_t const *aln)
 {
 	debug("slen(%u)", aln->slen);
 	for(int64_t i = 0; i < aln->slen - 1; i++) {
@@ -549,7 +549,7 @@ void gpa_write_segment(
 		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,
 		path->array,
-		path->offset + sec->ppos,
+		sec->ppos,
 		sec->plen);
 	zfputc(aw->fp, '\t');
 
@@ -585,7 +585,7 @@ void gpa_write_alignment(
 	aw_t *aw,
 	gref_idx_t const *r,
 	gref_acv_t const *q,
-	gaba_result_t const *aln)
+	gaba_alignment_t const *aln)
 {
 	debug("slen(%u)", aln->slen);
 
@@ -605,7 +605,7 @@ void aw_append_alignment(
 	aw_t *aw,
 	gref_idx_t const *ref,
 	gref_acv_t const *query,
-	struct gaba_result_s const *const *aln,
+	struct gaba_alignment_s const *const *aln,
 	int64_t cnt)
 {
 	for(int64_t i = 0; i < cnt; i++) {
@@ -680,7 +680,11 @@ aw_t *aw_init(
 		aw->conf = conf[params->format];
 	} else {
 		for(int64_t i = 0; i < sizeof(conf) / sizeof(struct aw_conf_s); i++) {
+			/* skip if extension string is not provided */
 			if(conf[i].ext == NULL) { continue; }
+
+			/* if path string is shorter than extension string */
+			if(strlen(path) < strlen(conf[i].ext)) { continue; }
 
 			if(strncmp(path + strlen(path) - strlen(conf[i].ext), conf[i].ext, strlen(conf[i].ext)) == 0) {
 				debug("format detected %s", conf[i].ext);
@@ -767,7 +771,7 @@ void aw_clean(
 
 struct aw_unittest_ctx_s {
 	gref_idx_t *idx;
-	gaba_result_t **res;
+	gaba_alignment_t **res;
 	int64_t cnt;
 };
 
@@ -792,23 +796,22 @@ void *aw_unittest_init(
 	ctx->idx = idx;
 
 
-	struct gaba_result_s **res = (struct gaba_result_s **)malloc(
-		3 * sizeof(struct gaba_result_s *));
+	struct gaba_alignment_s **res = (struct gaba_alignment_s **)malloc(
+		3 * sizeof(struct gaba_alignment_s *));
 	/* aln 0 */ {
-		res[0] = (struct gaba_result_s *)malloc(
-			  sizeof(struct gaba_result_s)
+		res[0] = (struct gaba_alignment_s *)malloc(
+			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[0] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 8, 0 };
+		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0, 8 };
 		s[1] = (struct gaba_path_section_s){ 2, 2, 0, 0, 4, 4, 8, 8 };
 		s[2] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 16, 16 };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 32;
-		p->offset = 0;
 		p->array[0] = 0x55555555;
 		p->array[1] = 0x01;
 		p->array[2] = 0;
@@ -817,58 +820,56 @@ void *aw_unittest_init(
 		res[0]->path = p;
 		res[0]->score = 10;
 		res[0]->slen = 3;
-		res[0]->qual = 100;
+		// res[0]->qual = 100;
 	}
 
 	/* aln 1 */ {
-		res[1] = (struct gaba_result_s *)malloc(
-			  sizeof(struct gaba_result_s)
+		res[1] = (struct gaba_alignment_s *)malloc(
+			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[1] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 5, 0, 4, 4, 4, 8, 0 };
+		s[0] = (struct gaba_path_section_s){ 0, 5, 0, 4, 4, 4, 0, 8 };
 		s[1] = (struct gaba_path_section_s){ 2, 3, 0, 0, 4, 4, 8, 8 };
-		s[2] = (struct gaba_path_section_s){ 4, 1, 0, 0, 2, 2, 4, 16 };
+		s[2] = (struct gaba_path_section_s){ 4, 1, 0, 0, 2, 2, 16, 4 };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 24;
-		p->offset = 8;
-		p->array[0] = 0x55555500;
-		p->array[1] = 0x01;
+		p->array[0] = 0x01555555;
+		p->array[1] = 0;
 		p->array[2] = 0;
 
 		res[1]->sec = s;
 		res[1]->path = p;
 		res[1]->score = 8;
 		res[1]->slen = 3;
-		res[1]->qual = 110;
+		// res[1]->qual = 110;
 	}
 
 	/* aln 2 */ {
-		res[2] = (struct gaba_result_s *)malloc(
-			  sizeof(struct gaba_result_s)
+		res[2] = (struct gaba_alignment_s *)malloc(
+			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[2] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 8, 0 };
-		s[1] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 16, 8 };
+		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0, 8 };
+		s[1] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 8, 16 };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 24;
-		p->offset = 16;
-		p->array[0] = 0x55550000;
-		p->array[1] = 0x00000155;
+		p->array[0] = 0x01555555;
+		p->array[1] = 0;
 		p->array[2] = 0;
 
 		res[2]->sec = s;
 		res[2]->path = p;
 		res[2]->score = 6;
 		res[2]->slen = 2;
-		res[2]->qual = 90;
+		// res[2]->qual = 90;
 	}
 	ctx->res = res;
 	ctx->cnt = 3;
@@ -1028,7 +1029,7 @@ unittest()
 
 	char const *path = "./test.sam";
 	aw_t *aw = aw_init(path, c->idx, NULL);
-	aw_append_alignment(aw, c->idx, c->idx, (gaba_result_t const *const *)c->res, c->cnt);
+	aw_append_alignment(aw, c->idx, c->idx, (gaba_alignment_t const *const *)c->res, c->cnt);
 	aw_clean(aw);
 
 	char const *sam =
@@ -1065,7 +1066,7 @@ unittest()
 
 	char const *path = "./test.sam";
 	aw_t *aw = aw_init(path, c->idx, AW_PARAMS(.clip = 'H'));
-	aw_append_alignment(aw, c->idx, c->idx, (gaba_result_t const *const *)c->res, c->cnt);
+	aw_append_alignment(aw, c->idx, c->idx, (gaba_alignment_t const *const *)c->res, c->cnt);
 	aw_clean(aw);
 
 	char const *sam =
@@ -1140,7 +1141,7 @@ unittest()
 
 	char const *path = "./test.gpa";
 	aw_t *aw = aw_init(path, c->idx, NULL);
-	aw_append_alignment(aw, c->idx, c->idx, (gaba_result_t const *const *)c->res, c->cnt);
+	aw_append_alignment(aw, c->idx, c->idx, (gaba_alignment_t const *const *)c->res, c->cnt);
 	aw_clean(aw);
 
 	char const *gpa =
@@ -1173,7 +1174,7 @@ unittest()
 
 	char const *path = "./test.gpa";
 	aw_t *aw = aw_init(path, c->idx, AW_PARAMS( .name_prefix = "aln" ));
-	aw_append_alignment(aw, c->idx, c->idx, (gaba_result_t const *const *)c->res, c->cnt);
+	aw_append_alignment(aw, c->idx, c->idx, (gaba_alignment_t const *const *)c->res, c->cnt);
 	aw_clean(aw);
 
 	char const *gpa =
