@@ -937,9 +937,8 @@ uint64_t rtree_update(
 			/* count vertical elements */
 			int64_t dcnt = popcnt(path_array<<(64 - 2*qlen));
 
-			debug("adjust path, qlen(%lld), dcnt(%lld), rpos(%llu), qrem(%lld), ridx(%lld), path_array(%llx, %llx)",
-				qlen, dcnt, 0xffffffff & rn->h.key + 2*(qlen - dcnt), q, ridx,
-				path_array, load_u64(rn->ptail, rem - ridx + 64));
+			debug("adjust path, qlen(%lld), dcnt(%lld), rpos(%llu), qrem(%lld), ridx(%lld), path_array(%llx)",
+				qlen, dcnt, 0xffffffff & rn->h.key + 2*(qlen - dcnt), q, ridx, path_array);
 
 			rn->h.key += 2 * (qlen - dcnt);
 			q -= qlen;
