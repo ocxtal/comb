@@ -650,6 +650,7 @@ aw_t *aw_init(
 	if(aw == NULL) {
 		goto _aw_init_error_handler;
 	}
+	memset(aw, 0, sizeof(struct aw_s));
 
 	struct aw_conf_s conf[] = {
 		[0] = {
