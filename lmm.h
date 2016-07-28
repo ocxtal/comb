@@ -15,7 +15,7 @@
 #define _BSD_SOURCE
 #endif
 
-#define LMM_DEBUG
+// #define LMM_DEBUG
 
 #include <stdint.h>
 #include <stdlib.h>
@@ -145,6 +145,7 @@ void *lmm_realloc(
 
 #else
 
+	debug("lmm_realloc, lmm(%p)", lmm);
 	if(lmm == NULL) {
 		return(realloc(ptr, size));
 	}
@@ -154,8 +155,10 @@ void *lmm_realloc(
 		
 		uint64_t prev_size = *((uint64_t *)(ptr - LMM_ALIGN_SIZE));
 		if(ptr + prev_size == lmm->ptr && ptr + size < lmm->lim) {
+			debug("expand current block");
 			return(lmm_reserve_mem(lmm, ptr - LMM_ALIGN_SIZE, size));
 		}
+		debug("malloc external memory");
 
 		void *np = malloc(size);
 		if(np == NULL) { return(NULL); }
