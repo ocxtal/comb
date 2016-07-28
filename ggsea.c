@@ -377,7 +377,9 @@ void ggsea_save_seed_pos(
 		(char const *)&kmer, sizeof(uint64_t));
 	struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, id);
 
+	debug("id(%u), count(%u), diff(%d)", id, hmap_get_count(ctx->rep), id - hmap_get_count(ctx->rep) + 1);
 	if(id == (hmap_get_count(ctx->rep) - 1)) {
+		c->vec_size = ctx->conf.max_rep_vec_size;
 		kv_init(c->rv);
 		kv_init(c->qv);
 	}
