@@ -3186,6 +3186,8 @@ void trace_cat_path(
 	}
 
 	/* fix dst path object */
+	dt[1] = 0;
+	dt[2] = 0;
 	dst->tail = dt;
 	dst->tofs = ofs;
 
@@ -3233,8 +3235,8 @@ struct trace_boundary_s trace_cat_section(
 		b.ptr--;
 		b.ppos = b.ptr->plen;
 
-		debug("dst: id(%u, %u), pos(%u, %u), len(%u, %u)", dt->bid, dt->aid, dt->bpos, dt->apos, dt->blen, dt->alen);
-		debug("src: id(%u, %u), pos(%u, %u), len(%u, %u)", sh->bid, sh->aid, sh->bpos, sh->apos, sh->blen, sh->alen);
+		debug("dst: id(%u, %u), pos(%u, %u), len(%u, %u)", dt[-1].bid, dt[-1].aid, dt[-1].bpos, dt[-1].apos, dt[-1].blen, dt[-1].alen);
+		debug("src: id(%u, %u), pos(%u, %u), len(%u, %u)", sh[0].bid, sh[0].aid, sh[0].bpos, sh[0].apos, sh[0].blen, sh[0].alen);
 
 		dt[-1].alen += sh->alen;
 		dt[-1].blen += sh->blen;
@@ -3287,7 +3289,7 @@ struct gaba_result_s trace_init_alignment(
 
 	/* malloc pointer */
 	uint64_t sec_size = sizeof(struct gaba_path_section_s) * (sec_len + 1);
-	uint64_t path_size = sizeof(uint32_t) * (path_len + 4);
+	uint64_t path_size = sizeof(uint32_t) * (path_len + 6);
 	uint64_t size = sizeof(struct gaba_alignment_s) + path_size + sec_size
 			+ this->head_margin + this->tail_margin;
 
@@ -3331,7 +3333,7 @@ struct gaba_result_s trace_init_alignment(
 	};
 
 	/* clear array */
-	*mpath = 0;
+	mpath[1] = 0;
 	*rv_path.head = 0;
 	*fw_path.tail = 0;
 
@@ -3604,7 +3606,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
 	int64_t ridx = len;
 
-	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
+	debug("path(%p), lim(%lld), ridx(%lld), mod(%lld)", p, lim, ridx, ridx % 64);
 
 	while(1) {
 		int64_t rsidx = ridx;
