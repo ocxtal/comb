@@ -123,7 +123,7 @@ void *lmm_malloc(
 	if(lmm != NULL && lmm->ptr + LMM_ALIGN_SIZE + size < lmm->lim) {
 		return(lmm_reserve_mem(lmm, lmm->ptr, size));
 	} else {
-		log("malloc, lmm(%p), size(%lu)", lmm, size);
+		debug("malloc, lmm(%p), size(%lu)", lmm, size);
 		return(malloc(size));
 	}
 
