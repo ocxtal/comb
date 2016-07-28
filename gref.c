@@ -1284,7 +1284,7 @@ struct gref_iter_stack_s *gref_iter_fetch_link(
 	/* add stack for the next section */
 	stack = gref_iter_push_stack(iter, stack);
 	debug("stack added, gid(%u), seq_ptr(%p), len(%u), rem_len(%u), global_rem_len(%u)",
-		gid, stack->seq_ptr, stack->len, stack->rem_len, stack->global_rem_len);
+		stack->sec_gid, stack->seq_ptr, stack->len, stack->rem_len, stack->global_rem_len);
 
 	/* fetch seq */
 	return(gref_iter_fetch_base(iter, stack));
@@ -1485,7 +1485,7 @@ int64_t *gref_build_kmer_idx_table(
 
 	/* may fail when main memory is small */
 	uint64_t kmer_idx_size = 0x01 << (2 * acv->params.k);
-	lmm_kv_reserve(acv->lmm, kmer_idx, kmer_idx_size);
+	lmm_kv_reserve(acv->lmm, kmer_idx, kmer_idx_size + 1);
 	debug("ptr(%p), size(%llu)", lmm_kv_ptr(kmer_idx), kmer_idx_size);
 	if(lmm_kv_ptr(kmer_idx) == NULL) { return(NULL); }
 
