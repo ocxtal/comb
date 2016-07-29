@@ -249,11 +249,29 @@ void ggsea_ctx_clean(
 	ggsea_ctx_t *ctx)
 {
 	if(ctx != NULL) {
+		/* destroy repetitive kmer vectors */
+		int64_t hcnt = hmap_get_count(ctx->rep);
+		for(int64_t i = 0; i < hcnt; i++) {
+			struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
+			kv_destroy(c->rv);
+			kv_destroy(c->qv);
+		}
 		hmap_clean(ctx->rep); ctx->rep = NULL;
-		gaba_dp_clean(ctx->dp); ctx->dp = NULL;
+
+		/* destroy seed filter tree */
+		rbtree_clean(ctx->rtree); ctx->rtree = NULL;
+		rbtree_clean(ctx->qtree); ctx->qtree = NULL;
+
+		/* destroy tree traversing queue */
 		kv_hq_destroy(ctx->queue);
+
+		/* margin sequence */
 		free(ctx->margin); ctx->margin = NULL;
-		// kv_destroy(ctx->res);
+
+		/* dp context */
+		gaba_dp_clean(ctx->dp); ctx->dp = NULL;
+
+		/* ggsea context */
 		free(ctx);
 	}
 	return;
@@ -336,6 +354,56 @@ _ggsea_ctx_init_error_handler:;
 		ggsea_ctx_clean(ctx);
 	}
 	return(NULL);
+}
+
+/**
+ * @fn ggsea_flush
+ */
+static _force_inline
+void ggsea_flush(
+	struct ggsea_ctx_s *ctx,
+	gref_acv_t const *query,
+	lmm_t *lmm)
+{
+	debug("flush called");
+
+	/* set sequence info */
+	ctx->q = query;
+
+	/* flush hashmap */
+	int64_t hcnt = hmap_get_count(ctx->rep);
+	for(int64_t i = 0; i < hcnt; i++) {
+		struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
+		kv_destroy(c->rv);
+		kv_destroy(c->qv);
+	}
+	hmap_flush(ctx->rep);
+
+	/* flush tree */
+	rbtree_flush(ctx->rtree);
+	rbtree_flush(ctx->qtree);
+
+	/* flush queues */
+	kv_hq_clear(ctx->queue);
+
+	/* flush dp context for the new read */
+	debug("rlim(%p), qlim(%p)", gref_get_lim(ctx->r), gref_get_lim(ctx->q));
+	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q));
+
+	/* flush result vector */
+	ctx->res_lmm = lmm;
+	ctx->res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
+	*ctx->res = (struct ggsea_result_s){
+		.reserved1 = (void *)lmm,
+		.ref = ctx->r,
+		.query = ctx->q,
+		.aln = NULL,
+		.cnt = 0,
+		.reserved2 = 0
+	};
+	lmm_kv_init(ctx->res_lmm, ctx->aln);
+	debug("flushed");
+	return;
 }
 
 
@@ -1107,56 +1175,6 @@ struct qtree_node_s *qtree_append_result(
 
 	/* update qtree pointer for the next iteration */
 	return(qtree_refresh_node(ctx, qpos));
-}
-
-/**
- * @fn ggsea_flush
- */
-static _force_inline
-void ggsea_flush(
-	struct ggsea_ctx_s *ctx,
-	gref_acv_t const *query,
-	lmm_t *lmm)
-{
-	debug("flush called");
-
-	/* set sequence info */
-	ctx->q = query;
-
-	/* flush hashmap */
-	int64_t hcnt = hmap_get_count(ctx->rep);
-	for(int64_t i = 0; i < hcnt; i++) {
-		struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
-		kv_destroy(c->rv);
-		kv_destroy(c->qv);
-	}
-	hmap_flush(ctx->rep);
-
-	/* flush tree */
-	rbtree_flush(ctx->rtree);
-	rbtree_flush(ctx->qtree);
-
-	/* flush queues */
-	kv_hq_clear(ctx->queue);
-
-	/* flush dp context for the new read */
-	debug("rlim(%p), qlim(%p)", gref_get_lim(ctx->r), gref_get_lim(ctx->q));
-	gaba_dp_flush(ctx->dp, gref_get_lim(ctx->r), gref_get_lim(ctx->q));
-
-	/* flush result vector */
-	ctx->res_lmm = lmm;
-	ctx->res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
-	*ctx->res = (struct ggsea_result_s){
-		.reserved1 = (void *)lmm,
-		.ref = ctx->r,
-		.query = ctx->q,
-		.aln = NULL,
-		.cnt = 0,
-		.reserved2 = 0
-	};
-	lmm_kv_init(ctx->res_lmm, ctx->aln);
-	debug("flushed");
-	return;
 }
 
 /**

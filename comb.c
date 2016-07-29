@@ -118,6 +118,7 @@ struct comb_params_s {
  */
 struct comb_worker_args_s {
 	struct comb_params_s const *params;
+	struct sr_gref_s *r;
 	ggsea_ctx_t *ctx;
 	sr_t *ref;
 	sr_t *query;
@@ -499,9 +500,11 @@ struct comb_worker_args_s **comb_worker_init(
 
 	/* init worker object */
 	for(int64_t i = 0; i < num_worker; i++) {
+		struct sr_gref_s *r = sr_get_index(ref);
 		base[i] = (struct comb_worker_args_s){
 			.params = params,
-			.ctx = ggsea_ctx_init(conf, sr_get_index(ref)->gref),
+			.r = r,
+			.ctx = ggsea_ctx_init(conf, r->gref),
 			.ref = ref,
 			.query = query,
 			.aw = aw
@@ -522,6 +525,7 @@ void comb_worker_clean(
 
 	for(struct comb_worker_args_s **p = w; (*p)->params != NULL; p++) {
 		ggsea_ctx_clean((*p)->ctx);
+		sr_gref_free((*p)->r);
 		memset(*p, 0, sizeof(struct comb_worker_args_s));
 	}
 	free(w);

@@ -3470,6 +3470,7 @@ void suffix(gaba_dp_res_free)(
 		lmm_t *lmm = (lmm_t *)aln->lmm;
 		lmm_free(lmm, (void *)((uint8_t *)aln - aln->reserved[0]));
 	}
+	return;
 }
 
 /**

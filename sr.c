@@ -149,10 +149,11 @@ struct sr_gref_s *sr_get_index(
 		}
 	}
 
-	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)malloc(
+	lmm_t *lmm = NULL;
+	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)lmm_malloc(lmm,
 		sizeof(struct sr_gref_intl_s));
 	*r = (struct sr_gref_intl_s){
-		.lmm = NULL,
+		.lmm = lmm,
 		.path = sr->path,
 		.gref = (gref_t const *)sr->idx,
 		.iter = NULL,
@@ -276,7 +277,7 @@ void sr_gref_free(
 	if(r == NULL) { return; }
 
 	gref_iter_clean(r->iter); r->iter = NULL;
-	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); } r->gref = NULL;
+	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); r->gref = NULL; }
 	if(r->seq_need_free != 0) { fna_seq_free(r->seq); r->seq = NULL; }
 
 	lmm_t *lmm = r->lmm; r->lmm = NULL;
