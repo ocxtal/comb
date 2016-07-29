@@ -89,6 +89,7 @@ struct comb_params_s {
 	int64_t num_threads;
 
 	char *command;
+	char *command_base;
 	char *program_name;
 	int64_t program_id;
 
@@ -183,7 +184,7 @@ void comb_print_option_summary(
 	struct comb_params_s const *params)
 {
 	#define _p(...)		fprintf(stderr, __VA_ARGS__);
-	_p("Running comb aligner with following options:\n");
+	_p("%s ", params->command_base);
 	_p("-t%" PRId64 " ", params->num_threads);
 	_p("-k%" PRId64 " ", params->k);
 	_p("-r%" PRId64 " ", params->kmer_cnt_thresh);
@@ -344,6 +345,7 @@ struct comb_params_s *comb_parse_args(
 	*params = (struct comb_params_s){
 		.num_threads = 0,
 		.command = comb_build_command_string(argc, argv),
+		.command_base = strdup(argv[0]),
 		.program_name = strdup("comb"),
 		.program_id = UNITTEST_UNIQUE_ID,
 		.k = 14,
@@ -463,6 +465,7 @@ void comb_clean_params(
 	}
 
 	free(params->command); params->command = NULL;
+	free(params->command_base); params->command_base = NULL;
 	free(params->program_name); params->program_name = NULL;
 	free(params->ref_name); params->ref_name = NULL;
 	free(params->query_name); params->query_name = NULL;
