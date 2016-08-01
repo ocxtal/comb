@@ -441,8 +441,8 @@ void ggsea_save_seed_pos(
 	debug("id(%u), count(%u), diff(%d)", id, hmap_get_count(ctx->rep), id - hmap_get_count(ctx->rep) + 1);
 	if(id == (hmap_get_count(ctx->rep) - 1)) {
 		c->vec_size = ctx->conf.max_rep_vec_size;
-		kv_init(c->rv);
-		kv_init(c->qv);
+		if(kv_ptr(c->rv) == NULL) { kv_init(c->rv); }
+		if(kv_ptr(c->qv) == NULL) { kv_init(c->qv); }
 
 		debug("malloc rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
 	}
