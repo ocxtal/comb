@@ -355,7 +355,7 @@ static inline
 void *lmm_pool_create_object(
 	lmm_pool_t *_pool)
 {
-#ifdef LMM_DEBUG
+#ifdef LMM_POOL_SEPARATE_NODE
 	struct lmm_pool_s *pool = (struct lmm_pool_s *)_pool;
 	return(malloc(sizeof(struct lmm_pool_object_s) * pool->object_multiplier));
 #else
@@ -389,7 +389,7 @@ void lmm_pool_delete_object(
 	lmm_pool_t *_pool,
 	void *_obj)
 {
-#ifdef LMM_DEBUG
+#ifdef LMM_POOL_SEPARATE_NODE
 
 	free(_obj);
 
