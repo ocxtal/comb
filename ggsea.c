@@ -420,7 +420,7 @@ int64_t ggsea_dedup_seed_pos(
 		if(p[cnt] == p[i]) { continue; }
 		p[++cnt] = p[i];
 	}
-	return(cnt);
+	return(cnt + 1);
 }
 
 /**
