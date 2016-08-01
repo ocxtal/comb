@@ -3294,13 +3294,11 @@ struct gaba_result_s trace_init_alignment(
 			+ this->head_margin + this->tail_margin;
 
 	lmm_t *lmm = (lmm_t *)params->lmm;
-	/*
 	struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin
 		+ ((lmm == NULL) ? gaba_dp_malloc(this, size) : lmm_malloc(lmm, size)));
-	*/
-	struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin + lmm_malloc(lmm, size));
+	// struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin + lmm_malloc(lmm, size));
 
-	debug("malloc trace mem(%p), lmm(%p)", aln, lmm);
+	debug("malloc trace mem(%p), lmm(%p), lim(%p)", aln, lmm, lmm->lim);
 
 	aln->lmm = (void *)lmm;
 	aln->score = fw_tail->max + rv_tail->max + this->m * params->k;
@@ -3468,6 +3466,7 @@ void suffix(gaba_dp_res_free)(
 {
 	if(aln->lmm != NULL) {
 		lmm_t *lmm = (lmm_t *)aln->lmm;
+		debug("free mem, ptr(%p), lmm(%p)", (void *)aln - aln->reserved[0], lmm);
 		lmm_free(lmm, (void *)((uint8_t *)aln - aln->reserved[0]));
 	}
 	return;

@@ -253,6 +253,7 @@ void ggsea_ctx_clean(
 		int64_t hcnt = hmap_get_count(ctx->rep);
 		for(int64_t i = 0; i < hcnt; i++) {
 			struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
+			debug("free rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
 			kv_destroy(c->rv);
 			kv_destroy(c->qv);
 		}
@@ -374,6 +375,8 @@ void ggsea_flush(
 	int64_t hcnt = hmap_get_count(ctx->rep);
 	for(int64_t i = 0; i < hcnt; i++) {
 		struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
+		debug("free rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
+
 		kv_destroy(c->rv);
 		kv_destroy(c->qv);
 	}
@@ -402,7 +405,7 @@ void ggsea_flush(
 		.reserved2 = 0
 	};
 	lmm_kv_init(ctx->res_lmm, ctx->aln);
-	debug("flushed");
+	debug("flushed, aln(%p), lmm(%p), lim(%p)", lmm_kv_ptr(ctx->aln), ctx->res_lmm, ctx->res_lmm->lim);
 	return;
 }
 
@@ -450,6 +453,8 @@ void ggsea_save_seed_pos(
 		c->vec_size = ctx->conf.max_rep_vec_size;
 		kv_init(c->rv);
 		kv_init(c->qv);
+
+		debug("malloc rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
 	}
 
 	debug("save repetitive kmer(%llx), r(%u, %u), q(%u, %u), rv(%p, %llu), qv(%p, %llu)",
@@ -1321,14 +1326,16 @@ struct ggsea_result_s *ggsea_refine_result(
 	int64_t dedup_cnt = j + 1;
 
 	/* build shrinked result array */
+	#if 0
 	for(int64_t i = 0; i < dedup_cnt; i++) {
 		/* swap elem */
 		struct gaba_alignment_s const *tmp = aln[i];
 		aln[i] = aln[karr[i].idx];
 		aln[karr[i].idx] = tmp;
-		debug("i(%lld) push(%u)", i, karr[i].idx);
+		log("i(%lld) push(%u)", i, karr[i].idx);
 	}
-	debug("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
+	log("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
+	#endif
 
 	/* pack pointer and length */
 	struct ggsea_result_s *res = ctx->res;
@@ -1414,6 +1421,8 @@ void ggsea_aln_free(
 	for(int64_t i = 0; i < cnt; i++) {
 		gaba_dp_res_free((struct gaba_alignment_s *)res->aln[i]);
 	}
+	debug("free, ptr(%p)", res);
+	lmm_free(lmm, (void *)res->aln);
 	lmm_free(lmm, (void *)res);
 	return;
 }
