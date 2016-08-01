@@ -404,17 +404,17 @@ uint32_t hmap_get_id(
 		};
 
 		/* reserve working area */
-		uint8_t tmp[hmap->object_size];
-		// memset(tmp, 0, hmap->object_size);
-		struct hmap_header_intl_s *h = (struct hmap_header_intl_s *)tmp;
 
 		/* push key string to key_arr */
-		h->key_len = len;
-		h->key_base = lmm_kv_size(hmap->key_arr);
 		lmm_kv_pushm(hmap->lmm, hmap->key_arr, str, len);
 		lmm_kv_push(hmap->lmm, hmap->key_arr, '\0');
 
 		/* add object to object array */
+		uint8_t tmp[hmap->object_size];
+		struct hmap_header_intl_s *h = (struct hmap_header_intl_s *)tmp;
+		h->key_len = len;
+		h->key_base = lmm_kv_size(hmap->key_arr);
+		memset((void *)(h + 1), 0, hmap->object_size - sizeof(struct hmap_header_intl_s));
 		lmm_kv_pushm(hmap->lmm, hmap->object_arr, tmp, hmap->object_size);
 	}
 	return(id);
