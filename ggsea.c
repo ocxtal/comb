@@ -170,7 +170,6 @@ struct ggsea_ctx_s {
 
 	/* result vector */
 	lmm_t *res_lmm;
-	struct ggsea_result_s *res;
 	kvec_t(struct gaba_alignment_s const *) aln;
 };
 
@@ -395,15 +394,6 @@ void ggsea_flush(
 
 	/* flush result vector */
 	ctx->res_lmm = lmm;
-	ctx->res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
-	*ctx->res = (struct ggsea_result_s){
-		.reserved1 = (void *)lmm,
-		.ref = ctx->r,
-		.query = ctx->q,
-		.aln = NULL,
-		.cnt = 0,
-		.reserved2 = 0
-	};
 	lmm_kv_init(ctx->res_lmm, ctx->aln);
 	debug("flushed, aln(%p), lmm(%p), lim(%p)", lmm_kv_ptr(ctx->aln), ctx->res_lmm, ctx->res_lmm->lim);
 	return;
@@ -1281,20 +1271,14 @@ int64_t ggsea_cmp_result(
 }
 
 /**
- * @fn ggsea_refine_result
+ * @fn ggsea_dedup_result
  */
 static _force_inline
-struct ggsea_result_s *ggsea_refine_result(
-	struct ggsea_ctx_s *ctx)
+int64_t ggsea_dedup_result(
+	struct ggsea_ctx_s *ctx,
+	struct gaba_alignment_s const **aln,
+	int64_t const cnt)
 {
-	/* build array and sort */
-	struct gaba_alignment_s const **aln = lmm_kv_ptr(ctx->aln);
-	int64_t const cnt = lmm_kv_size(ctx->aln);
-
-	if(cnt == 0) {
-		return(ctx->res);
-	}
-
 	struct ggsea_score_pos_s karr[cnt];
 	for(int64_t i = 0; i < cnt; i++) {
 		debug("score(%lld)", aln[i]->score);
@@ -1332,16 +1316,38 @@ struct ggsea_result_s *ggsea_refine_result(
 		struct gaba_alignment_s const *tmp = aln[i];
 		aln[i] = aln[karr[i].idx];
 		aln[karr[i].idx] = tmp;
-		log("i(%lld) push(%u)", i, karr[i].idx);
+		debug("i(%lld) push(%u)", i, karr[i].idx);
 	}
-	log("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
+	debug("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
 	#endif
+	return(dedup_cnt);
+}
+
+/**
+ * @fn ggsea_pack_result
+ */
+static _force_inline
+struct ggsea_result_s *ggsea_pack_result(
+	struct ggsea_ctx_s *ctx)
+{
+	/* build array and sort */
+	struct gaba_alignment_s const **aln = lmm_kv_ptr(ctx->aln);
+	int64_t const cnt = lmm_kv_size(ctx->aln);
+
+	/* dedup result */
+	int64_t dedup_cnt = (cnt != 0) ? ggsea_dedup_result(ctx, aln, cnt) : 0;
 
 	/* pack pointer and length */
-	struct ggsea_result_s *res = ctx->res;
-	res->aln = aln;
-	res->cnt = dedup_cnt;
-	res->reserved2 = cnt;
+	struct ggsea_result_s *res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
+	*res = (struct ggsea_result_s){
+		.reserved1 = (void *)ctx->res_lmm,
+		.ref = ctx->r,
+		.query = ctx->q,
+		.aln = aln,
+		.cnt = dedup_cnt,
+		.reserved2 = cnt
+	};
+	debug("result, ptr(%p), aln(%p)", res, res->aln);
 	return(res);
 }
 
@@ -1404,7 +1410,7 @@ ggsea_result_t *ggsea_align(
 
 	/* cleanup iterator */
 	debug("done. %llu alignments generated", lmm_kv_size(ctx->aln));
-	return((ggsea_result_t *)ggsea_refine_result(ctx));
+	return((ggsea_result_t *)ggsea_pack_result(ctx));
 }
 
 /**
@@ -1421,7 +1427,7 @@ void ggsea_aln_free(
 	for(int64_t i = 0; i < cnt; i++) {
 		gaba_dp_res_free((struct gaba_alignment_s *)res->aln[i]);
 	}
-	debug("free, ptr(%p)", res);
+	debug("free, ptr(%p), aln(%p)", res, res->aln);
 	lmm_free(lmm, (void *)res->aln);
 	lmm_free(lmm, (void *)res);
 	return;

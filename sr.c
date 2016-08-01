@@ -152,6 +152,8 @@ struct sr_gref_s *sr_get_index(
 	lmm_t *lmm = NULL;
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)lmm_malloc(lmm,
 		sizeof(struct sr_gref_intl_s));
+	debug("sr_gref malloc, ptr(%p)", r);
+
 	*r = (struct sr_gref_intl_s){
 		.lmm = lmm,
 		.path = sr->path,
@@ -208,6 +210,7 @@ struct sr_gref_s *sr_get_iter_read(
 	lmm_t *lmm_read = lmm_init(NULL, SR_SINGLE_READ_MEM_SIZE);
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)lmm_malloc(
 		lmm_read, sizeof(struct sr_gref_intl_s));
+	debug("sr_gref malloc, ptr(%p)", r);
 
 	/* read a sequence */
 	fna_set_lmm(sr->fna, lmm_read);
@@ -241,8 +244,9 @@ struct sr_gref_s *sr_get_iter_read(
 	}
 
 	if(seq == NULL) {
-		lmm_clean(lmm_read); lmm_read = NULL;
 		fna_close(sr->fna); sr->fna = NULL;
+		lmm_free(lmm_read, r);
+		lmm_clean(lmm_read);
 		return(NULL);
 	}
 
@@ -276,9 +280,11 @@ void sr_gref_free(
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)_r;
 	if(r == NULL) { return; }
 
+	debug("sr_gref free, ptr(%p)", r);
+
 	gref_iter_clean(r->iter); r->iter = NULL;
-	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); r->gref = NULL; }
-	if(r->seq_need_free != 0) { fna_seq_free(r->seq); r->seq = NULL; }
+	if(r->gref_need_free != 0) { gref_clean((gref_t *)r->gref); } r->gref = NULL;
+	if(r->seq_need_free != 0) { fna_seq_free(r->seq); } r->seq = NULL;
 
 	lmm_t *lmm = r->lmm; r->lmm = NULL;
 	lmm_free(lmm, r);

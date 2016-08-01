@@ -556,6 +556,8 @@ void *comb_source(
 				.lmm = q->lmm,
 				.q = q
 			};
+
+			debug("worker created, ptr(%p)", i);
 			return((void *)i);
 		}
 	}
@@ -599,8 +601,9 @@ void comb_drain(
 	ggsea_aln_free(i->res);
 
 	/* lmm must be freed before gref_free */
+	debug("worker destroyed, ptr(%p)", i);
 	struct sr_gref_s *q = i->q;
-	lmm_free(i->lmm, item);
+	lmm_free(i->lmm, (void *)i);
 	sr_gref_free(q);
 	return;
 }
