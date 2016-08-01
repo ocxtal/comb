@@ -703,13 +703,13 @@ int comb_align(
 	/* destroy objects */
 	ret = 0;
 _comb_align_error_handler:;
-	ggsea_conf_clean(conf); conf = NULL;
 	if(ref != query) {
 		sr_clean(query); query = NULL;
 	}
 	sr_clean(ref); ref = NULL;
 	aw_clean(aw); aw = NULL;
 	comb_worker_clean(w); w = NULL;
+	ggsea_conf_clean(conf); conf = NULL;
 	ptask_clean(pt); pt = NULL;
 	return(ret);
 }
