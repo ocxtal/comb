@@ -201,13 +201,20 @@ zf_t *zfopen(
 		return(NULL);
 	}
 
-	/* determine format */
+	/* check length */
+	int64_t path_len = strlen(path);
+	int64_t mode_len = strlen(mode);
+	if(path_len == 0 || mode_len == 0) {
+		return(NULL);
+	}
+
 	char *path_dup = (char *)path;
 	char *mode_dup = (char *)mode;
 
-	int64_t path_len = strlen(path);
 	char const *path_tail = path + path_len;
-	char const *mode_tail = mode + strlen(mode);
+	char const *mode_tail = mode + mode_len;
+
+	/* determine format */
 	struct zf_functions_s const *fn = &fn_table[0];
 	for(int64_t i = 1; i < sizeof(fn_table) / sizeof(struct zf_functions_s); i++) {
 		/* skip if ext string is longer than path string */
@@ -224,6 +231,9 @@ zf_t *zfopen(
 			path_dup[strlen(path) - strlen(fn_table[i].ext)] = '\0';
 			break;
 		}
+
+		/* skip if ext string is longer than mode string */
+		if(mode_len < strlen(fn_table[i].ext)) { continue; }
 
 		/* check mode */
 		if(strncmp(mode_tail - strlen(fn_table[i].ext),
