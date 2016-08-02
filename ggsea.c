@@ -249,18 +249,24 @@ void ggsea_ctx_clean(
 {
 	if(ctx != NULL) {
 		/* destroy repetitive kmer vectors */
-		int64_t hcnt = hmap_get_count(ctx->rep);
-		for(int64_t i = 0; i < hcnt; i++) {
-			struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
-			debug("free rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
-			kv_destroy(c->rv);
-			kv_destroy(c->qv);
+		if(ctx->rep != NULL) {
+			int64_t hcnt = hmap_get_count(ctx->rep);
+			for(int64_t i = 0; i < hcnt; i++) {
+				struct ggsea_rep_seed_s *c = hmap_get_object(ctx->rep, i);
+				debug("free rv(%p), qv(%p)", kv_ptr(c->rv), kv_ptr(c->qv));
+				kv_destroy(c->rv);
+				kv_destroy(c->qv);
+			}
+			hmap_clean(ctx->rep); ctx->rep = NULL;
 		}
-		hmap_clean(ctx->rep); ctx->rep = NULL;
 
 		/* destroy seed filter tree */
-		rbtree_clean(ctx->rtree); ctx->rtree = NULL;
-		rbtree_clean(ctx->qtree); ctx->qtree = NULL;
+		if(ctx->rtree != NULL) {
+			rbtree_clean(ctx->rtree); ctx->rtree = NULL;
+		}
+		if(ctx->qtree != NULL) {
+			rbtree_clean(ctx->qtree); ctx->qtree = NULL;
+		}
 
 		/* destroy tree traversing queue */
 		kv_hq_destroy(ctx->queue);
@@ -269,7 +275,9 @@ void ggsea_ctx_clean(
 		free(ctx->margin); ctx->margin = NULL;
 
 		/* dp context */
-		gaba_dp_clean(ctx->dp); ctx->dp = NULL;
+		if(ctx->dp != NULL) {
+			gaba_dp_clean(ctx->dp); ctx->dp = NULL;
+		}
 
 		/* ggsea context */
 		free(ctx);
