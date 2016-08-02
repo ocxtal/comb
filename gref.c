@@ -506,7 +506,7 @@ int gref_append_link(
 	int32_t dst_ori)
 {
 	struct gref_s *pool = (struct gref_s *)_pool;
-	debug("append link");
+	debug("append link, src(%s), dst(%s), cnt(%u)", src, dst, hmap_get_count(pool->hmap));
 
 	/* gref object is mutable only when type == POOL */
 	if(pool == NULL || pool->type != GREF_POOL) { return(-1); }
@@ -529,6 +529,7 @@ int gref_append_link(
 
 	/* update tail_id */
 	pool->sec_cnt = MAX3(pool->sec_cnt, src_id + 1, dst_id + 1);
+	debug("sec_cnt(%u), src_id(%u), dst_id(%u)", pool->sec_cnt, src_id, dst_id);
 	return(0);
 }
 
@@ -968,6 +969,165 @@ _gref_melt_archive_error_handler:;
 
 /* kmer enumeration */
 /**
+ * @struct gref_iter_kmer_s
+ * @brief kmer container
+ */
+struct gref_iter_kmer_s {
+	uint8_t vac_len;
+	uint8_t shift_len;
+	uint8_t init_len;
+	uint8_t pad;
+
+	/* kmer table */
+	uint16_t idx;
+	uint16_t lim;
+	uint64_t cnt;
+	uint64_t arr[];
+};
+_static_assert(sizeof(struct gref_iter_kmer_s) == 16);
+#define gref_iter_kmer_size(x)		( sizeof(struct gref_iter_kmer_s) + (x).lim * sizeof(uint64_t) )
+#define gref_iter_kmer_tail(x)		( &(x).arr[(x).lim] )
+
+/**
+ * @fn gref_iter_kmer_flush
+ */
+static _force_inline
+void gref_iter_kmer_flush(
+	struct gref_iter_kmer_s *kmer)
+{
+	kmer->vac_len = kmer->init_len;
+	kmer->idx = 1;
+	kmer->lim = 1;
+	kmer->cnt = 0;
+	kmer->arr[0] = 0;
+
+	debug("flush kmer, vac_len(%u), idx(%u), lim(%u)", kmer->vac_len, kmer->idx, kmer->lim);
+	return;
+}
+
+/**
+ * @fn gref_iter_kmer_init
+ */
+static _force_inline
+void gref_iter_kmer_init(
+	struct gref_iter_kmer_s *kmer,
+	int64_t k)
+{
+	kmer->shift_len = 2 * (k - 1);
+	kmer->init_len = k;
+	gref_iter_kmer_flush(kmer);
+	return;
+}
+
+/**
+ * @fn gref_iter_kmer_append
+ */
+static _force_inline
+void gref_iter_kmer_append(
+	struct gref_iter_kmer_s *kmer,
+	uint8_t conv,
+	uint8_t c)
+{
+	if(c == 0) {
+		gref_iter_kmer_flush(kmer);
+		return;
+	}
+
+	/* conversion tables */
+	static uint8_t const popcnt_table[] = {
+		0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 0	/* ignore 0x0f */
+	};
+	enum shift_size {
+		A = 0x00, C = 0x02, G = 0x04, T = 0x06
+	};
+	static uint8_t const shift_table[][3] = {
+		{},
+		{ A },
+		{ C },
+		{ A, C },
+		{ G },
+		{ A, G },
+		{ C, G },
+		{ A, C, G },
+		{ T },
+		{ A, T },
+		{ C, T },
+		{ A, C, T },
+		{ G, T },
+		{ A, G, T },
+		{ C, G, T },
+		{},
+	};
+
+	/* update count array */
+	uint64_t pcnt = popcnt_table[c];
+	kmer->cnt = (kmer->cnt>>2) | (pcnt<<(kmer->shift_len + 2));
+	uint64_t lim = kmer->lim;
+
+	/* branch */
+	switch(3 - pcnt) {
+		case 0: memcpy(&kmer->arr[2 * lim], kmer->arr, sizeof(uint64_t) * lim);
+		case 1: memcpy(&kmer->arr[lim], kmer->arr, sizeof(uint64_t) * lim);
+		/* fall through */
+		default: break;		/* return(-1); */
+	}
+
+	/* append to vector */
+	uint64_t *p = kmer->arr;
+	uint64_t mask = 0x03<<kmer->shift_len;
+	for(int64_t j = 0; j < pcnt; j++) {
+		uint64_t b = mask & (conv<<(kmer->shift_len - shift_table[c][j]));
+		for(int64_t k = 0; k < lim; k++) {
+			*p = (*p>>2) | b; p++;
+			debug("%lld, %lld, %lld, %x, %x, %llx",
+				j, k, j * lim + k, shift_table[c][j], 0x03 & (conv>>shift_table[c][j]), p[-1]);
+		}
+	}
+
+	/* update lim */
+	lim *= pcnt;
+
+	/* merge (shrink buffer) */
+	uint64_t shrink_skip = 0x03 & kmer->cnt;
+	if(shrink_skip > 1) {
+		// lim /= shrink_skip;
+		lim = (lim * ((shrink_skip == 2) ? 0x10000 : 0xaaab))>>17;
+		for(int64_t j = 0; j < lim; j++) {
+			kmer->arr[j] = kmer->arr[j * shrink_skip];
+		}
+	}
+
+	/* write back lim */
+	kmer->vac_len -= (kmer->vac_len != 0);
+	kmer->idx = (kmer->vac_len != 0) ? lim : 0;
+	kmer->lim = lim;
+
+	debug("vac_len(%u), cnt(%llx), lim(%llu), shrink_skip(%llu)", kmer->vac_len, kmer->cnt, lim, shrink_skip);
+	return;
+}
+
+/**
+ * @fn gref_iter_kmer_ready
+ */
+static _force_inline
+uint64_t gref_iter_kmer_ready(
+	struct gref_iter_kmer_s *kmer)
+{
+	debug("idx(%u), lim(%u)", kmer->idx, kmer->lim);
+	return(kmer->idx < kmer->lim);
+}
+
+/**
+ * @fn gref_iter_kmer_next
+ */
+static _force_inline
+uint64_t gref_iter_kmer_next(
+	struct gref_iter_kmer_s *kmer)
+{
+	return(kmer->arr[kmer->idx++]);
+}
+
+/**
  * @struct gref_iter_stack_s
  * @brief aliased to gref_iter_t
  */
@@ -978,29 +1138,21 @@ struct gref_iter_stack_s {
 	/* current section id */
 	uint32_t sec_gid;
 
-	/* link */
-	uint32_t link_depth;
-	uint32_t link_ridx, link_len;
-	uint32_t const *link_base;
-
 	/* sequence */
+	uint32_t len;
 	uint8_t const *seq_ptr;
 	uint32_t rem_len;
 	int8_t incr;
 	uint8_t conv_table;
-
-	/* global params */
 	uint8_t global_rem_len;
-	uint8_t shift_len;
 
-	/* sequence info (cont'd) */
-	uint32_t len;
+	/* link */
+	uint8_t link_depth;
+	uint32_t link_ridx, link_len;
+	uint32_t const *link_base;
 
 	/* kmer table */
-	uint16_t kmer_idx;
-	uint16_t kmer_table_size;
-	uint64_t cnt_arr;
-	uint64_t kmer[];
+	struct gref_iter_kmer_s kmer;
 };
 _static_assert(sizeof(struct gref_iter_stack_s) == 64);
 
@@ -1034,9 +1186,12 @@ _static_assert(sizeof(struct gref_iter_s) == 96);
  */
 static _force_inline
 struct gref_iter_stack_s *gref_iter_init_stack(
-	struct gref_iter_s *iter,
-	struct gref_iter_stack_s *stack)
+	struct gref_iter_s *iter)
 {
+	/* create stack */
+	struct gref_iter_stack_s *stack = (struct gref_iter_stack_s *)(iter + 1);
+	iter->stack = stack;
+
 	uint32_t gid = iter->base_gid;
 	uint32_t len = iter->hsec[gid].sec.len;
 	debug("init_stack called, stack(%p), gid(%u), len(%u)", stack, gid, len);
@@ -1046,6 +1201,17 @@ struct gref_iter_stack_s *gref_iter_init_stack(
 
 	/* current section info */
 	stack->sec_gid = gid;
+
+	/* seq info */
+	uint8_t const *base = iter->hsec[gid].sec.base;
+
+	stack->len = len - iter->seed_len;
+	stack->seq_ptr = (base < iter->seq_lim)
+		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
+	stack->rem_len = len;
+	stack->incr = (base < iter->seq_lim) ? 1 : -1;
+	stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	stack->global_rem_len = iter->seed_len - 1;
 
 	/* link info */
 	int64_t link_idx_base = iter->hsec[gid].link_idx_base;
@@ -1057,25 +1223,17 @@ struct gref_iter_stack_s *gref_iter_init_stack(
 	stack->link_len = link_len;
 	stack->link_base = iter->link_table + link_idx_base;
 
-	/* seq info */
-	uint8_t const *base = iter->hsec[gid].sec.base;
-
-	stack->seq_ptr = (base < iter->seq_lim)
-		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
-	stack->rem_len = len;
-	stack->incr = (base < iter->seq_lim) ? 1 : -1;
-	stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
-	stack->global_rem_len = iter->seed_len - 1;
-	stack->shift_len = iter->shift_len;
-	stack->len = len - iter->seed_len;
-
+	#if 0
 	/* init buffer and counter */
+	stack->shift_len = iter->shift_len;
+
 	stack->kmer_idx = 0;
 	stack->kmer_table_size = 1;
 	stack->cnt_arr = 0;
 	stack->kmer[0] = 0;
+	#endif
 
-	debug("init_stack finished, stack(%p), rem_len(%u), table_size(%u)", stack, stack->rem_len, stack->kmer_table_size);
+	debug("init_stack finished, stack(%p), rem_len(%u)", stack, stack->rem_len);
 	return(stack);
 }
 
@@ -1088,11 +1246,10 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 	struct gref_iter_stack_s *stack)
 {
 	/* fixme: check remaining memory size and malloc if there is no room */
-	struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)(
-		(uint64_t *)(stack + 1) + stack->kmer_table_size);
+	// struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)((uint64_t *)(stack + 1) + stack->lim);
+	struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)gref_iter_kmer_tail(stack->kmer);
 
-	debug("stack(%p), kmer_table_size(%u), new_stack(%p)",
-		stack, stack->kmer_table_size, new_stack);
+	debug("stack(%p), lim(%u), new_stack(%p)", stack, stack->kmer.lim, new_stack);
 
 	/* load next gid, adjust len for path encoding */
 	int64_t link_idx = stack->link_len - stack->link_ridx;
@@ -1106,6 +1263,18 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 	/* section id */
 	new_stack->sec_gid = gid;
 
+	/* init seq info */
+	uint8_t const *base = iter->hsec[gid].sec.base;
+	uint32_t rem_len = MIN2(stack->global_rem_len, iter->hsec[gid].sec.len);
+	uint32_t global_rem_len = stack->global_rem_len - rem_len;
+
+	new_stack->len = stack->len + rem_len;
+	new_stack->seq_ptr = (base < iter->seq_lim)
+		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
+	new_stack->rem_len = rem_len;
+	new_stack->incr = (base < iter->seq_lim) ? 1 : -1;
+	new_stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	new_stack->global_rem_len = global_rem_len;
 
 	/* link info */
 	int64_t link_idx_base = iter->hsec[gid].link_idx_base;
@@ -1117,26 +1286,17 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 	new_stack->link_len = link_len;
 	new_stack->link_base = iter->link_table + link_idx_base;
 
-	/* init seq info */
-	uint8_t const *base = iter->hsec[gid].sec.base;
-	uint32_t rem_len = MIN2(stack->global_rem_len, iter->hsec[gid].sec.len);
-	uint32_t global_rem_len = stack->global_rem_len - rem_len;
-
-	new_stack->seq_ptr = (base < iter->seq_lim)
-		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
-	new_stack->rem_len = rem_len;
-	new_stack->incr = (base < iter->seq_lim) ? 1 : -1;
-	new_stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
-	new_stack->global_rem_len = global_rem_len;
-	new_stack->shift_len = stack->shift_len;
-	new_stack->len = stack->len + rem_len;
-
 	/* copy kmer buffer */
+	memcpy(&new_stack->kmer, &stack->kmer, gref_iter_kmer_size(stack->kmer));
+
+	#if 0
+	new_stack->shift_len = stack->shift_len;
+
 	new_stack->kmer_idx = 0;
 	new_stack->kmer_table_size = stack->kmer_table_size;
 	new_stack->cnt_arr = stack->cnt_arr;
 	memcpy(&new_stack->kmer, &stack->kmer, stack->kmer_table_size * sizeof(uint64_t));
-
+	#endif
 	return(new_stack);
 }
 
@@ -1152,10 +1312,10 @@ struct gref_iter_stack_s *gref_iter_pop_stack(
 }
 
 /**
- * @fn gref_iter_fetch_base_intl
+ * @fn gref_iter_fetch_base
  */
 static _force_inline
-uint8_t gref_iter_fetch_base_intl(
+uint8_t gref_iter_fetch_base(
 	struct gref_iter_stack_s *stack)
 {
 	uint8_t c = *stack->seq_ptr;
@@ -1164,85 +1324,7 @@ uint8_t gref_iter_fetch_base_intl(
 	return(c);
 }
 
-/**
- * @fn gref_iter_update_table
- */
-static _force_inline
-int gref_iter_update_table(
-	struct gref_iter_stack_s *stack,
-	uint8_t c)
-{
-	/* conversion tables */
-	static uint8_t const popcnt_table[] = {
-		0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 0	/* ignore 0x0f */
-	};
-	enum shift_size {
-		A = 0x00, C = 0x02, G = 0x04, T = 0x06
-	};
-	static uint8_t const shift_table[][3] = {
-		{},
-		{ A },
-		{ C },
-		{ A, C },
-		{ G },
-		{ A, G },
-		{ C, G },
-		{ A, C, G },
-		{ T },
-		{ A, T },
-		{ C, T },
-		{ A, C, T },
-		{ G, T },
-		{ A, G, T },
-		{ C, G, T },
-		{},
-	};
-
-	/* update count array */
-	uint64_t pcnt = popcnt_table[c];
-	stack->cnt_arr = (stack->cnt_arr>>2) | (pcnt<<(stack->shift_len + 2));
-	uint64_t table_size = stack->kmer_table_size;
-
-	/* branch */
-	switch(3 - pcnt) {
-		case 0: memcpy(&stack->kmer[2 * table_size], stack->kmer, sizeof(uint64_t) * table_size);
-		case 1: memcpy(&stack->kmer[table_size], stack->kmer, sizeof(uint64_t) * table_size);
-		/* fall through */
-		default: break;		/* return(-1); */
-	}
-
-	/* append to vector */
-	uint32_t mask = 0x03<<stack->shift_len;
-	for(int64_t j = 0; j < pcnt; j++) {
-		for(int64_t k = 0; k < table_size; k++) {
-			stack->kmer[j * table_size + k] =
-				  (stack->kmer[j * table_size + k]>>2)
-				| (mask & (stack->conv_table<<(stack->shift_len - shift_table[c][j])));
-			debug("%lld, %lld, %lld, %x, %x, %llx",
-				j, k, j * table_size + k, shift_table[c][j], 0x03 & (stack->conv_table>>shift_table[c][j]), stack->kmer[j * table_size + k]);
-		}
-	}
-
-	/* update table_size */
-	table_size *= pcnt;
-
-	/* merge (shrink buffer) */
-	uint64_t shrink_skip = 0x03 & stack->cnt_arr;
-	debug("cnt_arr(%llx), table_size(%llu), shrink_skip(%llu)",
-		stack->cnt_arr, table_size, shrink_skip);
-	if(shrink_skip > 1) {
-		table_size /= shrink_skip;
-		for(int64_t j = 0; j < table_size; j++) {
-			stack->kmer[j] = stack->kmer[j * shrink_skip];
-		}
-	}
-
-	/* write back table_size */
-	stack->kmer_idx = 0;
-	stack->kmer_table_size = table_size;
-	return(0);
-}
-
+#if 0
 /**
  * @fn gref_iter_fetch_base
  */
@@ -1252,11 +1334,12 @@ struct gref_iter_stack_s *gref_iter_fetch_base(
 	struct gref_iter_stack_s *stack)
 {
 	uint8_t c = gref_iter_fetch_base_intl(stack);
-	gref_iter_update_table(stack, c);
+	// gref_iter_update_table(stack, c);
 
 	/* stack pointer does not chainge in this function */
 	return(stack);
 }
+#endif
 
 /**
  * @fn gref_iter_fetch_link
@@ -1269,7 +1352,8 @@ struct gref_iter_stack_s *gref_iter_fetch_link(
 	/* return if no more seq remains */
 	if(stack->global_rem_len == 0) {
 		debug("reached tail");
-		stack = stack->prev_stack;
+		// stack = stack->prev_stack;
+		stack = gref_iter_pop_stack(stack);
 	}
 
 	/* remove stack if no more link remains */
@@ -1287,12 +1371,28 @@ struct gref_iter_stack_s *gref_iter_fetch_link(
 		stack->sec_gid, stack->seq_ptr, stack->len, stack->rem_len, stack->global_rem_len);
 
 	/* fetch seq */
-	return(gref_iter_fetch_base(iter, stack));
+	// return(gref_iter_fetch_base(iter, stack));
+	return(stack);
 }
 
 /**
  * @fn gref_iter_fetch
  */
+static _force_inline
+uint8_t gref_iter_fetch(
+	struct gref_iter_s *iter)
+{
+	debug("iter_fetch called, check rem_len(%u)", iter->stack->rem_len);
+	if(iter->stack->rem_len == 0) {
+		/* fetch link */
+		if((iter->stack = gref_iter_fetch_link(iter, iter->stack)) == NULL) {
+			return(0);
+		}
+	}
+
+	return(gref_iter_fetch_base(iter->stack));
+}
+#if 0
 static _force_inline
 struct gref_iter_stack_s *gref_iter_fetch(
 	struct gref_iter_s *iter,
@@ -1310,10 +1410,9 @@ struct gref_iter_stack_s *gref_iter_fetch(
 	/* never reaches here */
 	return(NULL);
 }
+#endif
 
-/**
- * @fn gref_iter_prepare_stack
- */
+#if 0
 static _force_inline
 struct gref_iter_stack_s *gref_iter_prepare_stack(
 	struct gref_iter_s *iter)
@@ -1338,6 +1437,7 @@ struct gref_iter_stack_s *gref_iter_prepare_stack(
 
 	return(NULL);
 }
+#endif
 
 /**
  * @fn gref_iter_init
@@ -1376,25 +1476,80 @@ gref_iter_t *gref_iter_init(
 	
 	/* set params */
 	iter->seed_len = acv->params.k;
-	iter->shift_len = 2 * (acv->params.k - 1);
+	// iter->shift_len = 2 * (acv->params.k - 1);
 	iter->seq_lim = gref->seq_lim;
 	iter->link_table = acv->link_table;
 	iter->hsec = (struct gref_section_half_s const *)hmap_get_object(acv->hmap, 0);
 
-	struct gref_iter_stack_s *stack = gref_iter_prepare_stack(iter);
+	/* create stack */
+	// struct gref_iter_stack_s *stack = gref_iter_prepare_stack(iter);
+	struct gref_iter_stack_s *stack = gref_iter_init_stack(iter);
+
+	/* init kmer array */
+	gref_iter_kmer_init(&stack->kmer, acv->params.k);
+	#if 0
 	if(stack == NULL) {
 		debug("no valid stack created");
 		lmm_free(iter->lmm, (void *)iter);
 		return(NULL);
 	}
+	#endif
 
-	iter->stack = stack;
+	// iter->stack = stack;
 	return((gref_iter_t *)iter);
 }
 
 /**
  * @fn gref_iter_next
  */
+struct gref_kmer_tuple_s gref_iter_next(
+	gref_iter_t *_iter)
+{
+	struct gref_iter_s *iter = (struct gref_iter_s *)_iter;
+	// struct gref_iter_stack_s *stack = iter->stack;
+	// struct gref_iter_kmer_s *kmer = stack->kmer;
+
+	while(!gref_iter_kmer_ready(&iter->stack->kmer)) {
+		/* no kmer is available in the kmer array */
+		uint8_t c = gref_iter_fetch(iter);
+		debug("called iter_fetch(%u)", c);
+
+		if(iter->stack != NULL) {
+			gref_iter_kmer_append(&iter->stack->kmer, iter->stack->conv_table, c);
+			continue;
+		}
+
+		debug("fetch section, gid(%u)", iter->base_gid + iter->step_gid);
+
+		/* fetch the next section */
+		if((iter->base_gid += iter->step_gid) < iter->tail_gid
+		&& (iter->stack = gref_iter_init_stack(iter)) != NULL) {
+			gref_iter_kmer_flush(&iter->stack->kmer);
+			continue;
+		}
+
+		/* reached the end of the graph */
+		debug("reached end");
+		return((struct gref_kmer_tuple_s){
+			.kmer = GREF_ITER_KMER_TERM,
+			.gid_pos = (struct gref_gid_pos_s){
+				.pos = 0,
+				.gid = (uint32_t)-1
+			}
+		});
+	}
+
+	uint64_t k = gref_iter_kmer_next(&iter->stack->kmer);
+	debug("return kmer(%llx), gid(%u), pos(%u)", k, iter->stack->sec_gid, iter->stack->len - iter->stack->rem_len);
+	return((struct gref_kmer_tuple_s){
+		.kmer = k,
+		.gid_pos = (struct gref_gid_pos_s){
+			.pos = iter->stack->len - iter->stack->rem_len,
+			.gid = iter->base_gid
+		}
+	});
+}
+#if 0
 struct gref_kmer_tuple_s gref_iter_next(
 	gref_iter_t *_iter)
 {
@@ -1449,6 +1604,7 @@ struct gref_kmer_tuple_s gref_iter_next(
 		}
 	});
 }
+#endif
 
 /**
  * @fn gref_iter_clean
@@ -2204,6 +2360,51 @@ unittest()
 	t = _f(iter); assert(_check_kmer(t, "GGTG", 2, 3), _print_kmer(t));
 
 	t = _f(iter); assert(_check_kmer(t, "GTGT", 2, 4), _print_kmer(t));
+
+	t = _f(iter); assert(t.kmer == GREF_ITER_KMER_TERM, "%llx, %llx", t.kmer, GREF_ITER_KMER_TERM);
+	assert(t.gid_pos.gid == (uint32_t)-1, "gid(%u)", t.gid_pos.gid);
+
+	gref_iter_clean(iter);
+	gref_clean(acv);
+}
+
+
+/* N's in section */
+unittest()
+{
+	gref_pool_t *pool = gref_init_pool(GREF_PARAMS(
+		.k = 4,
+		.seq_head_margin = 32,
+		.seq_tail_margin = 32,
+		.seq_direction = GREF_FW_ONLY));
+	gref_append_segment(pool, _str("sec0"), _seq("GGRANNNNGTTCANNNNNAAAAT"));
+	gref_append_segment(pool, _str("sec1"), _seq("TNNNCCCCC"));
+	gref_append_link(pool, _str("sec0"), 0, _str("sec1"), 0);
+
+	/* build archive */
+	gref_acv_t *acv = gref_freeze_pool(pool);
+
+	/* create iterator */
+	gref_iter_t *iter = gref_iter_init(acv, NULL);
+	assert(iter != NULL, "%p", iter);
+	struct gref_kmer_tuple_s t;
+
+	/* sec0 */
+	t = _f(iter); assert(_check_kmer(t, "GGAA", 0, 0), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "GGGA", 0, 0), _print_kmer(t));
+
+	t = _f(iter); assert(_check_kmer(t, "GTTC", 0, 8), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "TTCA", 0, 9), _print_kmer(t));
+
+	t = _f(iter); assert(_check_kmer(t, "AAAA", 0, 18), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "AAAT", 0, 19), _print_kmer(t));
+
+	/* sec0-sec1 */
+	t = _f(iter); assert(_check_kmer(t, "AATT", 0, 20), _print_kmer(t));
+
+	/* sec1 */
+	t = _f(iter); assert(_check_kmer(t, "CCCC", 1, 4), _print_kmer(t));
+	t = _f(iter); assert(_check_kmer(t, "CCCC", 1, 5), _print_kmer(t));
 
 	t = _f(iter); assert(t.kmer == GREF_ITER_KMER_TERM, "%llx, %llx", t.kmer, GREF_ITER_KMER_TERM);
 	assert(t.gid_pos.gid == (uint32_t)-1, "gid(%u)", t.gid_pos.gid);
