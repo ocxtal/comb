@@ -1223,16 +1223,6 @@ struct gref_iter_stack_s *gref_iter_init_stack(
 	stack->link_len = link_len;
 	stack->link_base = iter->link_table + link_idx_base;
 
-	#if 0
-	/* init buffer and counter */
-	stack->shift_len = iter->shift_len;
-
-	stack->kmer_idx = 0;
-	stack->kmer_table_size = 1;
-	stack->cnt_arr = 0;
-	stack->kmer[0] = 0;
-	#endif
-
 	debug("init_stack finished, stack(%p), rem_len(%u)", stack, stack->rem_len);
 	return(stack);
 }
@@ -1288,15 +1278,6 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 
 	/* copy kmer buffer */
 	memcpy(&new_stack->kmer, &stack->kmer, gref_iter_kmer_size(stack->kmer));
-
-	#if 0
-	new_stack->shift_len = stack->shift_len;
-
-	new_stack->kmer_idx = 0;
-	new_stack->kmer_table_size = stack->kmer_table_size;
-	new_stack->cnt_arr = stack->cnt_arr;
-	memcpy(&new_stack->kmer, &stack->kmer, stack->kmer_table_size * sizeof(uint64_t));
-	#endif
 	return(new_stack);
 }
 
@@ -1323,23 +1304,6 @@ uint8_t gref_iter_fetch_base(
 	stack->seq_ptr += stack->incr;
 	return(c);
 }
-
-#if 0
-/**
- * @fn gref_iter_fetch_base
- */
-static _force_inline
-struct gref_iter_stack_s *gref_iter_fetch_base(
-	struct gref_iter_s *iter,
-	struct gref_iter_stack_s *stack)
-{
-	uint8_t c = gref_iter_fetch_base_intl(stack);
-	// gref_iter_update_table(stack, c);
-
-	/* stack pointer does not chainge in this function */
-	return(stack);
-}
-#endif
 
 /**
  * @fn gref_iter_fetch_link
@@ -1392,52 +1356,6 @@ uint8_t gref_iter_fetch(
 
 	return(gref_iter_fetch_base(iter->stack));
 }
-#if 0
-static _force_inline
-struct gref_iter_stack_s *gref_iter_fetch(
-	struct gref_iter_s *iter,
-	struct gref_iter_stack_s *stack)
-{
-	debug("iter_fetch called, check rem_len(%u)", stack->rem_len);
-	if(stack->rem_len > 0) {
-		/* fetch seq */
-		return(gref_iter_fetch_base(iter, stack));
-	} else if(stack->rem_len == 0) {
-		/* reached the end of the section, fetch the head of succeeding section */
-		return(gref_iter_fetch_link(iter, stack));
-	}
-
-	/* never reaches here */
-	return(NULL);
-}
-#endif
-
-#if 0
-static _force_inline
-struct gref_iter_stack_s *gref_iter_prepare_stack(
-	struct gref_iter_s *iter)
-{
-	/* init stack */
-	do {
-		struct gref_iter_stack_s *stack = gref_iter_init_stack(iter,
-			(struct gref_iter_stack_s *)(iter + 1));
-
-		/* skip the head of the section */
-		for(int64_t i = 0; i < iter->seed_len && stack != NULL; i++) {
-			debug("init fetch, stack(%p), stack->prev_stack(%p), rem_len(%u)", stack, stack->prev_stack, stack->rem_len);
-			stack = gref_iter_fetch(iter, stack);
-		}
-
-		/* check if init_stack succeeded */
-		if(stack != NULL) {
-			debug("stack(%p), iter(%p), len(%u)", stack, iter, iter->hsec[iter->base_gid].sec.len);
-			return(stack);
-		}
-	} while((iter->base_gid += iter->step_gid) < iter->tail_gid);
-
-	return(NULL);
-}
-#endif
 
 /**
  * @fn gref_iter_init
@@ -1487,15 +1405,6 @@ gref_iter_t *gref_iter_init(
 
 	/* init kmer array */
 	gref_iter_kmer_init(&stack->kmer, acv->params.k);
-	#if 0
-	if(stack == NULL) {
-		debug("no valid stack created");
-		lmm_free(iter->lmm, (void *)iter);
-		return(NULL);
-	}
-	#endif
-
-	// iter->stack = stack;
 	return((gref_iter_t *)iter);
 }
 
@@ -1549,62 +1458,6 @@ struct gref_kmer_tuple_s gref_iter_next(
 		}
 	});
 }
-#if 0
-struct gref_kmer_tuple_s gref_iter_next(
-	gref_iter_t *_iter)
-{
-	struct gref_iter_s *iter = (struct gref_iter_s *)_iter;
-	struct gref_iter_stack_s *stack = iter->stack;
-
-	#define return_kmer(_iter, _stack) { \
-		debug("return kmer(%llx), gid(%u), pos(%u)", \
-			(_stack)->kmer[(_stack)->kmer_idx], \
-			(_stack)->sec_gid, \
-			(_stack)->len - (_stack)->rem_len); \
-		return((struct gref_kmer_tuple_s){ \
-			.kmer = (_stack)->kmer[(_stack)->kmer_idx++], \
-			.gid_pos = (struct gref_gid_pos_s){ \
-				.pos = (_stack)->len - (_stack)->rem_len, \
-				.gid = (_iter)->base_gid \
-			} \
-		}); \
-	}
-
-	debug("stack(%p), kmer_idx(%u), kmer_table_size(%u)", stack, stack->kmer_idx, stack->kmer_table_size);
-	/* if there is remaining kmers, return one from table */
-	if(stack->kmer_idx < stack->kmer_table_size) {
-		return_kmer(iter, stack);
-	}
-
-	/* if no kmer ramains in the table, fetch the next */
-	if((stack = gref_iter_fetch(iter, stack)) != NULL) {
-		iter->stack = stack;
-		return_kmer(iter, stack);
-	}
-
-	debug("stack == NULL, stack(%p)", stack);
-	if((iter->base_gid += iter->step_gid) < iter->tail_gid) {
-		stack = gref_iter_prepare_stack(iter);
-
-		if(stack != NULL) {
-			iter->stack = stack;
-			debug("base_gid(%u), tail_gid(%u), stack(%p)", iter->base_gid, iter->tail_gid, stack);
-			return_kmer(iter, stack);
-		}
-	}
-	#undef return_kmer
-
-	debug("terminal");
-	/* reached the end of graph, all the sections were iterated */
-	return((struct gref_kmer_tuple_s){
-		.kmer = GREF_ITER_KMER_TERM,
-		.gid_pos = (struct gref_gid_pos_s){
-			.pos = 0,
-			.gid = (uint32_t)-1
-		}
-	});
-}
-#endif
 
 /**
  * @fn gref_iter_clean
