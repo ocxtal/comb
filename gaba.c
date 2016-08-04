@@ -2893,13 +2893,13 @@ void trace_forward_push(
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path length */
-	int64_t plen = 32 * (this->w.l.spath.head - this->w.l.cpath.head)
-		+ (this->w.l.cpath.hofs - this->w.l.spath.hofs);
+	v2i32_t tlen = _sub_v2i32(sidx, idx);
+	int64_t plen = _lo32(tlen) + _hi32(tlen);
 
 	/* store section info */	
 	_store_v2i32(&this->w.l.sec.head->aid, id);
 	_store_v2i32(&this->w.l.sec.head->apos, idx);
-	_store_v2i32(&this->w.l.sec.head->alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec.head->alen, tlen);
 
 	/* store path length */
 	this->w.l.sec.head->plen = plen;
@@ -2938,14 +2938,14 @@ void trace_reverse_push(
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* calc path pos and len */
-	int64_t plen = 32 * (this->w.l.cpath.tail - this->w.l.spath.tail)
-		+ (this->w.l.cpath.tofs - this->w.l.spath.tofs);
+	v2i32_t tlen = _sub_v2i32(sidx, idx);
+	int64_t plen = _lo32(tlen) + _hi32(tlen);
 	int64_t ppos = this->w.l.pspos;
 
 	/* store revcomped section */
 	_store_v2i32(&this->w.l.sec.tail->aid, _xor_v2i32(id, mask));
 	_store_v2i32(&this->w.l.sec.tail->apos, _sub_v2i32(len, sidx));
-	_store_v2i32(&this->w.l.sec.tail->alen, _sub_v2i32(sidx, idx));
+	_store_v2i32(&this->w.l.sec.tail->alen, tlen);
 
 	/* store path length */
 	this->w.l.sec.tail->plen = plen;
@@ -3390,13 +3390,9 @@ struct gaba_alignment_s *trace_refine_alignment(
 		if(fw_sec.head == fw_sec.tail) {
 			aln->rapos = rv_sec.tail[-1].apos + rv_sec.tail[-1].alen;
 			aln->rbpos = rv_sec.tail[-1].bpos + rv_sec.tail[-1].blen;
-			// aln->rppos = rv_sec.tail[-1].plen;
-			// aln->rsid = rv_sec.tail - rv_sec.head - 1;
 		} else {
 			aln->rapos = fw_sec.head->apos;
 			aln->rbpos = fw_sec.head->bpos;
-			// aln->rppos = rv_sec.tail[-1].plen;
-			// aln->rsid = rv_sec.tail - rv_sec.head;
 		}
 
 		/* append forward section */
