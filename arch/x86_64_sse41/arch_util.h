@@ -47,13 +47,7 @@
 	static inline
 	int tzcnt(uint64_t n)
 	{
-		n |= n<<1;
-		n |= n<<2;
-		n |= n<<4;
-		n |= n<<8;
-		n |= n<<16;
-		n |= n<<32;
-		return(64-popcnt(n));
+		return(popcnt(~n & (n - 1)));
 	}
 #endif
 
