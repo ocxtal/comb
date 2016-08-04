@@ -1210,7 +1210,7 @@ struct gref_iter_stack_s *gref_iter_init_stack(
 		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
 	stack->rem_len = len;
 	stack->incr = (base < iter->seq_lim) ? 1 : -1;
-	stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	stack->conv_table = (base < iter->seq_lim) ? 0xe4 : 0x1b;
 	stack->global_rem_len = iter->seed_len - 1;
 
 	/* link info */
@@ -1263,7 +1263,7 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 		? base : (iter->seq_lim + (iter->seq_lim - base - 1));
 	new_stack->rem_len = rem_len;
 	new_stack->incr = (base < iter->seq_lim) ? 1 : -1;
-	new_stack->conv_table = (base <iter->seq_lim) ? 0xe4 : 0x1b;
+	new_stack->conv_table = (base < iter->seq_lim) ? 0xe4 : 0x1b;
 	new_stack->global_rem_len = global_rem_len;
 
 	/* link info */
