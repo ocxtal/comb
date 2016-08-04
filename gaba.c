@@ -2891,14 +2891,20 @@ void trace_forward_push(
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* adjust breakpoint */
-	uint64_t const path_array = (uint64_t)*this->w.l.cpath.head>>(32 - this->w.l.cpath.hofs);
-	v2i32_t adj = _andn_v2i32(
-		_eq_v2i32(idx, _zero_v2i32()),
+	uint64_t const path_array = *((uint64_t *)this->w.l.cpath.head)>>(32 - this->w.l.cpath.hofs);
+	v2i32_t mask = _eq_v2i32(idx, _zero_v2i32());
+	v2i32_t adj = _and_v2i32(
+		_andn_v2i32(mask, _swap_v2i32(mask)),
 		_seta_v2i32(tzcnt(~path_array) - 1, tzcnt(path_array)));
 	idx = _min_v2i32(_add_v2i32(idx, adj), sidx);
 
-	debug("path_array(%llx), adj(%u, %u), idx(%u, %u)",
-		path_array, _hi32(adj), _lo32(adj), _hi32(idx), _lo32(idx));
+	debug("path_array(%llx), adj(%u, %u), mask(%u, %u), idx(%u, %u), sidx(%u, %u), nidx(%u, %u)",
+		path_array,
+		_hi32(adj), _lo32(adj),
+		_hi32(mask), _lo32(mask),
+		_hi32(idx), _lo32(idx),
+		_hi32(sidx), _lo32(sidx),
+		_hi32(nidx), _lo32(nidx));
 
 	/* calc path length */
 	v2i32_t tlen = _sub_v2i32(sidx, idx);
@@ -3249,7 +3255,7 @@ struct trace_boundary_s trace_cat_section(
 
 	/* copy sections */
 	while(sh < st) {
-		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%u)", dt, sh, dt->plen, sh->plen, ppos);
+		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%llu)", dt, sh, dt->plen, sh->plen, ppos);
 		*dt = *sh;
 		dt++->ppos = ppos;
 		ppos += sh++->plen;
