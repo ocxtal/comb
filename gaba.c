@@ -5455,6 +5455,46 @@ unittest(with_seq_pair("GACGTACGTGACGTACGT", "ACGTACGT"))
 	gaba_dp_clean(d);
 }
 
+unittest(with_seq_pair("ACGTACGT", "GACGTACGTGACGTACGT"))
+{
+	omajinai();
+
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+
+	/* fw */
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 20, 34, 2, 0, 0, 0, 0), print_result(r));
+	assert(check_path(r, "DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "1I8M1I8M"), print_path(r));
+	assert(check_section(r->sec[0], s->afsec, 0, 8, s->bfsec, 0, 10, 0, 18), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 0, 8, s->bfsec, 10, 8, 18, 16), print_section(r->sec[1]));
+
+	/* rv */
+	r = gaba_dp_trace(d, NULL, f, NULL);
+	assert(check_result(r, 20, 34, 2, 1, 17, 8, 18), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"), print_path(r));
+	assert(check_cigar(r, "8M1I8M1I"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 9, 9, 17, 17), print_section(r->sec[1]));
+
+	/* fw-rv */
+	r = gaba_dp_trace(d, f, f, NULL);
+	assert(check_result(r, 40, 68, 4, 2, 0, 0, 0), print_result(r));
+	assert(check_path(r,
+		"DRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDRD"
+		"DDRDRDRDRDRDRDRDRDDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "8M1I8M2I8M1I8M"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 8, s->brsec, 0, 9, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 9, 9, 17, 17), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 8, s->bfsec, 0, 10, 34, 18), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 10, 8, 52, 16), print_section(r->sec[3]));
+
+	gaba_dp_clean(d);
+}
+
 
 /* cross tests */
 
