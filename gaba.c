@@ -342,12 +342,10 @@ struct gaba_writer_work_s {
 	struct gaba_joint_tail_s const *btail;/** (8) */
 
 	/** path pointers */
-	struct gaba_path_intl_s spath;		/** (24) */
+	struct gaba_path_intl_s cpath;		/** (24) */
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	struct gaba_path_intl_s cpath;		/** (24) */
-
 	/** block pointers */
 	struct gaba_block_s const *blk;		/** (8) current block */
 
@@ -356,10 +354,6 @@ struct gaba_writer_work_s {
 	int32_t p;							/** (4) */
 	int32_t q;							/** (4) */
 
-	uint64_t _pad1[2];					/** (16) */
-	/** 64, 128 */
-
-	/** 64byte aligned */
 	/** save */
 	int32_t alen, blen;					/** (8) section lengths */
 	uint32_t aid, bid;					/** (8) */
@@ -367,9 +361,13 @@ struct gaba_writer_work_s {
 	int64_t psum;						/** (8) */
 	int64_t pspos;						/** (8) */
 
+	/** 64, 128 */
+
+	/** 64byte aligned */
+
 	/* section info */
 	struct gaba_sec_arr_s sec;			/** (16) */
-	uint64_t _pad2;						/** (8) */
+	uint64_t _pad[6];					/** (48) */
 
 	/** 64, 192 */
 };
@@ -2926,10 +2924,6 @@ void trace_forward_push(
 
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
-
-	/* update path and rem */
-	// this->w.l.spath.head = this->w.l.cpath.head;
-	// this->w.l.spath.hofs = this->w.l.cpath.hofs;
 	return;
 }
 
@@ -2973,9 +2967,7 @@ void trace_reverse_push(
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
 
-	/* update path, rem, and pspos */
-	// this->w.l.spath.tail = this->w.l.cpath.tail;
-	// this->w.l.spath.tofs = this->w.l.cpath.tofs;
+	/* update pspos */
 	this->w.l.pspos = ppos + plen;
 
 	/* windback pointer */
@@ -3000,7 +2992,6 @@ void trace_init_work(
 	this->w.l.btail = tail;
 
 	/* store path object and section array object */
-	// this->w.l.cpath = this->w.l.spath = *path;
 	this->w.l.cpath = *path;
 	struct gaba_block_s const *blk = leaf->blk;
 	this->w.l.blk = blk;
