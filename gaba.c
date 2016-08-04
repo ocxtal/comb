@@ -2892,6 +2892,16 @@ void trace_forward_push(
 	v2i32_t idx = _load_v2i32(&this->w.l.aidx);
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
+	/* adjust breakpoint */
+	uint64_t const path_array = (uint64_t)*this->w.l.cpath.head>>(32 - this->w.l.cpath.hofs);
+	v2i32_t adj = _andn_v2i32(
+		_eq_v2i32(idx, _zero_v2i32()),
+		_seta_v2i32(tzcnt(~path_array) - 1, tzcnt(path_array)));
+	idx = _min_v2i32(_add_v2i32(idx, adj), sidx);
+
+	debug("path_array(%llx), adj(%u, %u), idx(%u, %u)",
+		path_array, _hi32(adj), _lo32(adj), _hi32(idx), _lo32(idx));
+
 	/* calc path length */
 	v2i32_t tlen = _sub_v2i32(sidx, idx);
 	int64_t plen = _lo32(tlen) + _hi32(tlen);
@@ -2918,8 +2928,8 @@ void trace_forward_push(
 	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path and rem */
-	this->w.l.spath.head = this->w.l.cpath.head;
-	this->w.l.spath.hofs = this->w.l.cpath.hofs;
+	// this->w.l.spath.head = this->w.l.cpath.head;
+	// this->w.l.spath.hofs = this->w.l.cpath.hofs;
 	return;
 }
 
@@ -2964,8 +2974,8 @@ void trace_reverse_push(
 	_store_v2i32(&this->w.l.asidx, idx);
 
 	/* update path, rem, and pspos */
-	this->w.l.spath.tail = this->w.l.cpath.tail;
-	this->w.l.spath.tofs = this->w.l.cpath.tofs;
+	// this->w.l.spath.tail = this->w.l.cpath.tail;
+	// this->w.l.spath.tofs = this->w.l.cpath.tofs;
 	this->w.l.pspos = ppos + plen;
 
 	/* windback pointer */
@@ -2990,7 +3000,8 @@ void trace_init_work(
 	this->w.l.btail = tail;
 
 	/* store path object and section array object */
-	this->w.l.cpath = this->w.l.spath = *path;
+	// this->w.l.cpath = this->w.l.spath = *path;
+	this->w.l.cpath = *path;
 	struct gaba_block_s const *blk = leaf->blk;
 	this->w.l.blk = blk;
 
@@ -5408,6 +5419,47 @@ unittest(with_seq_pair("ACGTACGT", "GACGTACGT"))
 	assert(check_section(r->sec[1], s->arsec, 0, 8, s->brsec, 0, 9, 17, 17), print_section(r->sec[1]));
 	assert(check_section(r->sec[2], s->afsec, 0, 8, s->bfsec, 0, 9, 34, 17), print_section(r->sec[2]));
 	assert(check_section(r->sec[3], s->afsec, 0, 8, s->bfsec, 0, 9, 51, 17), print_section(r->sec[3]));
+
+	gaba_dp_clean(d);
+}
+
+/* breakpoint adjustment */
+unittest(with_seq_pair("GACGTACGTGACGTACGT", "ACGTACGT"))
+{
+	omajinai();
+
+	struct gaba_fill_s *f = gaba_dp_fill_root(d, &s->afsec, 0, &s->bfsec, 0);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
+	f = gaba_dp_fill(d, f, &s->afsec, &s->bftail);
+	f = gaba_dp_fill(d, f, &s->aftail, &s->bftail);
+
+	/* fw */
+	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
+	assert(check_result(r, 20, 34, 2, 0, 0, 0, 0), print_result(r));
+	assert(check_path(r, "RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "1D8M1D8M"), print_path(r));
+	assert(check_section(r->sec[0], s->afsec, 0, 10, s->bfsec, 0, 8, 0, 18), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->afsec, 10, 8, s->bfsec, 0, 8, 18, 16), print_section(r->sec[1]));
+
+	/* rv */
+	r = gaba_dp_trace(d, NULL, f, NULL);
+	assert(check_result(r, 20, 34, 2, 1, 17, 18, 8), print_result(r));
+	assert(check_path(r, "DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"), print_path(r));
+	assert(check_cigar(r, "8M1D8M1D"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 9, 9, s->brsec, 0, 8, 17, 17), print_section(r->sec[1]));
+
+	/* fw-rv */
+	r = gaba_dp_trace(d, f, f, NULL);
+	assert(check_result(r, 40, 68, 4, 2, 0, 0, 0), print_result(r));
+	assert(check_path(r,
+		"DRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDRR"
+		"RDRDRDRDRDRDRDRDRRDRDRDRDRDRDRDRDR"), print_path(r));
+	assert(check_cigar(r, "8M1D8M2D8M1D8M"), print_path(r));
+	assert(check_section(r->sec[0], s->arsec, 0, 9, s->brsec, 0, 8, 0, 17), print_section(r->sec[0]));
+	assert(check_section(r->sec[1], s->arsec, 9, 9, s->brsec, 0, 8, 17, 17), print_section(r->sec[1]));
+	assert(check_section(r->sec[2], s->afsec, 0, 10, s->bfsec, 0, 8, 34, 18), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 10, 8, s->bfsec, 0, 8, 52, 16), print_section(r->sec[3]));
 
 	gaba_dp_clean(d);
 }
