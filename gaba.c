@@ -6043,6 +6043,17 @@ unittest()
 		assert(check_path(r, n.path), "\n%s\n%s\n%s",
 			a, b, format_string_pair_diff(decode_path(r), n.path));
 
+		int64_t acnt = 0, bcnt = 0;
+		for(int64_t i = 0; i < r->path->len; i++) {
+			if(((r->path->array[i / 32]>>(i & 31)) & 0x01) == 0) {
+				acnt++;
+			} else {
+				bcnt++;
+			}
+		}
+		assert(acnt == r->sec[0].alen, "acnt(%lld), alen(%u)", acnt, r->sec[0].alen);
+		assert(bcnt == r->sec[0].blen, "bcnt(%lld), blen(%u)", bcnt, r->sec[0].blen);
+
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
 			r->score, n.score, n.alen, n.blen,
 			format_string_pair_diff(decode_path(r), n.path));
