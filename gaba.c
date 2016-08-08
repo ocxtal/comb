@@ -2177,6 +2177,8 @@ void leaf_save_coordinates(
 		_load_v2i32(&(blk - 1)->aridx),
 		_seta_v2i32((BLK - 1 - q) - bcnt, q - acnt));
 	_store_v2i32(&leaf->aridx, ridx);
+	debug("idx(%lld), fcnt(%lld), p(%d), q(%d), cnt(%d, %d), ridx(%u, %u)",
+		mask_idx, filled_count, p, q, bcnt, acnt, _hi32(ridx), _lo32(ridx));
 	
 	/* store p and q */
 	leaf->p = p;
@@ -2441,7 +2443,7 @@ void trace_load_section_b(
 	/* calc idx of the head of the block from ridx */ \
 	v2i32_t ridx = _load_v2i32(&blk->aridx); \
 	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
-	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32(q, (BW - 1) - q)); \
+	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32((BW - 1) - q, q)); \
 	debug("calc_index p(%lld), q(%lld)", p, q); \
 	_print_v2i32(ridx); \
 	_print_v2i32(len); \
