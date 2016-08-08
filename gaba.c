@@ -340,7 +340,7 @@ struct gaba_writer_work_s {
 	struct gaba_joint_tail_s const *btail;/** (8) */
 
 	/** path pointers */
-	struct gaba_path_intl_s cpath;		/** (24) */
+	struct gaba_path_intl_s path;		/** (24) */
 	/** 64, 64 */
 
 	/** 64byte aligned */
@@ -2341,14 +2341,14 @@ void trace_load_section_b(
 		p, q, mask_h, mask_v, path_array);
 
 #define _trace_forward_load_context(t) \
-	uint32_t *path = (t)->w.l.cpath.head; \
-	int64_t ofs = (t)->w.l.cpath.hofs; \
+	uint32_t *path = (t)->w.l.path.head; \
+	int64_t ofs = (t)->w.l.path.hofs; \
 	uint64_t path_array = _loadu_u64(path - 1)>>(2*BLK - ofs); \
 	_trace_load_context(t);
 
 #define _trace_reverse_load_context(t) \
-	uint32_t *path = (t)->w.l.cpath.tail; \
-	int64_t ofs = (t)->w.l.cpath.tofs; \
+	uint32_t *path = (t)->w.l.path.tail; \
+	int64_t ofs = (t)->w.l.path.tofs; \
 	uint64_t path_array = _loadu_u64(path)<<(2*BLK - ofs); \
 	_trace_load_context(t);
 
@@ -2637,13 +2637,13 @@ void trace_load_section_b(
 	debug("p(%lld), psum(%lld), q(%llu)", p, (t)->w.l.psum, q); \
 }
 #define _trace_forward_save_context(t) { \
-	(t)->w.l.cpath.head = path; \
-	(t)->w.l.cpath.hofs = ofs; \
+	(t)->w.l.path.head = path; \
+	(t)->w.l.path.hofs = ofs; \
 	_trace_save_context(t); \
 }
 #define _trace_reverse_save_context(t) { \
-	(t)->w.l.cpath.tail = path; \
-	(t)->w.l.cpath.tofs = ofs; \
+	(t)->w.l.path.tail = path; \
+	(t)->w.l.path.tofs = ofs; \
 	_trace_save_context(t); \
 }
 
@@ -2859,7 +2859,7 @@ void trace_forward_push(
 	v2i32_t sidx = _load_v2i32(&this->w.l.asidx);
 
 	/* adjust breakpoint */
-	uint64_t const path_array = *((uint64_t *)this->w.l.cpath.head)>>(32 - this->w.l.cpath.hofs);
+	uint64_t const path_array = *((uint64_t *)this->w.l.path.head)>>(32 - this->w.l.path.hofs);
 	v2i32_t mask = _eq_v2i32(idx, _zero_v2i32());
 	v2i32_t adj = _and_v2i32(
 		_andn_v2i32(mask, _swap_v2i32(mask)),
@@ -2966,7 +2966,7 @@ void trace_init_work(
 	this->w.l.btail = tail;
 
 	/* store path object and section array object */
-	this->w.l.cpath = *path;
+	this->w.l.path = *path;
 	struct gaba_block_s const *blk = leaf->blk;
 	this->w.l.blk = blk;
 
@@ -3013,7 +3013,7 @@ void trace_clean_work(
 	struct gaba_path_intl_s *path,
 	struct gaba_sec_arr_s *sec)
 {
-	*path = this->w.l.cpath;
+	*path = this->w.l.path;
 	*sec = this->w.l.sec;
 	return;
 }
