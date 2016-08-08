@@ -79,8 +79,6 @@
 #define BW 							( 0x01<<BW_BASE )
 #define BLK_BASE					( 5 )
 #define BLK 						( 0x01<<BLK_BASE )
-#define MAX_BW						( 32 )
-#define MAX_BLK						( 32 )
 #define mask_t						uint32_t
 
 
@@ -145,8 +143,8 @@ _static_assert(sizeof(union gaba_dir_u) == 8);
  * @struct gaba_small_delta_s
  */
 struct gaba_small_delta_s {
-	int8_t delta[MAX_BW];		/** (32) small delta */
-	int8_t max[MAX_BW];			/** (32) max */
+	int8_t delta[BW];			/** (32) small delta */
+	int8_t max[BW];				/** (32) max */
 };
 _static_assert(sizeof(struct gaba_small_delta_s) == 64);
 
@@ -154,7 +152,7 @@ _static_assert(sizeof(struct gaba_small_delta_s) == 64);
  * @struct gaba_middle_delta_s
  */
 struct gaba_middle_delta_s {
-	int16_t delta[MAX_BW];		/** (64) middle delta */
+	int16_t delta[BW];		/** (64) middle delta */
 };
 _static_assert(sizeof(struct gaba_middle_delta_s) == 64);
 
@@ -187,8 +185,8 @@ _static_assert(sizeof(union gaba_mask_pair_u) == 16);
  * @struct gaba_diff_vec_s
  */
 struct gaba_diff_vec_s {
-	uint8_t dh[MAX_BW];			/** (32) dh in the lower 5bits, de in the higher 3bits */
-	uint8_t dv[MAX_BW];			/** (32) dv in the lower 5bits, df in the higher 3bits */
+	uint8_t dh[BW];				/** (32) dh in the lower 5bits, de in the higher 3bits */
+	uint8_t dv[BW];				/** (32) dv in the lower 5bits, df in the higher 3bits */
 };
 _static_assert(sizeof(struct gaba_diff_vec_s) == 64);
 
@@ -196,7 +194,7 @@ _static_assert(sizeof(struct gaba_diff_vec_s) == 64);
  * @struct gaba_char_vec_s
  */
 struct gaba_char_vec_s {
-	uint8_t w[MAX_BW];					/** (32) a in the lower 4bit, b in the higher 4bit */
+	uint8_t w[BW];				/** (32) a in the lower 4bit, b in the higher 4bit */
 };
 _static_assert(sizeof(struct gaba_char_vec_s) == 32);
 
@@ -204,7 +202,7 @@ _static_assert(sizeof(struct gaba_char_vec_s) == 32);
  * @struct gaba_block_s
  */
 struct gaba_block_s {
-	union gaba_mask_pair_u mask[MAX_BLK];/** (256 / 512) mask vectors */
+	union gaba_mask_pair_u mask[BLK];/** (256 / 512) mask vectors */
 	struct gaba_diff_vec_s diff; 		/** (64) */
 	struct gaba_small_delta_s sd;		/** (64) */
 	union gaba_dir_u dir;				/** (8) */
@@ -285,7 +283,7 @@ struct gaba_merge_tail_s {
 	uint32_t aid, bid;			/** (8) id */
 
 	/* tail array */
-	uint8_t tail_idx[2][MAX_BW];	/** (64) array of index of joint_tail */
+	uint8_t tail_idx[2][BW];	/** (64) array of index of joint_tail */
 };
 _static_assert(sizeof(struct gaba_merge_tail_s) == 128);
 
@@ -323,8 +321,8 @@ struct gaba_reader_work_s {
 	/** 64, 64 */
 
 	/** 64byte aligned */
-	uint8_t bufa[MAX_BW + MAX_BLK];		/** (64) */
-	uint8_t bufb[MAX_BW + MAX_BLK];		/** (64) */
+	uint8_t bufa[BW + BLK];				/** (64) */
+	uint8_t bufb[BW + BLK];				/** (64) */
 	/** 128, 192 */
 };
 _static_assert(sizeof(struct gaba_reader_work_s) == 192);
@@ -1280,25 +1278,25 @@ struct gaba_joint_tail_s *fill_create_tail(
 }
 
 /**
- * @macro _fill_load_contexts
+ * @macro _fill_load_context
  * @brief load vectors onto registers
  */
 #if MODEL == LINEAR
-#define _fill_load_contexts(_blk) \
+#define _fill_load_context(_blk) \
 	debug("blk(%p)", (_blk)); \
 	/* load sequence buffer offset */ \
 	uint8_t const *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t const *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
-	union gaba_mask_pair_u *mask_ptr = (_blk)->mask; \
+	union gaba_mask_pair_u *ptr = (_blk)->mask; \
 	/* load vector registers */ \
-	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
-	vec_t register dv = _load(_pv(((_blk) - 1)->diff.dv)); \
+	vec_t register dh = _load(((_blk) - 1)->diff.dh); \
+	vec_t register dv = _load(((_blk) - 1)->diff.dv); \
 	_print(_add(dh, _load_ofsh(this->scv))); \
 	_print(_add(dv, _load_ofsv(this->scv))); \
 	/* load delta vectors */ \
-	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
-	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
+	vec_t register delta = _load(((_blk) - 1)->sd.delta); \
+	vec_t register max = _load(((_blk) - 1)->sd.max); \
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md))); \
 	/* load direction determiner */ \
@@ -1307,17 +1305,17 @@ struct gaba_joint_tail_s *fill_create_tail(
 	int64_t offset = ((_blk) - 1)->offset; \
 	debug("offset(%lld)", offset);
 #else
-#define _fill_load_contexts(_blk) \
+#define _fill_load_context(_blk) \
 	debug("blk(%p)", (_blk)); \
 	/* load sequence buffer offset */ \
 	uint8_t const *aptr = _rd_bufa(this, 0, BW); \
 	uint8_t const *bptr = _rd_bufb(this, 0, BW); \
 	/* load mask pointer */ \
-	union gaba_mask_pair_u *mask_ptr = (_blk)->mask; \
+	union gaba_mask_pair_u *ptr = (_blk)->mask; \
 	/* load vector registers */ \
 	vec_t const mask = _set(0x07); \
-	vec_t register dh = _load(_pv(((_blk) - 1)->diff.dh)); \
-	vec_t register dv = _load(_pv(((_blk) - 1)->diff.dv)); \
+	vec_t register dh = _load(((_blk) - 1)->diff.dh); \
+	vec_t register dv = _load(((_blk) - 1)->diff.dv); \
 	vec_t register de = _and(mask, dh); \
 	vec_t register df = _and(mask, dv); \
 	dh = _shr(_andn(mask, dh), 3); \
@@ -1330,8 +1328,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(_sub(_sub(de, dv), _load_adjh(this->scv))); \
 	_print(_sub(_add(df, dh), _load_adjv(this->scv))); \
 	/* load delta vectors */ \
-	vec_t register delta = _load(_pv(((_blk) - 1)->sd.delta)); \
-	vec_t register max = _load(_pv(((_blk) - 1)->sd.max)); \
+	vec_t register delta = _load(((_blk) - 1)->sd.delta); \
+	vec_t register max = _load(((_blk) - 1)->sd.max); \
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md))); \
 	/* load direction determiner */ \
@@ -1353,10 +1351,10 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(t); \
 	t = _max(dh, t); \
 	t = _max(dv, t); \
-	mask_ptr->pair.h.mask = _mask(_eq(t, dv)); \
-	mask_ptr->pair.v.mask = _mask(_eq(t, dh)); \
-	debug("mask(%llx)", mask_ptr->all); \
-	mask_ptr++; \
+	ptr->pair.h.mask = _mask(_eq(t, dv)); \
+	ptr->pair.v.mask = _mask(_eq(t, dh)); \
+	debug("mask(%llx)", ptr->all); \
+	ptr++; \
 	vec_t _dv = _sub(t, dh); \
 	dh = _sub(t, dv); \
 	dv = _dv; \
@@ -1372,22 +1370,22 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(t); \
 	t = _max(de, t); \
 	t = _max(df, t); \
-	mask_ptr->pair.h.mask = _mask(_eq(t, de)); \
-	mask_ptr->pair.v.mask = _mask(_eq(t, df)); \
-	debug("mask(%llx)", mask_ptr->all); \
+	ptr->pair.h.mask = _mask(_eq(t, de)); \
+	ptr->pair.v.mask = _mask(_eq(t, df)); \
+	debug("mask(%llx)", ptr->all); \
 	/* update de and dh */ \
 	de = _add(de, _load_adjh(this->scv)); \
 	vec_t te = _max(de, t); \
-	mask_ptr->pair.e.mask = _mask(_eq(te, de)); \
+	ptr->pair.e.mask = _mask(_eq(te, de)); \
 	de = _add(te, dh); \
 	dh = _add(dh, t); \
 	/* update df and dv */ \
 	df = _add(df, _load_adjv(this->scv)); \
 	vec_t tf = _max(df, t); \
-	mask_ptr->pair.f.mask = _mask(_eq(tf, df)); \
+	ptr->pair.f.mask = _mask(_eq(tf, df)); \
 	df = _sub(tf, dv); \
 	t = _sub(dv, t); \
-	mask_ptr++; \
+	ptr++; \
 	dv = dh; dh = t; \
 	_print(_add(dh, _load_ofsh(this->scv))); \
 	_print(_add(dv, _load_ofsv(this->scv))); \
@@ -1471,13 +1469,13 @@ struct gaba_joint_tail_s *fill_create_tail(
 #if MODEL == LINEAR
 #define _fill_store_vectors(_blk) ({ \
 	/* store diff vectors */ \
-	_store(_pv((_blk)->diff.dh), dh); \
-	_store(_pv((_blk)->diff.dv), dv); \
+	_store((_blk)->diff.dh, dh); \
+	_store((_blk)->diff.dv, dv); \
 	_print(dh); \
 	_print(dv); \
 	/* store delta vectors */ \
-	_store(_pv((_blk)->sd.delta), delta); \
-	_store(_pv((_blk)->sd.max), max); \
+	_store((_blk)->sd.delta, delta); \
+	_store((_blk)->sd.max, max); \
 	/* store direction array */ \
 	(_blk)->dir = dir; \
 	/* store large offset */ \
@@ -1501,13 +1499,13 @@ struct gaba_joint_tail_s *fill_create_tail(
 	dv = _shl(dv, 3); \
 	_print(dh); \
 	_print(dv); \
-	_store(_pv((_blk)->diff.dh), _add(dh, de)); \
-	_store(_pv((_blk)->diff.dv), _add(dv, df)); \
+	_store((_blk)->diff.dh, _add(dh, de)); \
+	_store((_blk)->diff.dv, _add(dv, df)); \
 	_print(_add(dh, de)); \
 	_print(_add(dv, df)); \
 	/* store delta vectors */ \
-	_store(_pv((_blk)->sd.delta), delta); \
-	_store(_pv((_blk)->sd.max), max); \
+	_store((_blk)->sd.delta, delta); \
+	_store((_blk)->sd.max, max); \
 	/* store direction array */ \
 	(_blk)->dir = dir; \
 	/* store large offset */ \
@@ -1573,7 +1571,7 @@ void fill_bulk_block(
 
 	/* load vectors onto registers */
 	debug("blk(%p)", blk);
-	_fill_load_contexts(blk);
+	_fill_load_context(blk);
 	/**
 	 * @macro _fill_block
 	 * @brief an element of unrolled fill-in loop
@@ -1698,7 +1696,7 @@ struct gaba_joint_block_s fill_cap_seq_bounded(
 
 		/* vectors on registers inside this block */ {
 			_fill_cap_test_seq_bound_init(blk);
-			_fill_load_contexts(blk);
+			_fill_load_context(blk);
 
 			/* update diff vectors */
 			uint64_t i = 0;
@@ -2112,7 +2110,7 @@ void leaf_refill_block(
 		}
 
 		/* load contexts and overwrite max vector */
-		_fill_load_contexts(blk);
+		_fill_load_context(blk);
 		max = compd_max;		/* overwrite with compensated max vector */
 		(void)offset;			/* to avoid warning */
 
@@ -2308,19 +2306,17 @@ void trace_load_section_b(
 #define _trace_declare_mask() \
 	uint32_t mask_h, mask_v;
 #define _trace_load_mask() { \
-	mask_v = mask_ptr->pair.v.all; \
-	mask_h = mask_ptr->pair.h.all; \
-	mask_ptr--; \
+	mask_v = ptr->pair.v.all; \
+	mask_h = ptr->pair.h.all; \
 }
 #else /* MODEL == AFFINE */
 #define _trace_declare_mask() \
 	uint32_t mask_h, mask_v, mask_e, mask_f;
 #define _trace_load_mask() { \
-	mask_f = mask_ptr->pair.f.all; \
-	mask_e = mask_ptr->pair.e.all; \
-	mask_v = mask_ptr->pair.v.all; \
-	mask_h = mask_ptr->pair.h.all; \
-	mask_ptr--; \
+	mask_f = ptr->pair.f.all; \
+	mask_e = ptr->pair.e.all; \
+	mask_v = ptr->pair.v.all; \
+	mask_h = ptr->pair.h.all; \
 }
 #endif
 
@@ -2330,29 +2326,40 @@ void trace_load_section_b(
  */
 #define _trace_load_context(t) \
 	v2i32_t idx = _load_v2i32(&(t)->w.l.aidx); \
+	v2i32_t const hterm = _seta_v2i32(-1, 0); \
+	v2i32_t const dterm = _seta_v2i32(0, 0); \
+	v2i32_t const vterm = _seta_v2i32(0, -1); \
 	struct gaba_block_s const *blk = (t)->w.l.blk; \
 	int64_t p = (t)->w.l.p; \
 	int64_t q = (t)->w.l.q; \
-	int64_t psave = p; \
-	uint64_t prev_array = path[0]; \
-	uint64_t path_array = 0; \
 	union gaba_dir_u dir = _dir_load(blk, p & (BLK - 1)); \
-	union gaba_mask_pair_u const *mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	union gaba_mask_pair_u const *ptr = &blk->mask[p & (BLK - 1)]; \
 	_trace_declare_mask(); \
 	_trace_load_mask(); \
-	debug("p(%lld), q(%lld), mask_h(%x), mask_v(%x), path_array(%llx), prev_array(%llx)", \
-		p, q, mask_h, mask_v, path_array, prev_array);
+	_print_v2i32(idx); \
+	debug("p(%lld), q(%lld), mask_h(%x), mask_v(%x), path_array(%llx)", \
+		p, q, mask_h, mask_v, path_array);
 
 #define _trace_forward_load_context(t) \
 	uint32_t *path = (t)->w.l.cpath.head; \
 	int64_t ofs = (t)->w.l.cpath.hofs; \
+	uint64_t path_array = _loadu_u64(path - 1)>>(2*BLK - ofs); \
 	_trace_load_context(t);
 
 #define _trace_reverse_load_context(t) \
 	uint32_t *path = (t)->w.l.cpath.tail; \
 	int64_t ofs = (t)->w.l.cpath.tofs; \
+	uint64_t path_array = _loadu_u64(path)<<(2*BLK - ofs); \
 	_trace_load_context(t);
 
+
+/**
+ * @macro _trace_reload_ptr
+ */
+#define _trace_reload_ptr(_idx) { \
+	ptr = &(--blk)->mask[(_idx)]; \
+	dir = _dir_load(blk, (_idx)); \
+}
 
 /**
  * @macro _trace_reload_tail
@@ -2365,12 +2372,11 @@ void trace_load_section_b(
 	(t)->w.l.psum -= (t)->w.l.p; \
 	/* load tail */ \
 	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
-	blk = _last_block(tail); \
-	psave = p = ((t)->w.l.p = tail->p) - 1; \
+	blk = _last_block(tail) + 1; \
+	p = ((t)->w.l.p = tail->p) - 1; \
 	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
 	/* reload dir and mask pointer */ \
-	dir = _dir_load(blk, p & (BLK - 1)); \
-	mask_ptr = &blk->mask[p & (BLK - 1)]; \
+	_trace_reload_ptr(p & (BLK - 1)); \
 	_trace_load_mask(); \
 }
 
@@ -2378,27 +2384,21 @@ void trace_load_section_b(
  * @macro _trace_*_cap_update_path
  * @brief store path array and update path pointer
  */
-#define _trace_forward_cap_update_path(_traced_count) { \
-	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
-	path_array = path_array<<(BLK - (_traced_count)); \
-	path[0] = (uint32_t)(prev_array | (path_array>>ofs)); \
-	path[-1] = (uint32_t)(path_array<<(BLK - ofs)); \
-	debug("path[0](%x), path[-1](%x)", path[0], path[-1]); \
-	path -= ((ofs + (_traced_count)) & BLK) != 0; \
-	ofs = (ofs + (_traced_count)) & (BLK - 1); \
-	path_array = 0; \
-	prev_array = (uint64_t)path[0]; \
+#define _trace_forward_cap_update_path() { \
+	int64_t _cnt = (p & (BLK - 1)) + 1 - (ptr - blk->mask + 1); \
+	debug("path_array(%llx), cnt(%lld), ptr(%p), base(%p)", path_array, _cnt, ptr, blk->mask - 1); \
+	_storeu_u64(path - 1, path_array<<(2*BLK - (ofs + _cnt))); \
+	path -= ((ofs + (_cnt)) & BLK) != 0; \
+	ofs = (ofs + (_cnt)) & (BLK - 1); \
+	p -= _cnt; \
 }
-#define _trace_reverse_cap_update_path(_traced_count) { \
-	debug("path_array(%llx), prev_array(%llx), cnt(%lld)", path_array, prev_array, _traced_count); \
-	path_array = path_array>>(BLK - (_traced_count)); \
-	path[0] = (uint32_t)(prev_array | (path_array<<ofs)); \
-	path[1] = (uint32_t)(path_array>>(BLK - ofs)); \
-	debug("path[0](%x), path[1](%x)", path[0], path[1]); \
-	path += ((ofs + (_traced_count)) & BLK) != 0; \
-	ofs = (ofs + (_traced_count)) & (BLK - 1); \
-	path_array = 0; \
-	prev_array = (uint64_t)path[0]; \
+#define _trace_reverse_cap_update_path() { \
+	int64_t _cnt = (p & (BLK - 1)) + 1 - (ptr - blk->mask + 1); \
+	debug("path_array(%llx), cnt(%lld), ptr(%p), base(%p)", path_array, _cnt, ptr, blk->mask - 1); \
+	_storeu_u64(path, path_array>>(2*BLK - (ofs + _cnt))); \
+	path += ((ofs + (_cnt)) & BLK) != 0; \
+	ofs = (ofs + (_cnt)) & (BLK - 1); \
+	p -= _cnt; \
 }
 
 /**
@@ -2406,16 +2406,16 @@ void trace_load_section_b(
  * @brief store path array
  */
 #define _trace_forward_bulk_update_path() { \
-	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
-	*path-- = (uint32_t)(prev_array | (path_array>>ofs)); \
-	prev_array = (uint64_t)(*path = (uint32_t)(path_array<<(BLK - ofs))); \
-	path_array = 0; \
+	debug("path_array(%llx)", path_array); \
+	_storeu_u64(path - 1, path_array<<(BLK - ofs)); \
+	path--; \
+	p -= BLK; \
 }
 #define _trace_reverse_bulk_update_path() { \
-	debug("path_array(%llx), prev_array(%llx)", path_array, prev_array); \
-	*path++ = (uint32_t)(prev_array | (path_array<<ofs)); \
-	prev_array = (uint64_t)(*path = (uint32_t)(path_array>>(BLK - ofs))); \
-	path_array = 0; \
+	debug("path_array(%llx)", path_array); \
+	_storeu_u64(path, path_array>>(BLK - ofs)); \
+	path++; \
+	p -= BLK; \
 }
 
 /**
@@ -2432,7 +2432,7 @@ void trace_load_section_b(
 	_print_v2i32(ridx); \
 	_print_v2i32(len); \
 	_print_v2i32(idx); \
-	psave = p; \
+	/*psave = p;*/ \
 }
 #define _trace_reverse_calc_index(t) { \
 	_print_v2i32(idx); \
@@ -2444,23 +2444,16 @@ void trace_load_section_b(
 	_print_v2i32(ridx); \
 	_print_v2i32(len); \
 	_print_v2i32(idx); \
-	psave = p; \
+	/*psave = p;*/ \
 }
 
 /**
  * @macro _trace_forward_*_load
  */
 #define _trace_forward_head_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
-		int64_t loop_count = (p & (BLK - 1)) + 1; \
-		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
-			loop_count, blk, blk-1, p, p - loop_count); \
-		/* store path_array and update rem */ \
-		_trace_forward_cap_update_path(loop_count); \
-		p -= loop_count; \
-		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+	if(ptr == blk->mask - 1) { \
+		_trace_forward_cap_update_path(); \
+		_trace_reload_ptr(BLK - 1); \
 		_trace_load_mask(); \
 		debug("jump to %s", #_jump_to); \
 		goto _jump_to; \
@@ -2468,18 +2461,12 @@ void trace_load_section_b(
 	_trace_load_mask(); \
 }
 #define _trace_forward_bulk_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
-		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
-			blk, blk-1, p, p - BLK); \
-		/* store path_array */ \
+	if(ptr == blk->mask - 1) { \
 		_trace_forward_bulk_update_path(); \
-		p -= BLK; \
-		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+		_trace_reload_ptr(BLK - 1); \
 		if(p < 2 * BLK) { \
-			_trace_load_mask(); \
 			_trace_forward_calc_index(t); \
+			_trace_load_mask(); \
 			debug("jump to %s", #_jump_to); \
 			goto _jump_to; \
 		} \
@@ -2487,12 +2474,11 @@ void trace_load_section_b(
 	_trace_load_mask(); \
 }
 #define _trace_forward_tail_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
+	if(ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
 			blk, blk-1, p); \
 		/* store path_array */ \
-		_trace_forward_cap_update_path(psave - p); \
-		psave = p; \
+		_trace_forward_cap_update_path(); \
 		if(p < 0) { \
 			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
 			if((t)->w.l.psum < (t)->w.l.p - p) { \
@@ -2503,8 +2489,7 @@ void trace_load_section_b(
 			goto _jump_to; \
 		} \
 		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+		_trace_reload_ptr(BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -2513,16 +2498,9 @@ void trace_load_section_b(
  * @macro _trace_reverse_*_load
  */
 #define _trace_reverse_head_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
-		int64_t loop_count = (p & (BLK - 1)) + 1; \
-		debug("load block, loop_count(%lld), blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
-			loop_count, blk, blk-1, p, p - loop_count); \
-		/* store path_array and update rem */ \
-		_trace_reverse_cap_update_path(loop_count); \
-		p -= loop_count; \
-		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+	if(ptr == blk->mask - 1) { \
+		_trace_reverse_cap_update_path(); \
+		_trace_reload_ptr(BLK - 1); \
 		_trace_load_mask(); \
 		debug("jump to %s", #_jump_to); \
 		goto _jump_to; \
@@ -2530,18 +2508,12 @@ void trace_load_section_b(
 	_trace_load_mask(); \
 }
 #define _trace_reverse_bulk_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
-		debug("load block, blk(%p), next_blk(%p), p(%lld), next_p(%lld)", \
-			blk, blk-1, p, p - BLK); \
-		/* store path_array */ \
+	if(ptr == blk->mask - 1) { \
 		_trace_reverse_bulk_update_path(); \
-		p -= BLK; \
-		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+		_trace_reload_ptr(BLK - 1); \
 		if(p < 2 * BLK) { \
-			_trace_load_mask(); \
 			_trace_reverse_calc_index(t); \
+			_trace_load_mask(); \
 			debug("jump to %s", #_jump_to); \
 			goto _jump_to; \
 		} \
@@ -2549,12 +2521,11 @@ void trace_load_section_b(
 	_trace_load_mask(); \
 }
 #define _trace_reverse_tail_load(t, _jump_to) { \
-	if(mask_ptr == blk->mask - 1) { \
+	if(ptr == blk->mask - 1) { \
 		debug("load block, blk(%p), next_blk(%p), p(%lld)", \
 			blk, blk-1, p); \
 		/* store path_array */ \
-		_trace_reverse_cap_update_path(psave - p); \
-		psave = p; \
+		_trace_reverse_cap_update_path(); \
 		if(p < 0) { \
 			debug("w.l.psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
 			if((t)->w.l.psum < (t)->w.l.p - p) { \
@@ -2565,8 +2536,7 @@ void trace_load_section_b(
 			goto _jump_to; \
 		} \
 		/* load dir and update mask pointer */ \
-		mask_ptr = &(--blk)->mask[BLK - 1]; \
-		dir = _dir_load(blk, BLK - 1); \
+		_trace_reload_ptr(BLK - 1); \
 	} \
 	_trace_load_mask(); \
 }
@@ -2584,13 +2554,13 @@ void trace_load_section_b(
 #define _trace_bulk_h_test_index()		( 0 )
 
 #define _trace_tail_v_test_index() ( \
-	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_10 \
+	_mask_v2i32(_eq_v2i32(idx, vterm)) \
 )
 #define _trace_tail_d_test_index() ( \
-	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) \
+	_mask_v2i32(_eq_v2i32(idx, dterm)) \
 )
 #define _trace_tail_h_test_index() ( \
-	_mask_v2i32(_eq_v2i32(idx, _zero_v2i32())) & V2I32_MASK_01 \
+	_mask_v2i32(_eq_v2i32(idx, hterm)) \
 )
 
 /**
@@ -2604,12 +2574,10 @@ void trace_load_section_b(
 #define _trace_bulk_h_update_index()	;
 
 #define _trace_tail_v_update_index() { \
-	p--; \
-	idx = _sub_v2i32(idx, _seta_v2i32(1, 0)); \
+	idx = _add_v2i32(idx, hterm); \
 }
 #define _trace_tail_h_update_index() { \
-	p--; \
-	idx = _sub_v2i32(idx, _seta_v2i32(0, 1)); \
+	idx = _add_v2i32(idx, vterm); \
 }
 
 /**
@@ -2633,21 +2601,25 @@ void trace_load_section_b(
  */
 #define _trace_forward_h_update_path_q() { \
 	path_array = path_array<<1; \
+	ptr--; \
 	q += _dir_is_down(dir); \
 	_dir_windback(dir); \
 }
 #define _trace_forward_v_update_path_q() { \
 	path_array = (path_array<<1) | 0x01; \
+	ptr--; \
 	q += _dir_is_down(dir) - 1; \
 	_dir_windback(dir); \
 }
 #define _trace_reverse_h_update_path_q() { \
 	path_array = path_array>>1; \
+	ptr--; \
 	q += _dir_is_down(dir); \
 	_dir_windback(dir); \
 }
 #define _trace_reverse_v_update_path_q() { \
-	path_array = (path_array>>1) | 0x80000000; \
+	path_array = (path_array>>1) | 0x8000000000000000; \
+	ptr--; \
 	q += _dir_is_down(dir) - 1; \
 	_dir_windback(dir); \
 }
@@ -2691,8 +2663,8 @@ void trace_forward_body(
 			if(_trace_##_type##_##_label##_test_index()) { \
 				goto _trace_forward_index_break; \
 			} \
-			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
-				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), ptr(%p), path_array(%llx)", \
+				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, ptr, path_array); \
 			_trace_##_type##_##_label##_update_index(); \
 			_trace_forward_##_label##_update_path_q(); \
 			_trace_forward_##_type##_load(t, _trace_forward_##_next##_##_label##_head); \
@@ -2706,11 +2678,11 @@ void trace_forward_body(
 				goto _trace_forward_##_type##_h_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
-				_trace_forward_cap_update_path(psave - p); \
+				_trace_forward_cap_update_path(); \
 				goto _trace_forward_index_break; \
 			} \
-			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
-				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), ptr(%p), path_array(%llx)", \
+				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, ptr, path_array); \
 			_trace_##_type##_h_update_index(); \
 			_trace_forward_h_update_path_q(); \
 			_trace_forward_##_type##_load(t, _trace_forward_##_next##_d_mid); \
@@ -2726,8 +2698,6 @@ void trace_forward_body(
 	}
 
 	_trace_forward_load_context(this);
-
-	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
 	/* v loop */
 	_trace_forward_loop_v_head: {
@@ -2791,8 +2761,8 @@ void trace_reverse_body(
 			if(_trace_##_type##_##_label##_test_index()) { \
 				goto _trace_reverse_index_break; \
 			} \
-			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
-				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			debug("go %s (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), ptr(%p), path_array(%llx)", \
+				#_label, #_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, ptr, path_array); \
 			_trace_##_type##_##_label##_update_index(); \
 			_trace_reverse_##_label##_update_path_q(); \
 			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_##_label##_head); \
@@ -2806,11 +2776,11 @@ void trace_reverse_body(
 				goto _trace_reverse_##_type##_v_head; \
 			} \
 			if(_trace_##_type##_d_test_index()) { \
-				_trace_reverse_cap_update_path(psave - p); \
+				_trace_reverse_cap_update_path(); \
 				goto _trace_reverse_index_break; \
 			} \
-			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), mask_ptr(%p), path_array(%llx), prev_array(%llx)", \
-				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, mask_ptr, path_array, prev_array); \
+			debug("go d (%s), dir(%llx), mask_h(%x), mask_v(%x), p(%lld), q(%lld), ptr(%p), path_array(%llx)", \
+				#_type, ((uint64_t)dir.dynamic.array), mask_h, mask_v, p, q, ptr, path_array); \
 			_trace_##_type##_v_update_index(); \
 			_trace_reverse_v_update_path_q(); \
 			_trace_reverse_##_type##_load(t, _trace_reverse_##_next##_d_mid); \
@@ -2826,8 +2796,6 @@ void trace_reverse_body(
 	}
 
 	_trace_reverse_load_context(this);
-
-	debug("p(%lld), q(%lld), path_array(%llx), prev_array(%llx)", p, q, path_array, prev_array);
 
 	/* h loop */
 	_trace_reverse_loop_h_head: {
@@ -3306,7 +3274,7 @@ struct gaba_result_s trace_init_alignment(
 		+ ((lmm == NULL) ? gaba_dp_malloc(this, size) : lmm_malloc(lmm, size)));
 	// struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin + lmm_malloc(lmm, size));
 
-	debug("malloc trace mem(%p), lmm(%p), lim(%p)", aln, lmm, lmm->lim);
+	debug("malloc trace mem(%p), lmm(%p), lim(%p)", aln, lmm, (lmm != NULL) ? lmm->lim : NULL);
 
 	aln->lmm = (void *)lmm;
 	aln->score = fw_tail->max + rv_tail->max + this->m * params->k;
@@ -5635,6 +5603,8 @@ struct unittest_naive_result_s unittest_naive(
 
 	result.alen = result.apos - max.apos;
 	result.blen = result.bpos - max.bpos;
+	result.apos = max.apos;
+	result.bpos = max.bpos;
 
 	result.path_length -= path_index;
 	for(uint64_t i = 0; i < result.path_length; i++) {
@@ -5765,6 +5735,8 @@ struct unittest_naive_result_s unittest_naive(
 
 	result.alen = result.apos - max.apos;
 	result.blen = result.bpos - max.bpos;
+	result.apos = max.apos;
+	result.bpos = max.bpos;
 
 	result.path_length -= path_index;
 	for(uint64_t i = 0; i < result.path_length; i++) {
@@ -6053,18 +6025,23 @@ unittest()
 			debug("refill f2(%lld, %u)", f2->max, f2->status);
 		}
 
-		/* generate trace */
+		/* forward trace */
 		struct gaba_alignment_s *r = gaba_dp_trace(d, m, NULL, NULL);
 
 		/* check results */
 		assert(r->score == n.score, "m->max(%lld), r->score(%lld), n.score(%d)",
 			m->max, r->score, n.score);
+		assert(r->sec[0].apos == n.apos, "apos(%u, %lld)", r->sec[0].apos, n.apos);
+		assert(r->sec[0].bpos == n.bpos, "bpos(%u, %lld)", r->sec[0].bpos, n.bpos);
+		assert(r->sec[0].alen == n.alen, "alen(%u, %lld)", r->sec[0].alen, n.alen);
+		assert(r->sec[0].blen == n.blen, "blen(%u, %lld)", r->sec[0].blen, n.blen);
 		assert(check_path(r, n.path), "\n%s\n%s\n%s",
 			a, b, format_string_pair_diff(decode_path(r), n.path));
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
 			r->score, n.score, n.alen, n.blen,
 			format_string_pair_diff(decode_path(r), n.path));
+
 
 		/* cleanup */
 		gaba_dp_clean(d);

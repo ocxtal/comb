@@ -73,11 +73,10 @@
 #endif
 
 /**
- * @macro store_stream
+ * @macro _loadu_u64, _storeu_u64
  */
-#define store_stream(_ptr, _a) { \
-	_mm_stream_si64((int64_t *)(_ptr), (int64_t)(_a)); \
-}
+#define _loadu_u64(p)		( *((uint64_t *)(p)) )
+#define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
 
 /**
  * @macro _aligned_block_memcpy

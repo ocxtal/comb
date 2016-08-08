@@ -77,6 +77,12 @@
 #endif
 
 /**
+ * @macro _loadu_u64, _storeu_u64
+ */
+#define _loadu_u64(p)		( *((uint64_t *)(p)) )
+#define _storeu_u64(p, e)	{ *((uint64_t *)(p)) = (e); }
+
+/**
  * @macro _aligned_block_memcpy
  *
  * @brief copy size bytes from src to dst.
