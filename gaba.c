@@ -2329,6 +2329,9 @@ void trace_load_section_b(
 	v2i32_t const hterm = _seta_v2i32(-1, 0); \
 	v2i32_t const dterm = _seta_v2i32(0, 0); \
 	v2i32_t const vterm = _seta_v2i32(0, -1); \
+	_print_v2i32(hterm); \
+	_print_v2i32(dterm); \
+	_print_v2i32(vterm); \
 	struct gaba_block_s const *blk = (t)->w.l.blk; \
 	int64_t p = (t)->w.l.p; \
 	int64_t q = (t)->w.l.q; \
@@ -2432,7 +2435,6 @@ void trace_load_section_b(
 	_print_v2i32(ridx); \
 	_print_v2i32(len); \
 	_print_v2i32(idx); \
-	/*psave = p;*/ \
 }
 #define _trace_reverse_calc_index(t) { \
 	_print_v2i32(idx); \
@@ -2444,7 +2446,6 @@ void trace_load_section_b(
 	_print_v2i32(ridx); \
 	_print_v2i32(len); \
 	_print_v2i32(idx); \
-	/*psave = p;*/ \
 }
 
 /**
@@ -2575,9 +2576,13 @@ void trace_load_section_b(
 
 #define _trace_tail_v_update_index() { \
 	idx = _add_v2i32(idx, hterm); \
+	_print_v2i32(hterm); \
+	_print_v2i32(idx); \
 }
 #define _trace_tail_h_update_index() { \
 	idx = _add_v2i32(idx, vterm); \
+	_print_v2i32(vterm); \
+	_print_v2i32(idx); \
 }
 
 /**
@@ -2631,6 +2636,7 @@ void trace_load_section_b(
 #define _trace_save_context(t) { \
 	(t)->w.l.blk = blk; \
 	_store_v2i32(&(t)->w.l.aidx, idx); \
+	_print_v2i32(idx); \
 	(t)->w.l.psum -= (t)->w.l.p - p; \
 	(t)->w.l.p = p; \
 	(t)->w.l.q = q; \
@@ -2866,19 +2872,18 @@ void trace_forward_push(
 		_seta_v2i32(tzcnt(~path_array) - 1, tzcnt(path_array)));
 	idx = _min_v2i32(_add_v2i32(idx, adj), sidx);
 
-	debug("path_array(%llx), adj(%u, %u), mask(%u, %u), idx(%u, %u), sidx(%u, %u), nidx(%u, %u)",
+	debug("path_array(%llx), adj(%u, %u), mask(%u, %u), idx(%u, %u), sidx(%u, %u)",
 		path_array,
 		_hi32(adj), _lo32(adj),
 		_hi32(mask), _lo32(mask),
 		_hi32(idx), _lo32(idx),
-		_hi32(sidx), _lo32(sidx),
-		_hi32(nidx), _lo32(nidx));
+		_hi32(sidx), _lo32(sidx));
 
 	/* calc path length */
 	v2i32_t tlen = _sub_v2i32(sidx, idx);
 	int64_t plen = _lo32(tlen) + _hi32(tlen);
 
-	/* store section info */	
+	/* store section info */
 	_store_v2i32(&this->w.l.sec.head->aid, id);
 	_store_v2i32(&this->w.l.sec.head->apos, idx);
 	_store_v2i32(&this->w.l.sec.head->alen, tlen);
