@@ -3634,7 +3634,7 @@ int64_t suffix(gaba_dp_print_cigar)(
 			clen += _fprintf(fp, "%" PRId64 "%c", g, 'D' + ((char)(0ULL - (arr & 0x01)) & ('I' - 'D')));
 			debug("gap g(%lld)", g);
 		}
-		if((ridx -= g) <= 0) { break; }
+		if((ridx -= g) <= 1) { break; }
 	}
 	return(clen);
 }
@@ -3683,7 +3683,7 @@ int64_t suffix(gaba_dp_dump_cigar)(
 			b += parse_dump_gap_string(b, g, arr & 0x01);
 			debug("gap g(%lld)", g);
 		}
-		if((ridx -= g) <= 0 || b > blim) { break; }
+		if((ridx -= g) <= 1 || b > blim) { break; }
 	}
 	return(b - buf);
 }
