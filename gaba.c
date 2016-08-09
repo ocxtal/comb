@@ -3358,11 +3358,11 @@ struct gaba_alignment_s *trace_refine_alignment(
 		trace_cat_section(this, &rv_sec, &fw_sec);
 
 		/* cat paths */
-		uint32_t seed[2] = { 0x55555555, 0x55555555 };
+		uint32_t seed = 0x55555555;
 		trace_cat_path(this, &rv_path,
 			&((struct gaba_path_intl_s const){
-				.head = seed + 1,
-				.tail = seed + 1,
+				.head = &seed,
+				.tail = &seed,
 				.hofs = 2 * params->k,
 				.tofs = 0
 			}));
