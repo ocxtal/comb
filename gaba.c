@@ -3267,12 +3267,12 @@ struct gaba_result_s trace_init_alignment(
 
 	/* malloc trace working area */
 	uint64_t sec_len = 2 * ssum;
-	uint64_t path_len = _roundup(psum / 32, sizeof(uint32_t));
+	uint64_t path_len = _roundup(psum / 32, sizeof(uint32_t)) + 2;
 	debug("psum(%lld), path_len(%llu), sec_len(%llu)", psum, path_len, sec_len);
 
 	/* malloc pointer */
 	uint64_t sec_size = sizeof(struct gaba_path_section_s) * (sec_len + 1);
-	uint64_t path_size = sizeof(uint32_t) * (path_len + 6);
+	uint64_t path_size = sizeof(uint32_t) * (path_len + 4);
 	uint64_t size = sizeof(struct gaba_alignment_s) + path_size + sec_size
 			+ this->head_margin + this->tail_margin;
 
@@ -3358,11 +3358,11 @@ struct gaba_alignment_s *trace_refine_alignment(
 		trace_cat_section(this, &rv_sec, &fw_sec);
 
 		/* cat paths */
-		uint32_t seed = 0x55555555;
+		uint32_t seed[2] = { 0x55555555, 0x55555555 };
 		trace_cat_path(this, &rv_path,
 			&((struct gaba_path_intl_s const){
-				.head = &seed,
-				.tail = &seed,
+				.head = seed + 1,
+				.tail = seed + 1,
 				.hofs = 2 * params->k,
 				.tofs = 0
 			}));
