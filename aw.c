@@ -294,7 +294,7 @@ void sam_print_cigar(
 		(void *)aw->fp,
 		path->array,
 		curr->ppos,
-		curr->plen);
+		gaba_plen(curr));
 
 	/* print clip at the tail */
 	if(tlen > 0) {
@@ -550,7 +550,7 @@ void gpa_write_segment(
 		(void *)aw->fp,
 		path->array,
 		sec->ppos,
-		sec->plen);
+		gaba_plen(sec));
 	zfputc(aw->fp, '\t');
 
 	/* prev */
@@ -807,9 +807,9 @@ void *aw_unittest_init(
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[0] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0, 8 };
-		s[1] = (struct gaba_path_section_s){ 2, 2, 0, 0, 4, 4, 8, 8 };
-		s[2] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 16, 16 };
+		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0 /*, 8*/ };
+		s[1] = (struct gaba_path_section_s){ 2, 2, 0, 0, 4, 4, 8 /*, 8*/ };
+		s[2] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 16 /*, 16*/ };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 32;
@@ -832,9 +832,9 @@ void *aw_unittest_init(
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[1] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 5, 0, 4, 4, 4, 0, 8 };
-		s[1] = (struct gaba_path_section_s){ 2, 3, 0, 0, 4, 4, 8, 8 };
-		s[2] = (struct gaba_path_section_s){ 4, 1, 0, 0, 2, 2, 16, 4 };
+		s[0] = (struct gaba_path_section_s){ 0, 5, 0, 4, 4, 4, 0 /*, 8*/ };
+		s[1] = (struct gaba_path_section_s){ 2, 3, 0, 0, 4, 4, 8 /*, 8*/ };
+		s[2] = (struct gaba_path_section_s){ 4, 1, 0, 0, 2, 2, 16 /*, 4*/ };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 24;
@@ -857,8 +857,8 @@ void *aw_unittest_init(
 			+ 3 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[2] + 1);
-		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0, 8 };
-		s[1] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 8, 16 };
+		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0 /*, 8*/ };
+		s[1] = (struct gaba_path_section_s){ 4, 4, 0, 0, 8, 8, 8 /*, 16*/ };
 
 		struct gaba_path_s *p = (struct gaba_path_s *)(s + 3);
 		p->len = 24;
