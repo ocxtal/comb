@@ -112,11 +112,16 @@ _static_assert(sizeof(struct gaba_score_s) == 20);
 _static_assert(sizeof(struct gaba_params_s) == 16);
 _static_assert(sizeof(struct gaba_section_s) == 16);
 _static_assert(sizeof(struct gaba_fill_s) == 64);
-_static_assert(sizeof(struct gaba_path_section_s) == 40);
+_static_assert(sizeof(struct gaba_path_section_s) == 32);
 _static_assert(sizeof(struct gaba_path_s) == 8);
 _static_assert(sizeof(struct gaba_alignment_s) == 64);
 _static_assert(sizeof(vec_masku_t) == 4);
 
+/**
+ * @macro _plen
+ * @brief extract plen from path_section_s
+ */
+#define _plen(sec)		( (sec)->alen + (sec)->blen )
 
 /* forward declarations */
 static int32_t gaba_dp_add_stack(struct gaba_dp_context_s *this, uint64_t size);
@@ -2883,7 +2888,7 @@ void trace_forward_push(
 
 	/* calc path length */
 	v2i32_t tlen = _sub_v2i32(sidx, idx);
-	int64_t plen = _lo32(tlen) + _hi32(tlen);
+	// int64_t plen = _lo32(tlen) + _hi32(tlen);
 
 	/* store section info */
 	_store_v2i32(&this->w.l.sec.head->aid, id);
@@ -2891,7 +2896,7 @@ void trace_forward_push(
 	_store_v2i32(&this->w.l.sec.head->alen, tlen);
 
 	/* store path length */
-	this->w.l.sec.head->plen = plen;
+	// this->w.l.sec.head->plen = plen;
 	this->w.l.sec.head->ppos = 0;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%lld)",
@@ -2901,7 +2906,7 @@ void trace_forward_push(
 		this->w.l.sec.head->bid,
 		this->w.l.sec.head->bpos,
 		this->w.l.sec.head->blen,
-		plen);
+		_plen(this->w.l.sec.head));
 
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
@@ -2933,7 +2938,7 @@ void trace_reverse_push(
 	_store_v2i32(&this->w.l.sec.tail->alen, tlen);
 
 	/* store path length */
-	this->w.l.sec.tail->plen = plen;
+	// this->w.l.sec.tail->plen = plen;
 	this->w.l.sec.tail->ppos = ppos;
 
 	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%lld)",
@@ -2943,7 +2948,8 @@ void trace_reverse_push(
 		this->w.l.sec.tail->bid,
 		this->w.l.sec.tail->bpos,
 		this->w.l.sec.tail->blen,
-		ppos, plen);
+		this->w.l.sec.tail->ppos,
+		_plen(this->w.l.sec.tail));
 
 	/* update rsidx */
 	_store_v2i32(&this->w.l.asidx, idx);
@@ -3203,37 +3209,37 @@ struct trace_boundary_s trace_cat_section(
 	 * load tail ppos, supposing dt[-1] is all zeros when dh == dt.
 	 */
 	// int64_t ppos = (dh == dt) ? 0 : dt[-1].ppos + dt[-1].plen;
-	int64_t ppos = dt[-1].ppos + dt[-1].plen;
+	int64_t ppos = dt[-1].ppos + _plen(&dt[-1]);
 
 	/* check if two sections can be merged */
 	// int merged = 0;
 	struct trace_boundary_s b = {
 		.ptr = dt - (sh == st),
-		.ppos = (sh == st) ? dt[-1].plen : 0
+		.ppos = (sh == st) ? _plen(&dt[-1]) : 0
 	};
 	debug("init, ptr(%p), ppos(%lld)", b.ptr, b.ppos);
 
 	if(dh != dt && sh != st && sh->apos != 0 && sh->bpos != 0) {
 		// merged = 1;
 		b.ptr--;
-		b.ppos = b.ptr->plen;
+		b.ppos = _plen(b.ptr);
 
 		debug("dst: id(%u, %u), pos(%u, %u), len(%u, %u)", dt[-1].bid, dt[-1].aid, dt[-1].bpos, dt[-1].apos, dt[-1].blen, dt[-1].alen);
 		debug("src: id(%u, %u), pos(%u, %u), len(%u, %u)", sh[0].bid, sh[0].aid, sh[0].bpos, sh[0].apos, sh[0].blen, sh[0].alen);
 
 		dt[-1].alen += sh->alen;
 		dt[-1].blen += sh->blen;
-		dt[-1].plen += sh->plen;
-		ppos += sh++->plen;
+		// dt[-1].plen += _plen(sh);
+		ppos += _plen(sh); sh++;
 	}
 	debug("adjust, ptr(%p), ppos(%lld)", b.ptr, b.ppos);
 
 	/* copy sections */
 	while(sh < st) {
-		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%llu)", dt, sh, dt->plen, sh->plen, ppos);
+		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%llu)", dt, sh, _plen(dt), _plen(sh), ppos);
 		*dt = *sh;
 		dt++->ppos = ppos;
-		ppos += sh++->plen;
+		ppos += _plen(sh); sh++;
 	}
 
 	/* write back pointer */
@@ -3345,7 +3351,7 @@ struct gaba_alignment_s *trace_refine_alignment(
 		aln->rapos = params->sec[0].apos;
 		aln->rbpos = params->sec[0].bpos;
 		// aln->rppos = rv_sec.tail[-1].plen;		/* tail[-1].plen == 0 when head == tail */
-		// aln->rsid = rv_sec.tail - rv_sec.head;
+		// aln->rsidx = rv_sec.tail - rv_sec.head;
 
 		/* cat sections */
 		struct trace_boundary_s b = trace_cat_section(this, &rv_sec,
@@ -3354,7 +3360,7 @@ struct gaba_alignment_s *trace_refine_alignment(
 				.tail = (struct gaba_path_section_s *)params->sec + params->slen
 			}));
 		aln->rppos = b.ppos;
-		aln->rsid = b.ptr - rv_sec.head;
+		aln->rsidx = b.ptr - rv_sec.head;
 		trace_cat_section(this, &rv_sec, &fw_sec);
 
 		/* cat paths */
@@ -3381,11 +3387,11 @@ struct gaba_alignment_s *trace_refine_alignment(
 		/* append forward section */
 		struct trace_boundary_s b = trace_cat_section(this, &rv_sec, &fw_sec);
 		aln->rppos = b.ppos;
-		aln->rsid = b.ptr - rv_sec.head;
+		aln->rsidx = b.ptr - rv_sec.head;
 		trace_cat_path(this, &rv_path, &fw_path);
 	}
 	debug("ridx(%x), rppos(%x), rapos(%x), rbpos(%x)",
-		aln->rsid, aln->rppos, aln->rapos, aln->rbpos);
+		aln->rsidx, aln->rppos, aln->rapos, aln->rbpos);
 
 	/* set pointer fields in aln object */
 	aln->slen = rv_sec.tail - rv_sec.head;
@@ -3435,6 +3441,19 @@ struct gaba_alignment_s *suffix(gaba_dp_trace)(
 		res.rv_sec, res.fw_sec,
 		res.rv_path, res.fw_path,
 		params));
+}
+
+/**
+ * @fn gaba_dp_recombine
+ */
+struct gaba_alignment_s *suffix(gaba_dp_recombine)(
+	struct gaba_dp_context_s *this,
+	struct gaba_alignment_s *x,
+	uint32_t xsid,
+	struct gaba_alignment_s *y,
+	uint32_t ysid)
+{
+	return(x);
 }
 
 /**
@@ -4492,21 +4511,21 @@ void unittest_clean_seqs(void *ctx)
 #define print_tail(_t) \
 	"tail(%p), max(%lld), p(%d), psum(%lld), ssum(%u)", \
 	(_t), (_t)->max, (_t)->p, (_t)->psum, (_t)->ssum
-#define check_result(_r, _score, _plen, _slen, _rsid, _rppos, _rapos, _rbpos) ( \
+#define check_result(_r, _score, _plen, _slen, _rsidx, _rppos, _rapos, _rbpos) ( \
 	   (_r) != NULL \
 	&& (_r)->sec != NULL \
 	&& (_r)->path != NULL \
 	&& (_r)->path->len == (_plen) \
 	&& (_r)->slen == (_slen) \
 	&& (_r)->score == (_score) \
-	&& (_r)->rsid == (_rsid) \
+	&& (_r)->rsidx == (_rsidx) \
 	&& (_r)->rppos == (_rppos) \
 	&& (_r)->rapos == (_rapos) \
 	&& (_r)->rbpos == (_rbpos) \
 )
 #define print_result(_r) \
 	"res(%p), score(%lld), plen(%u), slen(%u), rsid(%u), rppos(%u), rapos(%u), rbpos(%u)", \
-	(_r), (_r)->score, (_r)->path->len, (_r)->slen, (_r)->rsid, (_r)->rppos, (_r )->rapos, (_r)->rbpos
+	(_r), (_r)->score, (_r)->path->len, (_r)->slen, (_r)->rsidx, (_r)->rppos, (_r )->rapos, (_r)->rbpos
 
 static
 int check_path(
@@ -4580,7 +4599,7 @@ int check_cigar(
 	ptr; \
 })
 #define print_path(_r)			"%s", decode_path(_r)
-#define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen, _ppos, _plen) ( \
+#define check_section(_s, _a, _apos, _alen, _b, _bpos, _blen, _ppos, _pl) ( \
 	   (_s).aid == (_a).id \
 	&& (_s).apos == (_apos) \
 	&& (_s).alen == (_alen) \
@@ -4588,13 +4607,13 @@ int check_cigar(
 	&& (_s).bpos == (_bpos) \
 	&& (_s).blen == (_blen) \
 	&& (_s).ppos == (_ppos) \
-	&& (_s).plen == (_plen) \
+	&& _plen(&(_s)) == (_pl) \
 )
 #define print_section(_s) \
 	"a(%u), apos(%u), alen(%u), b(%u), bpos(%u), blen(%u), ppos(%u), plen(%u)", \
 	(_s).aid, (_s).apos, (_s).alen, \
 	(_s).bid, (_s).bpos, (_s).blen, \
-	(_s).ppos, (_s).plen
+	(_s).ppos, _plen(&(_s))
 
 /* global configuration of the tests */
 unittest_config(
@@ -5126,7 +5145,7 @@ unittest(with_seq_pair("A", "A"))
 			.aid = 100, .bid = 102,
 			.apos = 0, .bpos = 0,
 			.alen = 14, .blen = 14,
-			.ppos = 0, .plen = 14
+			.ppos = 0, /*.plen = 14*/
 		}),
 		.slen = 1,
 		.k = 14));
@@ -5135,9 +5154,9 @@ unittest(with_seq_pair("A", "A"))
 	assert(check_cigar(r, "18M"), print_path(r));
 	assert(check_section(r->sec[0], s->arsec, 0, 1, s->brsec, 0, 1, 0, 2), print_section(r->sec[0]));
 	assert(check_section(r->sec[1], s->arsec, 0, 1, s->brsec, 0, 1, 2, 2), print_section(r->sec[1]));
-	assert(check_section(r->sec[2], s->assec, 0, 14, s->bssec, 0, 14, 4, 14), print_section(r->sec[2]));
-	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 18, 2), print_section(r->sec[3]));
-	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 0, 1, 20, 2), print_section(r->sec[4]));
+	assert(check_section(r->sec[2], s->assec, 0, 14, s->bssec, 0, 14, 4, 28), print_section(r->sec[2]));
+	assert(check_section(r->sec[3], s->afsec, 0, 1, s->bfsec, 0, 1, 32, 2), print_section(r->sec[3]));
+	assert(check_section(r->sec[4], s->afsec, 0, 1, s->bfsec, 0, 1, 34, 2), print_section(r->sec[4]));
 
 	gaba_dp_clean(d);
 }

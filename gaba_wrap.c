@@ -105,6 +105,12 @@ gaba_alignment_t *gaba_dp_trace_linear(
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+gaba_alignment_t *gaba_dp_recombine_linear(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 void gaba_dp_res_free_linear(
 	gaba_alignment_t *res);
 int64_t gaba_dp_print_cigar_linear(
@@ -160,6 +166,12 @@ gaba_alignment_t *gaba_dp_trace_affine(
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+gaba_alignment_t *gaba_dp_recombine_affine(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 void gaba_dp_res_free_affine(
 	gaba_alignment_t *res);
 int64_t gaba_dp_print_cigar_affine(
@@ -358,6 +370,19 @@ gaba_alignment_t *gaba_dp_trace(
 	gaba_trace_params_t const *params)
 {
 	return(_api(this)->dp_trace(this, fw_tail, rv_tail, params));
+}
+
+/**
+ * @fn gaba_dp_recombine
+ */
+gaba_alignment_t *gaba_dp_recombine(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid)
+{
+	return(gaba_dp_recombine_linear(this, x, xsid, y, ysid));
 }
 
 /**

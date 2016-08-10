@@ -188,10 +188,11 @@ struct gaba_path_section_s {
 	uint32_t apos, bpos;		/** (8) pos in the sections */
 	uint32_t alen, blen;		/** (8) length of the segments */
 	int64_t ppos;				/** (8) path string position (offset) */
-	uint32_t plen;				/** (4) path string length */
-	uint32_t reserved;			/** (4) */
+	// uint32_t plen;				/** (4) path string length */
+	// uint32_t reserved;			/** (4) */
 };
 typedef struct gaba_path_section_s gaba_path_section_t;
+#define gaba_plen(sec)		( (sec)->alen + (sec)->blen )
 
 /**
  * @struct gaba_path_s
@@ -211,7 +212,7 @@ struct gaba_alignment_s {
 	int32_t reserved[2];
 	uint32_t rapos, rbpos;
 	uint32_t rppos;				/** (4) local path index in the root section */
-	uint32_t rsid;				/** (4) index of the root section */
+	uint32_t rsidx;				/** (4) index of the root section */
 	uint32_t pad;
 	uint32_t slen;
 	struct gaba_path_section_s const *sec;
@@ -340,6 +341,18 @@ gaba_alignment_t *gaba_dp_trace(
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
+
+/**
+ * @fn gaba_dp_recombine
+ *
+ * @brief recombine two alignments x and y at xsid and ysid.
+ */
+gaba_alignment_t *gaba_dp_recombine(
+	gaba_dp_t *this,
+	gaba_alignment_t *x,
+	uint32_t xsid,
+	gaba_alignment_t *y,
+	uint32_t ysid);
 
 /**
  * @fn gaba_dp_res_free
