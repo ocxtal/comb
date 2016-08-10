@@ -190,7 +190,7 @@ ngx_rbtree_delete(ngx_rbtree_t *tree, ngx_rbtree_node_t *node)
     }
 
     if (subst == *root) {
-        debug("subst == root");
+        debug("subst == root, temp(%p), subst(%p), node(%p)", temp, subst, node);
 
         *root = temp;
         temp->parent = NULL;
