@@ -1593,7 +1593,7 @@ struct gaba_alignment_s const *pp_recomb_head(
 	/* replace nodes */
 	struct qtree_node_s *qhead = rn->qhead;
 	resv_replace(ctx, qhead->res_id, x);
-	qhead = qtree_replace(ctx, qhead, x, (int64_t)xsidx - (int64_t)ysidx, qhead->res_id);
+	qhead = qtree_replace(ctx, qhead, x, qhead->res_id, (int64_t)xsidx - (int64_t)ysidx);
 	rtree_replace(ctx, rn, qhead, x);
 	return(NULL);
 }
@@ -1621,7 +1621,7 @@ struct gaba_alignment_s const *pp_recomb_tail(
 	/* replace nodes */
 	struct qtree_node_s *qhead = rn->qhead;
 	resv_replace(ctx, qhead->res_id, x);
-	qhead = qtree_replace(ctx, qhead, x, (int64_t)ysidx - (int64_t)xsidx, qhead->res_id);
+	qhead = qtree_replace(ctx, qhead, x, qhead->res_id, (int64_t)ysidx - (int64_t)xsidx);
 	rtree_replace(ctx, rn, qhead, x);
 	return(NULL);
 }
@@ -1646,7 +1646,7 @@ struct gaba_alignment_s const *pp_replace(
 
 	/* replace nodes */
 	resv_replace(ctx, qhead->res_id, aln);
-	qhead = qtree_replace(ctx, qhead, aln, (int64_t)xsidx - (int64_t)ysidx, qhead->res_id);
+	qhead = qtree_replace(ctx, qhead, aln, qhead->res_id, (int64_t)xsidx - (int64_t)ysidx);
 	rtree_replace(ctx, rn, qhead, aln);
 	return(NULL);
 }
@@ -1697,6 +1697,7 @@ struct gaba_alignment_s const *pp_process_alignment(
 		},
 	};
 	return(process[h.cmp + 1][t.cmp + 1](ctx, rn, aln, h.xidx, h.yidx, t.xidx - h.xidx));
+	// return(aln);
 }
 
 /**
@@ -1935,7 +1936,7 @@ unittest()
 	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_acv_t *acv = gref_freeze_pool(pool);
-	gref_idx_t *idx = gref_build_index(acv);
+	gref_idx_t *idx = gref_build_index(acv, NULL);
 	assert(idx != NULL, "%p", idx);
 
 	/* ctx_init fails without reference index */
@@ -1978,7 +1979,7 @@ unittest(with_default_conf(4))
 	/* build sequence pool */
 	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
-	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool));
+	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool), NULL);
 
 	/* build ggsea context */
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, idx);
@@ -2003,7 +2004,7 @@ unittest(with_default_conf(14))
 	gref_pool_t *rpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
 	gref_append_segment(rpool, _str("ref1"),
 		_seq("CTCACCTCGCTCAAAAGGGCTGCCTCCGAGCGTGTGGGCGAGGACAACCGCCCCACAGTCAAGCTCGAATGGGTGCTATTGCGTAGCTAGGACCGGCACT"));
-	gref_idx_t *ref = gref_build_index(gref_freeze_pool(rpool));
+	gref_idx_t *ref = gref_build_index(gref_freeze_pool(rpool), NULL);
 
 	/* build query sequence iterator */
 	gref_pool_t *qpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
