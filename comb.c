@@ -18,6 +18,7 @@
 #include "gref.h"			/* graphical sequence indexer */
 #include "ggsea.h"			/* graph-to-graph seed-and-extend alignment */
 #include "aw.h"				/* alignment writer */
+#include "mem.h"
 #include "sassert.h"
 #include "log.h"
 #include "lmm.h"
@@ -52,6 +53,7 @@ struct comb_align_params_s {
 	void *message_context;
 
 	int64_t num_threads;
+	int64_t mem_size;
 
 	char *command;
 	char *command_base;
@@ -398,6 +400,7 @@ struct comb_index_params_s {
 	void *message_context;
 
 	int64_t num_threads;
+	int64_t mem_size;
 
 	char *command;
 	char *command_base;
@@ -786,6 +789,7 @@ struct comb_align_params_s *comb_init_align(
 		.message_printer = (int (*)(void *, char const *, ...))fprintf,
 		.message_context = (void *)stderr,
 		.num_threads = 0,
+		.mem_size = mem_estimate_free_size(),
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
@@ -806,6 +810,7 @@ struct comb_align_params_s *comb_init_align(
 		{ "version", no_argument, NULL, 'v' },
 		{ "verbose", no_argument, NULL, 'V' },
 		{ "threads", required_argument, NULL, 't' },
+		{ "memory", required_argument, NULL, 'M' },
 		{ "out", required_argument, NULL, 'o' },
 
 		/* indexing params */
@@ -839,6 +844,7 @@ struct comb_align_params_s *comb_init_align(
 			case 'v': comb_print_version(); goto _comb_init_align_error_handler;
 			case 'V': params->message_level = 3; break;
 			case 't': params->num_threads = comb_atoi(optarg); break;
+			case 'M': params->mem_size = comb_atoi(optarg); break;
 			case 'o': params->out_name = strdup(optarg); break;
 
 			/* params */
@@ -946,6 +952,7 @@ struct comb_index_params_s *comb_init_index(
 		.message_printer = (int (*)(void *, char const *, ...))fprintf,
 		.message_context = (void *)stderr,
 		.num_threads = 0,
+		.mem_size = mem_estimate_free_size(),
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
@@ -959,6 +966,7 @@ struct comb_index_params_s *comb_init_index(
 		{ "version", no_argument, NULL, 'v' },
 		{ "verbose", no_argument, NULL, 'V' },
 		{ "threads", required_argument, NULL, 't' },
+		{ "memory", required_argument, NULL, 'M' },
 		{ "prefix", required_argument, NULL, 'p' },
 
 		/* indexing params */
@@ -977,6 +985,7 @@ struct comb_index_params_s *comb_init_index(
 			case 'v': comb_print_version(); goto _comb_init_index_error_handler;
 			case 'V': params->message_level = 3; break;
 			case 't': params->num_threads = comb_atoi(optarg); break;
+			case 'M': params->mem_size = mem_estimate_free_size(); break;
 			case 'p': params->prefix = strdup(optarg); break;
 
 			/* params */
@@ -1092,6 +1101,7 @@ struct comb_index_params_s *comb_init_bwa_index(
 		.message_printer = (int (*)(void *, char const *, ...))fprintf,
 		.message_context = (void *)stderr,
 		.num_threads = 0,
+		.mem_size = 0,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
@@ -1178,6 +1188,7 @@ struct comb_align_params_s *comb_init_bwa_mem(
 		.message_context = (void *)stderr,
 
 		.num_threads = 0,
+		.mem_size = 0,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
