@@ -1016,7 +1016,6 @@ int main(int argc, char *argv[])
 
 	int ret = (o->process != NULL) ? o->process(o->params) : 1;
 
-	log("cleanup");
 	if(o->clean != NULL) {
 		o->clean(o->params);
 	}
