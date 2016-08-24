@@ -1936,7 +1936,7 @@ unittest()
 	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_acv_t *acv = gref_freeze_pool(pool);
-	gref_idx_t *idx = gref_build_index(acv, NULL);
+	gref_idx_t *idx = gref_build_index(acv);
 	assert(idx != NULL, "%p", idx);
 
 	/* ctx_init fails without reference index */
@@ -1979,7 +1979,7 @@ unittest(with_default_conf(4))
 	/* build sequence pool */
 	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
-	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool), NULL);
+	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool));
 
 	/* build ggsea context */
 	ggsea_ctx_t *sea = ggsea_ctx_init(conf, idx);
@@ -2004,7 +2004,7 @@ unittest(with_default_conf(14))
 	gref_pool_t *rpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
 	gref_append_segment(rpool, _str("ref1"),
 		_seq("CTCACCTCGCTCAAAAGGGCTGCCTCCGAGCGTGTGGGCGAGGACAACCGCCCCACAGTCAAGCTCGAATGGGTGCTATTGCGTAGCTAGGACCGGCACT"));
-	gref_idx_t *ref = gref_build_index(gref_freeze_pool(rpool), NULL);
+	gref_idx_t *ref = gref_build_index(gref_freeze_pool(rpool));
 
 	/* build query sequence iterator */
 	gref_pool_t *qpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
