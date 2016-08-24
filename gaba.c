@@ -2899,7 +2899,7 @@ void trace_forward_push(
 	// this->w.l.sec.head->plen = plen;
 	this->w.l.sec.head->ppos = 0;
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%lld)",
+	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%u)",
 		this->w.l.sec.head->aid,
 		this->w.l.sec.head->apos,
 		this->w.l.sec.head->alen,
@@ -2941,7 +2941,7 @@ void trace_reverse_push(
 	// this->w.l.sec.tail->plen = plen;
 	this->w.l.sec.tail->ppos = ppos;
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%lld)",
+	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%u)",
 		this->w.l.sec.tail->aid,
 		this->w.l.sec.tail->apos,
 		this->w.l.sec.tail->alen,
@@ -3453,6 +3453,7 @@ struct gaba_alignment_s *suffix(gaba_dp_recombine)(
 	struct gaba_alignment_s *y,
 	uint32_t ysid)
 {
+	gaba_dp_res_free(y);
 	return(x);
 }
 
