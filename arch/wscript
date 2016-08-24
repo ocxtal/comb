@@ -17,13 +17,13 @@ def configure(conf):
 		}
 		''',
 		execute = True,
-		cflags = '-mcore-avx2',
+		cflags = '-march=core-avx2' if conf.env.CC_NAME == 'icc' else '-mavx2',
 		mandatory = False,
 		msg = 'Checking for AVX2 instructions')):
 
 		# sse4.1 instructions are also available on the avx2 enabled machines.
 		conf.env.append_value('CFLAGS',
-			['-march=core-avx2', '-axcore-avx2'] if conf.env.CC_NAME == 'icc' else '-mcore-avx2')
+			['-march=core-avx2', '-axcore-avx2'] if conf.env.CC_NAME == 'icc' else '-mavx2')
 
 	# next, check if SSE4 instructions are availavle.
 	elif(conf.check_cc(fragment='''
