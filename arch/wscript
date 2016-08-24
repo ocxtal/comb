@@ -10,9 +10,9 @@ def configure(conf):
 		#include <stdio.h>
 		#include <immintrin.h>
 		int main(void) {
-			volatile __m256i a = _mm256_add_epi8(
-				_mm256_setzero_si256(),
-				_mm256_setzero_si256());
+			volatile __m256i a = _mm256_set1_epi8(1);
+			volatile __m256i b = _mm256_set1_epi8(-2);
+			volatile __m256i c = _mm256_add_epi8(a, b);
 			return 0;
 		}
 		''',
@@ -30,9 +30,9 @@ def configure(conf):
 		#include <stdio.h>
 		#include <smmintrin.h>
 		int main(void) {
-			volatile __m128i a = _mm_add_epi8(
-				_mm_setzero_si128(),
-				_mm_insert_epi8(a, 1, 0));
+			volatile __m128i a = _mm_set1_epi8(1);
+			volatile __m128i b = _mm_set1_epi8(-2);
+			volatile __m128i c = _mm_add_epi8(a, b);
 			return 0;
 		}
 		''',
