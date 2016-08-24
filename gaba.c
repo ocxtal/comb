@@ -4645,17 +4645,17 @@ unittest(with_seq_pair("A", "A"))
 	/* check sequences */
 	#if BIT == 2
 		assert(strncmp((char const *)s->a,
-			((char const [22]){ 0, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' }),
+			"\x00\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\0",
 			22) == 0, "%s", (char const *)s->a);
 		assert(strncmp((char const *)s->b,
-			((char const [22]){ 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, '\0' }),
+			"\x00\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\x01\0",
 			22) == 0, "%s", (char const *)s->b);
 	#else /* BIT == 4 */
 		assert(strncmp((char const *)s->a,
-			((char const [22]){ 1, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, 4, '\0' }),
+			"\x01\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\x04\0",
 			22) == 0, "%s", (char const *)s->a);
 		assert(strncmp((char const *)s->b,
-			((char const [22]){ 1, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, '\0' }),
+			"\x01\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\x02\0",
 			22) == 0, "%s", (char const *)s->b);
 	#endif
 	assert(s->alen == 21, "%llu", s->alen);
