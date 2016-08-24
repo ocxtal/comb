@@ -621,7 +621,10 @@ static _force_inline
 void comb_align_print_option_summary(
 	struct comb_align_params_s const *params)
 {
-	#define _p(...)		fprintf(stderr, __VA_ARGS__);
+	char *s = (char *)malloc(4096);
+	char *p = s;
+
+	#define _p(...)		p += sprintf(p, __VA_ARGS__);
 	_p("%s align ", params->command_base);
 	_p("-t%" PRId64 " ", params->num_threads);
 	_p("-k%" PRId64 " ", params->k);
@@ -635,8 +638,10 @@ void comb_align_print_option_summary(
 	_p("-x%" PRId64 " ", params->xdrop);
 	_p("-m%" PRId64 " ", params->score_thresh);
 	_p("-c%c", params->clip);
-	_p("\n");
 	#undef _p
+
+	fprintf(stderr, "%s\n", s);
+	free(s);
 	return;
 }
 
@@ -823,12 +828,17 @@ static _force_inline
 void comb_index_print_option_summary(
 	struct comb_index_params_s const *params)
 {
-	#define _p(...)		fprintf(stderr, __VA_ARGS__);
+	char *s = (char *)malloc(4096);
+	char *p = s;
+
+	#define _p(...)		p += sprintf(p, __VA_ARGS__);
 	_p("%s index ", params->command_base);
 	_p("-t%" PRId64 " ", params->num_threads);
 	_p("-k%" PRId64 " ", params->k);
-	_p("\n");
 	#undef _p
+
+	fprintf(stderr, "%s\n", s);
+	free(s);
 	return;
 }
 
