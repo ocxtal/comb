@@ -5526,12 +5526,15 @@ int8_t unittest_naive_encode(char a)
  * @brief naive implementation of the forward semi-global alignment algorithm
  * left-aligned gap and left-aligned deletion
  */
+#define UNITTEST_NAIVE_FORWARD 		( 0 )
+#define UNITTEST_NAIVE_REVERSE 		( 1 )
 #if MODEL == LINEAR
 static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_score_s const *sc,
 	char const *a,
-	char const *b)
+	char const *b,
+	int dir)
 {
 	/* utils */
 	#define _a(p, q, plen)		( (q) * ((plen) + 1) + (p) )
@@ -5608,37 +5611,67 @@ struct unittest_naive_result_s unittest_naive(
 		.path_length = max.apos + max.bpos + 1,
 		.path = (char *)malloc(max.apos + max.bpos + 1)
 	};
-	int64_t path_index = max.apos + max.bpos + 1;
-	while(max.apos > 0 || max.bpos > 0) {
-		debug("path_index(%llu), apos(%lld), bpos(%lld)", path_index, max.apos, max.bpos);
-		/* M > I > D > X */
-		if(max.bpos > 0
-		&& mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + (geb + gib)) {
-			max.bpos--;
-			result.path[--path_index] = 'D';
-		} else if(max.apos > 0
-		&& mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + (gea + gia)) {
-			max.apos--;
-			result.path[--path_index] = 'R';
-		} else {
-			result.path[--path_index] = 'R';
-			result.path[--path_index] = 'D';
-			max.apos--;
-			max.bpos--;
+	if(dir == UNITTEST_NAIVE_FORWARD) {
+		/* forward trace */
+
+		int64_t path_index = max.apos + max.bpos + 1;
+		while(max.apos > 0 || max.bpos > 0) {
+			debug("path_index(%llu), apos(%lld), bpos(%lld)", path_index, max.apos, max.bpos);
+
+			/* M > I > D > X */
+			if(max.bpos > 0
+			&& mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + (geb + gib)) {
+				max.bpos--;
+				result.path[--path_index] = 'D';
+			} else if(max.apos > 0
+			&& mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + (gea + gia)) {
+				max.apos--;
+				result.path[--path_index] = 'R';
+			} else {
+				result.path[--path_index] = 'R';
+				result.path[--path_index] = 'D';
+				max.apos--;
+				max.bpos--;
+			}
 		}
+		result.alen = result.apos - max.apos;
+		result.blen = result.bpos - max.bpos;
+		result.apos = max.apos;
+		result.bpos = max.bpos;
+
+		result.path_length -= path_index;
+		for(uint64_t i = 0; i < result.path_length; i++) {
+			result.path[i] = result.path[path_index++];
+		}
+		result.path[result.path_length] = '\0';
+
+	} else {
+		int64_t path_index = 0;
+		while(max.apos > 0 || max.bpos > 0) {
+			/* M > I > D > X */
+			if(max.apos > 0
+			&& mat[s(max.apos, max.bpos)] == mat[s(max.apos - 1, max.bpos)] + (gea + gia)) {
+				max.apos--;
+				result.path[path_index++] = 'R';
+			} else if(max.bpos > 0
+			&& mat[s(max.apos, max.bpos)] == mat[s(max.apos, max.bpos - 1)] + (geb + gib)) {
+				max.bpos--;
+				result.path[path_index++] = 'D';
+			} else {
+				result.path[path_index++] = 'D';
+				result.path[path_index++] = 'R';
+				max.apos--;
+				max.bpos--;
+			}
+		}
+		result.alen = result.apos - max.apos;
+		result.blen = result.bpos - max.bpos;
+		result.apos = alen - result.apos;
+		result.bpos = blen - result.bpos;
+
+		result.path_length = path_index;
+		result.path[result.path_length] = '\0';
 	}
-
-	result.alen = result.apos - max.apos;
-	result.blen = result.bpos - max.bpos;
-	result.apos = max.apos;
-	result.bpos = max.bpos;
-
-	result.path_length -= path_index;
-	for(uint64_t i = 0; i < result.path_length; i++) {
-		result.path[i] = result.path[path_index++];
-	}
-	result.path[result.path_length] = '\0';
-
 	free(mat);
 
 	#undef _a
@@ -5651,7 +5684,8 @@ static
 struct unittest_naive_result_s unittest_naive(
 	struct gaba_score_s const *sc,
 	char const *a,
-	char const *b)
+	char const *b,
+	int dir)
 {
 	/* utils */
 	#define _a(p, q, plen)		( (q) * ((plen) + 1) + (p) )
@@ -5735,42 +5769,77 @@ struct unittest_naive_result_s unittest_naive(
 		.path_length = max.apos + max.bpos + 1,
 		.path = (char *)malloc(max.apos + max.bpos + 1)
 	};
-	int64_t path_index = max.apos + max.bpos + 1;
-	while(max.apos > 0 || max.bpos > 0) {
-		/* M > I > D > X */
-		if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
-			while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + geb) {
+	if(dir == UNITTEST_NAIVE_FORWARD) {
+		int64_t path_index = max.apos + max.bpos + 1;
+		while(max.apos > 0 || max.bpos > 0) {
+			/* M > I > D > X */
+			if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
+				while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + geb) {
+					max.bpos--;
+					result.path[--path_index] = 'D';
+				}
 				max.bpos--;
 				result.path[--path_index] = 'D';
-			}
-			max.bpos--;
-			result.path[--path_index] = 'D';
-		} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
-			while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + gea) {
+			} else if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
+				while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + gea) {
+					max.apos--;
+					result.path[--path_index] = 'R';
+				}
 				max.apos--;
 				result.path[--path_index] = 'R';
+			} else {
+				result.path[--path_index] = 'R';
+				result.path[--path_index] = 'D';
+				max.apos--;
+				max.bpos--;
 			}
-			max.apos--;
-			result.path[--path_index] = 'R';
-		} else {
-			result.path[--path_index] = 'R';
-			result.path[--path_index] = 'D';
-			max.apos--;
-			max.bpos--;
 		}
+
+		result.alen = result.apos - max.apos;
+		result.blen = result.bpos - max.bpos;
+		result.apos = max.apos;
+		result.bpos = max.bpos;
+
+		result.path_length -= path_index;
+		for(uint64_t i = 0; i < result.path_length; i++) {
+			result.path[i] = result.path[path_index++];
+		}
+		result.path[result.path_length] = '\0';
+
+	} else {
+		int64_t path_index = 0;
+		while(max.apos > 0 || max.bpos > 0) {
+			/* M > I > D > X */
+			if(mat[s(max.apos, max.bpos)] == mat[e(max.apos, max.bpos)]) {
+				while(mat[e(max.apos, max.bpos)] == mat[e(max.apos - 1, max.bpos)] + gea) {
+					max.apos--;
+					result.path[path_index++] = 'R';
+				}
+				max.apos--;
+				result.path[path_index++] = 'R';
+			} else if(mat[s(max.apos, max.bpos)] == mat[f(max.apos, max.bpos)]) {
+				while(mat[f(max.apos, max.bpos)] == mat[f(max.apos, max.bpos - 1)] + geb) {
+					max.bpos--;
+					result.path[path_index++] = 'D';
+				}
+				max.bpos--;
+				result.path[path_index++] = 'D';
+			} else {
+				result.path[path_index++] = 'D';
+				result.path[path_index++] = 'R';
+				max.apos--;
+				max.bpos--;
+			}
+		}
+
+		result.alen = result.apos - max.apos;
+		result.blen = result.bpos - max.bpos;
+		result.apos = alen - result.apos;
+		result.bpos = blen - result.bpos;
+
+		result.path_length = path_index;
+		result.path[result.path_length] = '\0';
 	}
-
-	result.alen = result.apos - max.apos;
-	result.blen = result.bpos - max.bpos;
-	result.apos = max.apos;
-	result.bpos = max.bpos;
-
-	result.path_length -= path_index;
-	for(uint64_t i = 0; i < result.path_length; i++) {
-		result.path[i] = result.path[path_index++];
-	}
-	result.path[result.path_length] = '\0';
-
 	free(mat);
 
 	#undef _a
@@ -5938,17 +6007,17 @@ unittest()
 	struct unittest_naive_result_s n;
 
 	/* all matches */
-	n = unittest_naive(p, "AAAA", "AAAA");
+	n = unittest_naive(p, "AAAA", "AAAA", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
 	free(n.path);
 
 	/* with deletions */
-	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT");
+	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 8, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 
 	/* with insertions */
-	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT");
+	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 8, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 }
@@ -5959,22 +6028,22 @@ unittest()
 	struct unittest_naive_result_s n;
 
 	/* all matches */
-	n = unittest_naive(p, "AAAA", "AAAA");
+	n = unittest_naive(p, "AAAA", "AAAA", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 8, "DRDRDRDR"), print_naive_result(n));
 	free(n.path);
 
 	/* with deletions */
-	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT");
+	n = unittest_naive(p, "TTTTACGTACGT", "TTACGTACGT", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 13, "DRDRRRDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 
 	/* with insertions */
-	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT");
+	n = unittest_naive(p, "TTACGTACGT", "TTTTACGTACGT", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 13, "DRDRDDDRDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 
 	/* ins-match-del */
-	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC");
+	n = unittest_naive(p, "ATGAAGCTGCGAGGC", "TGATGGCTTGCGAGGC", UNITTEST_NAIVE_FORWARD);
 	assert(check_naive_result(n, 6, "DDDRDRDRRRDRDRDRDDRDRDRDRDRDRDR"), print_naive_result(n));
 	free(n.path);
 }
@@ -6008,13 +6077,18 @@ unittest()
 		b = unittest_add_tail(b, 0, 64);
 
 		/* add tail margin */
-		a = unittest_add_tail(a, 'C', 20);
-		b = unittest_add_tail(b, 'G', 20);
+		int64_t const mlen = 20;
+		a = unittest_add_tail(a, 'C', mlen);
+		b = unittest_add_tail(b, 'G', mlen);
 
 
 		/* naive */
-		struct unittest_naive_result_s n = unittest_naive(p, a, b);
-
+		struct unittest_naive_result_s nf = unittest_naive(p, a, b, UNITTEST_NAIVE_FORWARD);
+		struct unittest_naive_result_s nr = unittest_naive(p, a, b, UNITTEST_NAIVE_REVERSE);
+		assert(nf.score == nr.score, "(%d, %d)", nf.score, nr.score);
+		assert(nf.alen == nr.alen, "(%lld, %lld)", nf.alen, nr.alen);
+		assert(nf.blen == nr.blen, "(%lld, %lld)", nf.blen, nr.blen);
+		assert(nf.path_length == nr.path_length, "(%u, %u)", nf.path_length, nr.path_length);
 
 		/* build section */
 		struct unittest_sections_s *sec = unittest_build_seqs(
@@ -6044,47 +6118,76 @@ unittest()
 		m = (t2->max > m->max) ? t2 : m;
 
 		/* check max */
-		assert(m->max == n.score, "m->max(%lld), f(%lld, %u), t1->max(%lld, %u), t2->max(%lld, %u), n.score(%d)",
-			m->max, f->max, f->status, t1->max, t1->status, t2->max, t2->status, n.score);
-		if(m->max != n.score) {
+		assert(m->max == nf.score, "m->max(%lld), f(%lld, %u), t1->max(%lld, %u), t2->max(%lld, %u), n.score(%d)",
+			m->max, f->max, f->status, t1->max, t1->status, t2->max, t2->status, nf.score);
+		if(m->max != nf.score) {
 			struct gaba_fill_s *f2 = gaba_dp_fill_root(d, &sec->afsec, 0, &sec->bfsec, 0);
 			(void)f2;
 			debug("refill f2(%lld, %u)", f2->max, f2->status);
 		}
 
 		/* forward trace */
-		struct gaba_alignment_s *r = gaba_dp_trace(d, m, NULL, NULL);
+		struct gaba_alignment_s *rf = gaba_dp_trace(d, m, NULL, NULL);
 
 		/* check results */
-		assert(r->score == n.score, "m->max(%lld), r->score(%lld), n.score(%d)",
-			m->max, r->score, n.score);
-		assert(r->sec[0].apos == n.apos, "apos(%u, %lld)", r->sec[0].apos, n.apos);
-		assert(r->sec[0].bpos == n.bpos, "bpos(%u, %lld)", r->sec[0].bpos, n.bpos);
-		assert(r->sec[0].alen == n.alen, "alen(%u, %lld)", r->sec[0].alen, n.alen);
-		assert(r->sec[0].blen == n.blen, "blen(%u, %lld)", r->sec[0].blen, n.blen);
-		assert(check_path(r, n.path), "\n%s\n%s\n%s",
-			a, b, format_string_pair_diff(decode_path(r), n.path));
+		assert(rf->score == nf.score, "m->max(%lld), rf->score(%lld), nf.score(%d)",
+			m->max, rf->score, nf.score);
+		assert(rf->sec[0].apos == nf.apos, "apos(%u, %lld)", rf->sec[0].apos, nf.apos);
+		assert(rf->sec[0].bpos == nf.bpos, "bpos(%u, %lld)", rf->sec[0].bpos, nf.bpos);
+		assert(rf->sec[0].alen == nf.alen, "alen(%u, %lld)", rf->sec[0].alen, nf.alen);
+		assert(rf->sec[0].blen == nf.blen, "blen(%u, %lld)", rf->sec[0].blen, nf.blen);
+		assert(check_path(rf, nf.path), "\n%s\n%s\n%s",
+			a, b, format_string_pair_diff(decode_path(rf), nf.path));
 
 		int64_t acnt = 0, bcnt = 0;
-		for(int64_t i = 0; i < r->path->len; i++) {
-			if(((r->path->array[i / 32]>>(i & 31)) & 0x01) == 0) {
+		for(int64_t i = 0; i < rf->path->len; i++) {
+			if(((rf->path->array[i / 32]>>(i & 31)) & 0x01) == 0) {
 				acnt++;
 			} else {
 				bcnt++;
 			}
 		}
-		assert(acnt == r->sec[0].alen, "acnt(%lld), alen(%u)", acnt, r->sec[0].alen);
-		assert(bcnt == r->sec[0].blen, "bcnt(%lld), blen(%u)", bcnt, r->sec[0].blen);
+		assert(acnt == rf->sec[0].alen, "acnt(%lld), alen(%u)", acnt, rf->sec[0].alen);
+		assert(bcnt == rf->sec[0].blen, "bcnt(%lld), blen(%u)", bcnt, rf->sec[0].blen);
 
 		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
-			r->score, n.score, n.alen, n.blen,
-			format_string_pair_diff(decode_path(r), n.path));
+			rf->score, nf.score, nf.alen, nf.blen,
+			format_string_pair_diff(decode_path(rf), nf.path));
+
+		/* reverse trace */
+		struct gaba_alignment_s *rr = gaba_dp_trace(d, NULL, m, NULL);
+
+		/* check results */
+		assert(rr->score == nr.score, "m->max(%lld), rr->score(%lld), nr.score(%d)",
+			m->max, rr->score, nr.score);
+		assert(rr->sec[0].apos == nr.apos - mlen, "apos(%u, %lld)", rr->sec[0].apos, nr.apos);
+		assert(rr->sec[0].bpos == nr.bpos - mlen, "bpos(%u, %lld)", rr->sec[0].bpos, nr.bpos);
+		assert(rr->sec[0].alen == nr.alen, "alen(%u, %lld)", rr->sec[0].alen, nr.alen);
+		assert(rr->sec[0].blen == nr.blen, "blen(%u, %lld)", rr->sec[0].blen, nr.blen);
+		assert(check_path(rr, nr.path), "\n%s\n%s\n%s",
+			a, b, format_string_pair_diff(decode_path(rr), nr.path));
+
+		acnt = 0, bcnt = 0;
+		for(int64_t i = 0; i < rr->path->len; i++) {
+			if(((rr->path->array[i / 32]>>(i & 31)) & 0x01) == 0) {
+				acnt++;
+			} else {
+				bcnt++;
+			}
+		}
+		assert(acnt == rr->sec[0].alen, "acnt(%lld), alen(%u)", acnt, rr->sec[0].alen);
+		assert(bcnt == rr->sec[0].blen, "bcnt(%lld), blen(%u)", bcnt, rr->sec[0].blen);
+
+		debug("score(%lld, %d), alen(%lld), blen(%lld)\n%s",
+			rr->score, nr.score, nr.alen, nr.blen,
+			format_string_pair_diff(decode_path(rr), nr.path));
 
 
 		/* cleanup */
 		gaba_dp_clean(d);
 		free(sec);
-		free(n.path);
+		free(nf.path);
+		free(nr.path);
 		free(a);
 		free(b);
 	}
