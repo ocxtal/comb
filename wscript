@@ -6,22 +6,23 @@ def isxdigit(string):
 	try:
 		int(string, 16)
 		return True
-	except ValueError, e:
+	except ValueError:
 		return False
 
-def get_hash(default_version_string):
+def check_output(*args):
 	import subprocess
-	try:
-		return(subprocess.check_output(['git', 'rev-parse', 'HEAD']).split('\n')[0])
-	except subprocess.CalledProcessError, e:
-		return(default_version_string)
+	process = subprocess.Popen(stdout = subprocess.PIPE, *args)
+	output, unused_err = process.communicate()
+	retcode = process.poll()
+	return(output if retcode == 0 else None)
+
+def get_hash(default_version_string):
+	s = check_output(['git', 'rev-parse', 'HEAD'])
+	return(s.decode().split('\n')[0] if s is not None else default_version_string)
 
 def get_tag(hash):
-	import subprocess
-	try:
-		return(filter(lambda a: a == hash, subprocess.check_output(['git', 'show-ref', '--tags']).split('\n')))
-	except subprocess.CalledProcessError, e:
-		return('')
+	s = check_output(['git', 'show-ref', '--tags'])
+	return(filter(lambda a: a == hash, s.decode().split('\n')) if s is not None else '')
 
 def get_version_string(default_version_string):
 	hash = get_hash(default_version_string)
