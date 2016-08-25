@@ -28,7 +28,7 @@ def get_version_string(default_version_string):
 	hash = get_hash(default_version_string)
 	tag = get_tag(hash)
 	hash = hash[0:7] if isxdigit(hash) == True else hash
-	return('"{}"'.format(tag if tag != '' else hash))
+	return('"%s"' % (tag if tag != '' else hash))
 
 
 def options(opt):
