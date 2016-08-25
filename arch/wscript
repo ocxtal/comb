@@ -8,7 +8,6 @@ def configure(conf):
 	# first check if AVX2 intrinsics are available on the compiler
 	# note: check not the cpu but the compiler thus inline rdtsc is not appropriate here
 	if(conf.check_cc(fragment='''
-		#include <stdio.h>
 		#include <x86intrin.h>
 		int main(void) {
 			volatile __m256i a = _mm256_set1_epi8(1);
@@ -28,7 +27,6 @@ def configure(conf):
 
 	# next, check if SSE4 intrinsics are availavle.
 	elif(conf.check_cc(fragment='''
-		#include <stdio.h>
 		#include <x86intrin.h>
 		int main(void) {
 			volatile __m128i a = _mm_set1_epi8(1);
