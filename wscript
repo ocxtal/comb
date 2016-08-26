@@ -62,9 +62,9 @@ def configure(conf):
 	conf.env.append_value('CFLAGS', '-Wno-unused-function')
 	conf.env.append_value('CFLAGS', '-march=native')
 
-	conf.env.append_value('LIB_COMB', conf.env.LIB_Z + conf.env.LIB_BZ2 + conf.env.LIB_PTHREAD)
-	conf.env.append_value('DEFINES_COMB', conf.env.DEFINES_Z + conf.env.DEFINES_BZ2 + ['COMB_VERSION_STRING=' + get_version_string("0.0.1")])
-	conf.env.append_value('OBJ_COMB',
+	conf.env.append_value('LIBS', conf.env.LIB_Z + conf.env.LIB_BZ2 + conf.env.LIB_PTHREAD)
+	conf.env.append_value('DEFINES', conf.env.DEFINES_Z + conf.env.DEFINES_BZ2 + ['COMB_VERSION_STRING=' + get_version_string("0.0.1")])
+	conf.env.append_value('OBJS',
 		['aw.o', 'fna.o', 'gaba_linear.o', 'gaba_affine.o', 'gaba_wrap.o', 'ggsea.o', 'gref.o', 'hmap.o', 'kopen.o', 'ngx_rbtree.o', 'psort.o', 'ptask.o', 'queue.o', 'queue_internal.o', 'sr.o', 'tree.o', 'zf.o'])
 
 
@@ -92,7 +92,7 @@ def build(bld):
 	bld.program(
 		source = ['comb.c'],
 		target = 'comb',
-		use = bld.env.OBJ_COMB,
-		lib = bld.env.LIB_COMB,
-		defines = ['MAIN'] + bld.env.DEFINES_COMB,
+		use = bld.env.OBJS,
+		lib = bld.env.LIBS,
+		defines = ['MAIN'],
 		install_path = '${PREFIX}/bin')
