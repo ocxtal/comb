@@ -90,7 +90,7 @@ struct fna_context_s {
 	struct fna_seq_intl_s *(*read)(struct fna_context_s *fna);
 
 	/* output sequence format specific parser */
-	struct fna_read_ret_s (*read_seq)(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
+	struct fna_read_ret_s (*read_seq)(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
 };
 _static_assert_offset(struct fna_s, path, struct fna_context_s, path, 0);
 _static_assert_offset(struct fna_s, file_format, struct fna_context_s, file_format, 0);
@@ -185,11 +185,11 @@ static struct fna_seq_intl_s *fna_read_fastq(struct fna_context_s *fna);
 static struct fna_seq_intl_s *fna_read_fast5(struct fna_context_s *fna);
 static struct fna_seq_intl_s *fna_read_gfa(struct fna_context_s *fna);
 
-static struct fna_read_ret_s fna_read_seq_ascii(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
-static struct fna_read_ret_s fna_read_seq_2bit(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
-static struct fna_read_ret_s fna_read_seq_2bitpacked(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
-static struct fna_read_ret_s fna_read_seq_4bit(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
-static struct fna_read_ret_s fna_read_seq_4bitpacked(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table);
+static struct fna_read_ret_s fna_read_seq_ascii(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
+static struct fna_read_ret_s fna_read_seq_2bit(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
+static struct fna_read_ret_s fna_read_seq_2bitpacked(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
+static struct fna_read_ret_s fna_read_seq_4bit(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
+static struct fna_read_ret_s fna_read_seq_4bitpacked(struct fna_context_s *fna, lmm_kvec_uint8_t *v, uint8_t const *delim_table, int64_t lim);
 
 /**
  * @fn fna_init
@@ -247,7 +247,8 @@ fna_t *fna_init(
 	struct fna_read_ret_s (*read_seq[])(
 		struct fna_context_s *fna,
 		lmm_kvec_uint8_t *v,
-		uint8_t const *delim_table) = {
+		uint8_t const *delim_table,
+		int64_t lim) = {
 		[FNA_ASCII] = fna_read_seq_ascii,
 		[FNA_2BIT] = fna_read_seq_2bit,
 		[FNA_2BITPACKED] = fna_read_seq_2bitpacked,
@@ -429,6 +430,7 @@ void *fna_set_lmm(
 /**
  * @val ascii_table, alpha_table, delim_space
  */
+#define LIM_UNLIMITED		( INT64_MAX )
 #define DELIM_TERM			( 1 )
 
 /* non-printable, first 32 elements of the ASCII table */
@@ -466,13 +468,18 @@ uint8_t const delim_fasta_seq[256] = {
 static
 uint8_t const delim_fastq_seq[256] = {
 	_non_printable(2),
-	['@'] = DELIM_TERM,
+	['+'] = DELIM_TERM,
 	[0xff] = 0xff
 };
 static
 uint8_t const delim_fastq_qual[256] = {
 	_non_printable(2),
-	['+'] = DELIM_TERM,
+	[0xff] = 0xff
+};
+static
+uint8_t const delim_fastq_tail[256] = {
+	_non_printable(2),
+	['@'] = DELIM_TERM,
 	[0xff] = 0xff
 };
 static
@@ -582,14 +589,18 @@ struct fna_read_ret_s fna_read_ascii(
 static _force_inline
 struct fna_read_ret_s fna_read_skip(
 	struct fna_context_s *fna,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
+	uint8_t type;
 	int c;
-	while((delim_table[(uint8_t)(c = zfgetc(fna->fp))] & DELIM_TERM) == 0) {
-		debug("%c, %d, %u", c, c, delim_table[(uint8_t)c]);
+	int64_t len = 0;
+	while(((type = delim_table[(uint8_t)(c = zfgetc(fna->fp))]) & DELIM_TERM) == 0) {
+		debug("%c, %d, %u, %lld, %lld", c, c, delim_table[(uint8_t)c], len, lim);
+		if(type == 0 && ++len >= lim) { break; }
 	}
 	return((struct fna_read_ret_s){
-		.len = 0,
+		.len = len,
 		.c = (char)c
 	});
 }
@@ -602,11 +613,12 @@ static
 struct fna_read_ret_s fna_read_seq_ascii(
 	struct fna_context_s *fna,
 	lmm_kvec_uint8_t *v,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
 	int c;
 	int64_t len = 0;
-	while(1) {
+	while(len < lim) {
 		c = zfgetc(fna->fp);
 		uint8_t type = delim_table[(uint8_t)c];
 		if(type & DELIM_TERM) { break; }
@@ -661,11 +673,12 @@ static
 struct fna_read_ret_s fna_read_seq_2bit(
 	struct fna_context_s *fna,
 	lmm_kvec_uint8_t *v,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
 	int c = 0;
 	int64_t len = 0;
-	while(1) {
+	while(len < lim) {
 		c = zfgetc(fna->fp);
 		uint8_t type = delim_table[(uint8_t)c];
 		if(type & DELIM_TERM) { break; }
@@ -688,7 +701,8 @@ static
 struct fna_read_ret_s fna_read_seq_2bitpacked(
 	struct fna_context_s *fna,
 	lmm_kvec_uint8_t *v,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
 	int c = 0;
 	int64_t len = 0;
@@ -705,14 +719,19 @@ struct fna_read_ret_s fna_read_seq_2bitpacked(
 			_c; \
 		}) \
 
+		#define _check(l) { \
+			if((l)-- <= 0) { goto _fna_read_seq_2bitpacked_finish; } \
+		}
+
 		rem = 8;
-		arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
-		arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
-		arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
-		arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6);
+		_check(lim); arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
+		_check(lim); arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
+		_check(lim); arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6); rem -= 2;
+		_check(lim); arr = (arr>>2) | (fna_encode_2bit(c = _fetch(fna))<<6);
 		lmm_kv_push(fna->lmm, *v, arr); len += 4;
 
 		#undef _fetch
+		#undef _check
 	}
 _fna_read_seq_2bitpacked_finish:;
 	lmm_kv_push(fna->lmm, *v, arr>>rem); len += (8 - rem) / 2;
@@ -771,11 +790,12 @@ static
 struct fna_read_ret_s fna_read_seq_4bit(
 	struct fna_context_s *fna,
 	lmm_kvec_uint8_t *v,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
 	int c = 0;
 	int64_t len = 0;
-	while(1) {
+	while(len < lim) {
 		c = zfgetc(fna->fp);
 		uint8_t type = delim_table[(uint8_t)c];
 		if(type & DELIM_TERM) { break; }
@@ -798,7 +818,8 @@ static
 struct fna_read_ret_s fna_read_seq_4bitpacked(
 	struct fna_context_s *fna,
 	lmm_kvec_uint8_t *v,
-	uint8_t const *delim_table)
+	uint8_t const *delim_table,
+	int64_t lim)
 {
 	int c = 0;
 	int64_t len = 0;
@@ -810,17 +831,22 @@ struct fna_read_ret_s fna_read_seq_4bitpacked(
 			int _c; \
 			uint8_t _type; \
 			while((_type = delim_table[(uint8_t)(_c = zfgetc(_fna->fp))]) != 0) { \
-				if(_type & DELIM_TERM) { goto _fna_read_seq_4bitpacked_finish; } \
+				if(lim-- <= 0 && _type & DELIM_TERM) { goto _fna_read_seq_4bitpacked_finish; } \
 			} \
 			_c; \
 		}) \
 
+		#define _check(l) { \
+			if((l)-- <= 0) { goto _fna_read_seq_4bitpacked_finish; } \
+		}
+
 		rem = 8;
-		arr = (arr>>2) | (fna_encode_4bit(c = _fetch(fna))<<4); rem -= 4;
-		arr = (arr>>2) | (fna_encode_4bit(c = _fetch(fna))<<4);
+		_check(lim); arr = (arr>>2) | (fna_encode_4bit(c = _fetch(fna))<<4); rem -= 4;
+		_check(lim); arr = (arr>>2) | (fna_encode_4bit(c = _fetch(fna))<<4);
 		lmm_kv_push(fna->lmm, *v, arr); len += 2;
 
 		#undef _fetch
+		#undef _check
 	}
 _fna_read_seq_4bitpacked_finish:;
 	lmm_kv_push(fna->lmm, *v, arr>>rem); len += (8 - rem) / 4;
@@ -840,7 +866,7 @@ int fna_read_head_fasta(
 	struct fna_context_s *fna)
 {
 	/* eat '>' at the head */
-	fna_read_skip(fna, delim_fasta_seq);
+	fna_read_skip(fna, delim_fasta_seq, LIM_UNLIMITED);
 	return(zfeof(fna->fp) ? FNA_EOF :  FNA_SUCCESS);
 }
 
@@ -881,7 +907,9 @@ struct fna_seq_intl_s *fna_read_fasta(
 
 	/* parse seq */
 	fna_seq_make_margin(fna, &v, fna->seq_head_margin);
-	int64_t seq_len = (fna->read_seq(fna, &v, delim_fasta_seq)).len;
+	int64_t seq_len = (fna->read_seq(fna, &v, delim_fasta_seq, LIM_UNLIMITED)).len;
+
+	debug("name_len(%lld), com_len(%lld), seq_len(%lld)", name_len, com_len, seq_len);
 
 	/* check termination */
 	if(name_len == 0 && com_len == 0 && seq_len == 0) {
@@ -939,7 +967,7 @@ int fna_read_head_fastq(
 	struct fna_context_s *fna)
 {
 	/* eat '@' at the head */
-	fna_read_skip(fna, delim_fastq_seq);
+	fna_read_skip(fna, delim_fastq_tail, LIM_UNLIMITED);
 	return(zfeof(fna->fp) ? FNA_EOF :  FNA_SUCCESS);
 }
 
@@ -985,20 +1013,22 @@ struct fna_seq_intl_s *fna_read_fastq(
 
 	/* parse seq */
 	fna_seq_make_margin(fna, &v, fna->seq_head_margin);
-	int64_t seq_len = (fna->read_seq(fna, &v, delim_fastq_qual)).len;
+	int64_t seq_len = (fna->read_seq(fna, &v, delim_fastq_seq, LIM_UNLIMITED)).len;
 	fna_seq_make_margin(fna, &v, fna->seq_tail_margin);
 
 	/* skip name */
-	fna_read_skip(fna, delim_line);
+	fna_read_skip(fna, delim_line, LIM_UNLIMITED);
 
 	/* parse qual */
 	int64_t qual_len = (((fna->options & FNA_SKIP_QUAL) == 0)
-		? fna->read_seq(fna, &v, delim_fastq_seq)
-		: fna_read_skip(fna, delim_fastq_seq)).len;
-	lmm_kv_push(fna->lmm, v, '\0');			/* push null terminator */
+		? fna->read_seq(fna, &v, delim_fastq_qual, seq_len)
+		: fna_read_skip(fna, delim_fastq_qual, seq_len)).len;
+	fna_read_skip(fna, delim_fastq_tail, LIM_UNLIMITED);	/* strip tail */
+	lmm_kv_push(fna->lmm, v, '\0');							/* push null terminator */
 
 	/* check termination */
-	if(name_len == 0 && seq_len == 0) {
+	debug("seq_len(%lld), qual_len(%lld), name_len(%lld)", seq_len, qual_len, name_len);
+	if(seq_len != qual_len || (name_len == 0 && seq_len == 0)) {
 		lmm_kv_destroy(fna->lmm, v);
 		return(NULL);
 	}
@@ -1025,7 +1055,7 @@ struct fna_seq_intl_s *fna_read_fastq(
 	};
 	r->s.segment.qual = (struct fna_sarr_s){
 		.ptr = (uint8_t const *)(_next(r->s.segment.seq) + r->seq_tail_margin),
-		.len = qual_len
+		.len = ((fna->options & FNA_SKIP_QUAL) == 0) ? qual_len : 0
 	};
 	#undef _next
 	return(r);
@@ -1134,13 +1164,13 @@ struct fna_seq_intl_s *fna_read_gfa_seq(
 
 	/* parse seq */
 	fna_seq_make_margin(fna, &v, fna->seq_head_margin);
-	struct fna_read_ret_s ret = fna->read_seq(fna, &v, delim_gfa_field);
+	struct fna_read_ret_s ret = fna->read_seq(fna, &v, delim_gfa_field, LIM_UNLIMITED);
 	int64_t seq_len = ret.len;
 
 	/* check if optional field remains */
 	if(ret.c == '\t') {
 		/* skip optional fields */
-		fna_read_skip(fna, delim_line);
+		fna_read_skip(fna, delim_line, LIM_UNLIMITED);
 	}
 
 	/* check termination */
@@ -1250,7 +1280,7 @@ struct fna_seq_intl_s *fna_read_gfa_link(
 	/* check if optional field remains */
 	if(ret_cig.c == '\t') {
 		/* skip optional fields */
-		fna_read_skip(fna, delim_line);
+		fna_read_skip(fna, delim_line, LIM_UNLIMITED);
 	}
 
 	/* make margin at the tail */
@@ -1349,7 +1379,7 @@ struct fna_seq_intl_s *fna_read_gfa(
 
 			case 'C':	/* fall throught to 'P' */
 			case 'P':
-			fna_read_skip(fna, delim_line);
+			fna_read_skip(fna, delim_line, LIM_UNLIMITED);
 			break;
 
 			/*
@@ -1894,7 +1924,7 @@ unittest()
 	char const *fastq_filename = "test_fna.fq";
 	char const *fastq_content =
 		"@test0\nAAAA\n+test0\nNNNN\n"
-		"@ test1\nATAT\nCGCG\n+ test1\nNNNN\nNNNN\n"
+		"@ test1\nATAT\nCGCG\n+ test1\nII@#\n+III\n"
 		"@  test2\n\nAAAA\n+  test2\n\nNNNN\n"
 		"@\ttest3\nACGT\n\n+\ttest3\nNNNN";
 	assert(fdump(fastq_filename, fastq_content));
