@@ -261,6 +261,21 @@ int64_t sam_calc_flags(
 }
 
 /**
+ * @fn sam_calc_pos
+ */
+static _force_inline
+int64_t sam_calc_pos(
+	gref_idx_t const *r,
+	gref_acv_t const *q,
+	struct gaba_path_section_s const *curr)
+{
+	/* determine direction */
+	return((gref_dir(curr->aid) ^ gref_dir(curr->bid))
+		? (gref_get_section(r, curr->aid)->len - curr->apos - curr->alen + 1)
+		: (curr->apos + 1));
+}
+
+/**
  * @fn sam_print_cigar
  */
 static _force_inline
@@ -400,7 +415,7 @@ void sam_write_segment(
 		gref_get_name(r, curr->aid).ptr,
 		gref_get_name(r, curr->aid).len);
 	zfputc(aw->fp, '\t');
-	aw_print_num(aw->fp, curr->apos);
+	aw_print_num(aw->fp, sam_calc_pos(r, q, curr));
 	zfputc(aw->fp, '\t');
 
 	/* mapping quality */
