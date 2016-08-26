@@ -1749,7 +1749,7 @@ unittest()
 		">test0\nAAAA\n"
 		"> test1\nATAT\nCGCG\n"
 		">  test2\n\nAAAA\n"
-		">\ttest3\nACGT";
+		">\ttest3 \tcomment   \nACGT";
 	assert(fdump(fasta_filename, fasta_content));
 	assert(fcmp(fasta_filename, strlen(fasta_content), (uint8_t const *)fasta_content));
 
@@ -1762,6 +1762,7 @@ unittest()
 	/* test0 */
 	fna_seq_t *seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test0") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "AAAA") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	fna_seq_free(seq);
@@ -1769,6 +1770,7 @@ unittest()
 	/* test1 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test1") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "ATATCGCG") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 8, "len(%lld)", seq->s.segment.seq.len);
 	fna_seq_free(seq);
@@ -1776,6 +1778,7 @@ unittest()
 	/* test2 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test2") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "AAAA") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	fna_seq_free(seq);
@@ -1783,6 +1786,7 @@ unittest()
 	/* test3 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test3") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "comment") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "ACGT") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	fna_seq_free(seq);
@@ -1815,7 +1819,7 @@ unittest()
 		"@test0\nAAAA\n+test0\nNNNN\n"
 		"@ test1\nATAT\nCGCG\n+ test1\nNNNN\nNNNN\n"
 		"@  test2\n\nAAAA\n+  test2\n\nNNNN\n"
-		"@\ttest3\nACGT\n\n+\ttest3\nNNNN";
+		"@\ttest3\t  comment   \nACGT\n\n+\ttest3\nNNNN";
 	assert(fdump(fastq_filename, fastq_content));
 	assert(fcmp(fastq_filename, strlen(fastq_content), (uint8_t const *)fastq_content));
 
@@ -1828,6 +1832,7 @@ unittest()
 	/* test0 */
 	fna_seq_t *seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test0") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "AAAA") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	assert(strcmp((char const *)seq->s.segment.qual.ptr, "NNNN") == 0, "seq(%s)", (char const *)seq->s.segment.qual.ptr);
@@ -1837,6 +1842,7 @@ unittest()
 	/* test1 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test1") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "ATATCGCG") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 8, "len(%lld)", seq->s.segment.seq.len);
 	assert(strcmp((char const *)seq->s.segment.qual.ptr, "NNNNNNNN") == 0, "seq(%s)", (char const *)seq->s.segment.qual.ptr);
@@ -1846,6 +1852,7 @@ unittest()
 	/* test2 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test2") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "AAAA") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	assert(strcmp((char const *)seq->s.segment.qual.ptr, "NNNN") == 0, "seq(%s)", (char const *)seq->s.segment.qual.ptr);
@@ -1855,6 +1862,7 @@ unittest()
 	/* test3 */
 	seq = fna_read(fna);
 	assert(strcmp(seq->s.segment.name.ptr, "test3") == 0, "name(%s)", seq->s.segment.name.ptr);
+	assert(strcmp(seq->s.segment.comment.ptr, "comment") == 0, "comment(%s)", seq->s.segment.comment.ptr);
 	assert(strcmp((char const *)seq->s.segment.seq.ptr, "ACGT") == 0, "seq(%s)", (char const *)seq->s.segment.seq.ptr);
 	assert(seq->s.segment.seq.len == 4, "len(%lld)", seq->s.segment.seq.len);
 	assert(strcmp((char const *)seq->s.segment.qual.ptr, "NNNN") == 0, "seq(%s)", (char const *)seq->s.segment.qual.ptr);
