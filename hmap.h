@@ -38,7 +38,7 @@ typedef struct hmap_s hmap_t;
  * @brief return value container for get_key function
  */
 struct hmap_key_s {
-	char const *str;
+	char const *ptr;
 	int32_t len;
 };
 typedef struct hmap_key_s hmap_key_t;

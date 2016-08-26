@@ -153,7 +153,7 @@ typedef struct gref_link_s gref_link_t;
  * @struct gref_str_s
  */
 struct gref_str_s {
-	char const *str;
+	char const *ptr;
 	int32_t len;
 };
 typedef struct gref_str_s gref_str_t;

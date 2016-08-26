@@ -1738,7 +1738,7 @@ struct gref_str_s gref_get_name(
 	struct gref_s *gref = (struct gref_s *)_gref;
 	struct hmap_key_s key = hmap_get_key(gref->hmap, _decode_id(gid));
 	return((struct gref_str_s){
-		.str = key.str,
+		.ptr = key.ptr,
 		.len = key.len
 	});
 }
@@ -2551,24 +2551,24 @@ unittest()
 
 	/* section id is given in ascending order from 0 */
 	assert(gref_get_name(idx, 0).len == 4, "%d", gref_get_name(idx, 0).len);
-	assert(strcmp(gref_get_name(idx, 0).str, "sec0") == 0, "%s", gref_get_name(idx, 0).str);
+	assert(strcmp(gref_get_name(idx, 0).ptr, "sec0") == 0, "%s", gref_get_name(idx, 0).ptr);
 
 	assert(gref_get_name(idx, 1).len == 4, "%d", gref_get_name(idx, 1).len);
-	assert(strcmp(gref_get_name(idx, 1).str, "sec0") == 0, "%s", gref_get_name(idx, 1).str);
+	assert(strcmp(gref_get_name(idx, 1).ptr, "sec0") == 0, "%s", gref_get_name(idx, 1).ptr);
 
 	/* section 1 */
 	assert(gref_get_name(idx, 2).len == 4, "%d", gref_get_name(idx, 2).len);
-	assert(strcmp(gref_get_name(idx, 2).str, "sec1") == 0, "%s", gref_get_name(idx, 2).str);
+	assert(strcmp(gref_get_name(idx, 2).ptr, "sec1") == 0, "%s", gref_get_name(idx, 2).ptr);
 
 	assert(gref_get_name(idx, 3).len == 4, "%d", gref_get_name(idx, 3).len);
-	assert(strcmp(gref_get_name(idx, 3).str, "sec1") == 0, "%s", gref_get_name(idx, 3).str);
+	assert(strcmp(gref_get_name(idx, 3).ptr, "sec1") == 0, "%s", gref_get_name(idx, 3).ptr);
 
 	/* section 2 */
 	assert(gref_get_name(idx, 4).len == 4, "%d", gref_get_name(idx, 4).len);
-	assert(strcmp(gref_get_name(idx, 4).str, "sec2") == 0, "%s", gref_get_name(idx, 4).str);
+	assert(strcmp(gref_get_name(idx, 4).ptr, "sec2") == 0, "%s", gref_get_name(idx, 4).ptr);
 
 	assert(gref_get_name(idx, 5).len == 4, "%d", gref_get_name(idx, 5).len);
-	assert(strcmp(gref_get_name(idx, 5).str, "sec2") == 0, "%s", gref_get_name(idx, 5).str);
+	assert(strcmp(gref_get_name(idx, 5).ptr, "sec2") == 0, "%s", gref_get_name(idx, 5).ptr);
 
 	gref_clean(idx);
 }

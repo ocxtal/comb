@@ -213,12 +213,12 @@ void sam_write_header(
 	int64_t ref_cnt = gref_get_section_count(r);
 	for(int64_t i = 0; i < ref_cnt; i++) {
 		zfprintf(aw->fp, "@SQ\tSN:%s\tLN:%u\n",
-			gref_get_name(r, gref_gid(i, 0)).str,
+			gref_get_name(r, gref_gid(i, 0)).ptr,
 			gref_get_section(r, gref_gid(i, 0))->len);
 
 		debug("i(%lld), gid(%u), name(%s), len(%u)", i,
 			gref_get_section(r, gref_gid(i, 0))->gid,
-			gref_get_name(r, gref_gid(i, 0)).str,
+			gref_get_name(r, gref_gid(i, 0)).ptr,
 			gref_get_section(r, gref_gid(i, 0))->len);
 	}
 
@@ -387,7 +387,7 @@ void sam_write_segment(
 {
 	/* query name */
 	aw_print_str(aw->fp,
-		gref_get_name(q, curr->bid).str,
+		gref_get_name(q, curr->bid).ptr,
 		gref_get_name(q, curr->bid).len);
 	zfputc(aw->fp, '\t');
 
@@ -397,7 +397,7 @@ void sam_write_segment(
 
 	/* reference name and pos (name is skipped by default) */
 	aw_print_str(aw->fp, 
-		gref_get_name(r, curr->aid).str,
+		gref_get_name(r, curr->aid).ptr,
 		gref_get_name(r, curr->aid).len);
 	zfputc(aw->fp, '\t');
 	aw_print_num(aw->fp, curr->apos);
@@ -413,7 +413,7 @@ void sam_write_segment(
 	/* ref name and pos of the next section */
 	if(next != NULL) {
 		aw_print_str(aw->fp,
-			gref_get_name(r, next->aid).str,
+			gref_get_name(r, next->aid).ptr,
 			gref_get_name(r, next->aid).len);
 		zfputc(aw->fp, '\t');
 		aw_print_num(aw->fp, next->apos);
@@ -503,7 +503,7 @@ void gpa_write_segment(
 
 	/* ref name */
 	aw_print_str(aw->fp,
-		gref_get_name(r, sec->aid).str,
+		gref_get_name(r, sec->aid).ptr,
 		gref_get_name(r, sec->aid).len);
 	zfputc(aw->fp, '\t');
 
@@ -524,7 +524,7 @@ void gpa_write_segment(
 
 	/* query name */
 	aw_print_str(aw->fp,
-		gref_get_name(q, sec->bid).str,
+		gref_get_name(q, sec->bid).ptr,
 		gref_get_name(q, sec->bid).len);
 	zfputc(aw->fp, '\t');
 

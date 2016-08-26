@@ -95,23 +95,23 @@ void sr_dump_seq(
 			*/
 
 			gref_append_segment(pool,
-				seq->s.segment.name,
-				seq->s.segment.name_len,
-				seq->s.segment.seq,
-				seq->s.segment.seq_len);
+				seq->s.segment.name.ptr,
+				seq->s.segment.name.len,
+				seq->s.segment.seq.ptr,
+				seq->s.segment.seq.len);
 		} else if(seq->type == FNA_LINK) {
 			/* check cigar starts from '0' (indicating cigar is "0M") */
-			if(seq->s.link.cigar[0] != '0') {
+			if(seq->s.link.cigar.ptr[0] != '0') {
 				debug("overlapping link is not supported.");
 				break;
 			} else {
 				gref_append_link(pool,
-					seq->s.link.from,
-					seq->s.link.from_len,
-					seq->s.link.from_ori,
-					seq->s.link.to,
-					seq->s.link.to_len,
-					seq->s.link.to_ori);
+					seq->s.link.src.ptr,
+					seq->s.link.src.len,
+					seq->s.link.src_ori,
+					seq->s.link.dst.ptr,
+					seq->s.link.dst.len,
+					seq->s.link.dst_ori);
 			}
 		} else {
 			/* unknown type */
@@ -233,10 +233,10 @@ struct sr_gref_s *sr_get_iter_read(
 				.lmm = lmm_read));
 
 			gref_append_segment(pool,
-				seq->s.segment.name,
-				seq->s.segment.name_len,
-				seq->s.segment.seq,
-				seq->s.segment.seq_len);
+				seq->s.segment.name.ptr,
+				seq->s.segment.name.len,
+				seq->s.segment.seq.ptr,
+				seq->s.segment.seq.len);
 			acv = gref_freeze_pool(pool);
 			break;
 		}

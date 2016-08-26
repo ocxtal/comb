@@ -289,7 +289,7 @@ struct hmap_key_s hmap_object_get_key(
 {
 	struct hmap_header_intl_s *obj = hmap_object_get_ptr(hmap, id);
 	return((struct hmap_key_s){
-		.str = (char const *)lmm_kv_ptr(hmap->key_arr) + obj->key_base,
+		.ptr = (char const *)lmm_kv_ptr(hmap->key_arr) + obj->key_base,
 		.len = obj->key_len
 	});
 }
@@ -372,16 +372,16 @@ uint32_t hmap_get_id(
 
 	while((tmp_id = hmap->table[hmap->mask & hash_val].id) != invalid_id) {
 		struct hmap_key_s ex_key = hmap_object_get_key(hmap, tmp_id);
-		debug("ex_key at %u: str(%p), len(%d)", tmp_id, ex_key.str, ex_key.len);
+		debug("ex_key at %u: str(%p), len(%d)", tmp_id, ex_key.ptr, ex_key.len);
 
 		/* compare string */
-		if(ex_key.len == len && strncmp(ex_key.str, str, MIN2(ex_key.len, len) + 1) == 0) {
+		if(ex_key.len == len && strncmp(ex_key.ptr, str, MIN2(ex_key.len, len) + 1) == 0) {
 			/* matched with existing string in the section array */
 			id = tmp_id; break;
 		}
 
 		debug("collision at %u, key(%s), ex_key(%s), hash_val(%x)",
-			hmap->mask & hash_val, str, ex_key.str, hash_uint32(hash_val));
+			hmap->mask & hash_val, str, ex_key.ptr, hash_uint32(hash_val));
 
 		/* not matched, rehash */
 		hash_val = hash_uint32(hash_val);
@@ -514,7 +514,7 @@ unittest()
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
 
@@ -523,7 +523,7 @@ unittest()
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
 
@@ -559,7 +559,7 @@ unittest()
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
 
@@ -586,7 +586,7 @@ unittest()
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
 
@@ -595,7 +595,7 @@ unittest()
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	assert(hmap_get_count(hmap) == UNITTEST_KEY_COUNT, "count(%u)", hmap_get_count(hmap));
 
@@ -616,7 +616,7 @@ unittest()
 	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	hmap_clean(hmap);
 
@@ -630,7 +630,7 @@ unittest()
 	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	hmap_clean(hmap);
 
@@ -644,7 +644,7 @@ unittest()
 	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	hmap_clean(hmap);
 }
@@ -665,7 +665,7 @@ unittest()
 	for(int64_t i = 0; i < UNITTEST_KEY_COUNT; i++) {
 		struct hmap_key_s k = hmap_get_key(hmap, i);
 		assert(k.len == strlen(make_string(i)), "a(%d), b(%d)", k.len, strlen(make_string(i)));
-		assert(strcmp(k.str, make_string(i)) == 0, "a(%s), b(%s)", k.str, make_string(i));
+		assert(strcmp(k.ptr, make_string(i)) == 0, "a(%s), b(%s)", k.ptr, make_string(i));
 	}
 	hmap_clean(hmap);
 	lmm_clean(lmm);

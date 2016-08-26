@@ -133,6 +133,30 @@ struct fna_s {
 typedef struct fna_s fna_t;
 
 /**
+ * @struct fna_str_s
+ */
+struct fna_str_s {
+	char const *ptr;
+	int32_t len;
+};
+
+/**
+ * @struct fna_sarr_s
+ */
+struct fna_sarr_s {
+	uint8_t const *ptr;
+	int64_t len;
+};
+
+/**
+ * @struct fna_cigar_s
+ */
+struct fna_cigar_s {
+	char const *ptr;
+	int64_t len;
+};
+
+/**
  * @struct fna_seq_s
  *
  * @brief a struct to contain parsed sequence.
@@ -144,23 +168,17 @@ struct fna_seq_s {
 	uint16_t options;
 	union fna_seq_body_u {
 		struct {
-			char *name;					/** sequence name */
-			int32_t name_len;
-			int32_t reserved;
-			uint8_t *seq;				/** sequence */
-			int64_t seq_len;			/** sequence length */
-			uint8_t *qual;
-			int64_t qual_len;
+			struct fna_str_s name;
+			struct fna_str_s comment;
+			struct fna_sarr_s seq;
+			struct fna_sarr_s qual;
 		} segment;
 		struct {
-			char *from;
-			int32_t from_len;
-			int32_t from_ori;
-			char *to;
-			int32_t to_len;
-			int32_t to_ori;
-			char *cigar;				/** contains link cigar string */
-			int64_t cigar_len;			/** contains link cigar string length (== strlen(seq)) */
+			struct fna_str_s src;
+			int32_t src_ori;			/** 0: forward, 1: reverse */
+			struct fna_str_s dst;
+			int32_t dst_ori;			/** 0: forward, 1: reverse */
+			struct fna_cigar_s cigar;
 		} link;
 	} s;
 	uint16_t reserved3[4];
