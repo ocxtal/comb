@@ -95,3 +95,5 @@ def build(bld):
 		use = bld.env.OBJ_COMB,
 		lib = bld.env.LIB_COMB,
 		defines = ['MAIN'] + bld.env.DEFINES_COMB)
+
+	bld.install_files('${PREFIX}/bin', ['comb'])
