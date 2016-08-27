@@ -3694,7 +3694,7 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
  */
 #define _parse_count_match_reverse(_arr) ({ \
 	uint64_t _a = (_arr); \
-	uint64_t m0 = _a & (_a>>1); \
+	uint64_t m0 = _a & ((_a>>1) | (0x01ULL<<63)); \
 	uint64_t m1 = _a | (_a<<1); \
 	uint64_t m = m0 | ~m1; \
 	debug("m0(%llx), m1(%llx), m(%llx), lzcnt(%u)", m0, m1, m, lzcnt(m)); \
