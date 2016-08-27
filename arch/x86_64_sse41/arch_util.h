@@ -22,7 +22,7 @@
 #else
 	// #warning "popcnt instruction is not enabled."
 	static inline
-	int popcnt(uint64_t n)
+	int64_t popcnt(uint64_t n)
 	{
 		uint64_t c = 0;
 		c = (n & 0x5555555555555555) + ((n>>1) & 0x5555555555555555);
@@ -45,9 +45,19 @@
 #else
 	// #warning "tzcnt instruction is not enabled."
 	static inline
-	int tzcnt(uint64_t n)
+	int64_t tzcnt(uint64_t n)
 	{
-		return(popcnt(~n & (n - 1)));
+		#ifdef __POPCNT__
+			return(popcnt(~n & (n - 1)));
+		#else
+			if(n == 0) {
+				return(64);
+			} else {
+				int64_t res;
+				__asm__( "bsfq %1, %0" : "=r"(res) : "r"(n) );
+				return(res);
+			}
+		#endif
 	}
 #endif
 
@@ -60,8 +70,16 @@
 #else
 	// #warning "lzcnt instruction is not enabled."
 	static inline
-	int lzcnt(uint64_t n)
+	int64_t lzcnt(uint64_t n)
 	{
+		if(n == 0) {
+			return(64);
+		} else {
+			int64_t res;
+			__asm__( "bsrq %1, %0" : "=r"(res) : "r"(n) );
+			return(63 - res);
+		}
+		/*
 		n |= n>>1;
 		n |= n>>2;
 		n |= n>>4;
@@ -69,6 +87,7 @@
 		n |= n>>16;
 		n |= n>>32;
 		return(64-popcnt(n));
+		*/
 	}
 #endif
 
