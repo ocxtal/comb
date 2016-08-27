@@ -303,7 +303,7 @@ void sam_print_cigar(
 	}
 
 	/* print cigar */
-	gaba_dp_print_cigar(
+	gaba_dp_print_cigar_forward(
 		// (gaba_dp_fprintf_t)zfprintf,
 		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,
@@ -559,7 +559,7 @@ void gpa_write_segment(
 	zfputc(aw->fp, '\t');
 
 	/* cigar string */
-	gaba_dp_print_cigar(
+	gaba_dp_print_cigar_forward(
 		// (gaba_dp_fprintf_t)zfprintf,
 		(gaba_dp_fprintf_t)aw_cigar_printf,
 		(void *)aw->fp,

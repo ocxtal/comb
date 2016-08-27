@@ -113,13 +113,25 @@ gaba_alignment_t *gaba_dp_recombine_linear(
 	uint32_t ysid);
 void gaba_dp_res_free_linear(
 	gaba_alignment_t *res);
-int64_t gaba_dp_print_cigar_linear(
+int64_t gaba_dp_print_cigar_forward_linear(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-int64_t gaba_dp_dump_cigar_linear(
+int64_t gaba_dp_print_cigar_reverse_linear(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_forward_linear(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_reverse_linear(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -174,19 +186,30 @@ gaba_alignment_t *gaba_dp_recombine_affine(
 	uint32_t ysid);
 void gaba_dp_res_free_affine(
 	gaba_alignment_t *res);
-int64_t gaba_dp_print_cigar_affine(
+int64_t gaba_dp_print_cigar_forward_affine(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-int64_t gaba_dp_dump_cigar_affine(
+int64_t gaba_dp_print_cigar_reverse_affine(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+int64_t gaba_dp_dump_cigar_forward_affine(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len);
-
+int64_t gaba_dp_dump_cigar_reverse_affine(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
 
 
 /* function table */
@@ -397,31 +420,56 @@ void gaba_dp_res_free(
 
 
 /**
- * @fn gaba_dp_print_cigar
+ * @fn gaba_dp_print_cigar_forward
  */
-int64_t gaba_dp_print_cigar(
+int64_t gaba_dp_print_cigar_forward(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
 {
-	return(gaba_dp_print_cigar_linear(_fprintf, fp, path, offset, len));
+	return(gaba_dp_print_cigar_forward_linear(_fprintf, fp, path, offset, len));
 }
 
 /**
- * @fn gaba_dp_dump_cigar
+ * @fn gaba_dp_print_cigar_reverse
  */
-int64_t gaba_dp_dump_cigar(
+int64_t gaba_dp_print_cigar_reverse(
+	gaba_dp_fprintf_t _fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len)
+{
+	return(gaba_dp_print_cigar_reverse_linear(_fprintf, fp, path, offset, len));
+}
+
+/**
+ * @fn gaba_dp_dump_cigar_forward
+ */
+int64_t gaba_dp_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
 {
-	return(gaba_dp_dump_cigar_linear(buf, buf_size, path, offset, len));
+	return(gaba_dp_dump_cigar_forward_linear(buf, buf_size, path, offset, len));
 }
 
+/**
+ * @fn gaba_dp_dump_cigar_reverse
+ */
+int64_t gaba_dp_dump_cigar_reverse(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len)
+{
+	return(gaba_dp_dump_cigar_reverse_linear(buf, buf_size, path, offset, len));
+}
 
 
 /* unittests */

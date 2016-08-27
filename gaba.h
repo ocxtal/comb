@@ -361,7 +361,7 @@ void gaba_dp_res_free(
 	gaba_alignment_t *aln);
 
 /**
- * @fn gaba_dp_print_cigar
+ * @fn gaba_dp_print_cigar_forward
  *
  * @brief convert path string to cigar.
  * @detail
@@ -369,7 +369,7 @@ void gaba_dp_res_free(
  * otherwise can be ignored.
  */
 typedef int (*gaba_dp_fprintf_t)(void *, char const *, ...);
-int64_t gaba_dp_print_cigar(
+int64_t gaba_dp_print_cigar_forward(
 	gaba_dp_fprintf_t fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -377,9 +377,31 @@ int64_t gaba_dp_print_cigar(
 	uint32_t len);
 
 /**
- * @fn gaba_dp_dump_cigar
+ * @fn gaba_dp_print_cigar_reverse
+ *
+ * @brief convert path string to cigar in reverse direction
  */
-int64_t gaba_dp_dump_cigar(
+int64_t gaba_dp_print_cigar_reverse(
+	gaba_dp_fprintf_t fprintf,
+	void *fp,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+
+/**
+ * @fn gaba_dp_dump_cigar_forward
+ */
+int64_t gaba_dp_dump_cigar_forward(
+	char *buf,
+	uint64_t buf_size,
+	uint32_t const *path,
+	uint32_t offset,
+	uint32_t len);
+
+/**
+ * @fn gaba_dp_dump_cigar_reverse
+ */
+int64_t gaba_dp_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
