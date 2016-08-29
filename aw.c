@@ -59,6 +59,7 @@ struct aw_s {
 	struct aw_conf_s conf;		/* function pointers and misc */
 	uint8_t format;				/* AW_SAM, AW_GPA, ... */
 	char clip;					/* cigar operation to represent clip operation ('S' or 'H') */
+	// uint8_t include_qual;		/* include quality string in output if not zero */
 	uint8_t pad1[2];
 	uint32_t program_id;
 	char *program_name;
@@ -73,23 +74,6 @@ struct aw_s {
 
 
 /* formatter utils */
-
-#if 0
-/**
- * @fn aw_decode_4bit
- */
-static _force_inline
-char aw_decode_4bit(
-	uint8_t base)
-{
-	static char const table[] = {
-		'N', 'A', 'C', 'M', 'G', 'R', 'S', 'V',
-		'T', 'W', 'Y', 'H', 'K', 'D', 'B', 'N'
-	};
-	return(table[base & 0x0f]);
-}
-#endif
-
 /**
  * @fn aw_print_str
  */
@@ -101,8 +85,10 @@ void aw_print_str(
 {
 	debug("print_str %p, %s", str, str);
 
-	for(int64_t i = 0; i < len; i++) {
-		zfputc(fp, str[i]);
+	char const *p = str;
+	char const *lim = str + len;
+	while(p < lim) {
+		zfputc(fp, *p++);
 	}
 	return;
 }
@@ -273,6 +259,44 @@ void sam_print_option_tags(
 }
 
 /**
+ * @fn sam_print_seq_forward
+ */
+static _force_inline
+void sam_print_seq_forward(
+	aw_t *aw,
+	uint8_t const *seq,
+	int64_t len)
+{
+	char const *decode = "NACMGRSVTWYHKDBN";
+
+	uint8_t const *p = seq;
+	uint8_t const *lim = seq + len;
+	while(p < lim) {
+		zfputc(aw->fp, decode[*p++]);
+	}
+	return;
+}
+
+/**
+ * @fn sam_print_seq_reverse
+ */
+static _force_inline
+void sam_print_seq_reverse(
+	aw_t *aw,
+	uint8_t const *seq,
+	int64_t len)
+{
+	char const *decode = "NTGKCYSBAWRDMHVN";
+
+	uint8_t const *p = seq + len;
+	uint8_t const *lim = seq;
+	while(p > lim) {
+		zfputc(aw->fp, decode[*--p]);		
+	}
+	return;
+}
+
+/**
  * @fn sam_print_cigar_forward
  */
 static _force_inline
@@ -283,10 +307,6 @@ void sam_print_cigar_forward(
 	struct gaba_path_s const *path)
 {
 	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-
-	debug("curr->bid(%u), bsec->gid(%u)", curr->bid, bsec->gid);
-
-	/* determine direction and calc margins */
 	int64_t hlen = curr->bpos;
 	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
 
@@ -314,7 +334,45 @@ void sam_print_cigar_forward(
 }
 
 /**
+ * @fn sam_print_cigar_reverse
+ */
+static _force_inline
+void sam_print_cigar_reverse(
+	aw_t *aw,
+	gref_acv_t const *q,
+	struct gaba_path_section_s const *curr,
+	struct gaba_path_s const *path)
+{
+	gref_section_t const *bsec = gref_get_section(q, curr->bid);
+	int64_t hlen = curr->bpos;
+	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
+
+	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
+
+	/* print clip at the head */
+	if(tlen > 0) {
+		zfprintf(aw->fp, "%lld%c", tlen, aw->clip);
+	}
+
+	/* print cigar */
+	gaba_dp_print_cigar_reverse(
+		(gaba_dp_fprintf_t)aw_cigar_printf,
+		(void *)aw->fp,
+		path->array,
+		curr->ppos,
+		gaba_plen(curr));
+
+	/* print clip at the tail */
+	if(hlen > 0) {
+		zfprintf(aw->fp, "%lld%c", hlen, aw->clip);
+	}
+	zfputc(aw->fp, '\t');
+	return;
+}
+
+/**
  * @fn sam_print_seq_qual_forward
+ * @brief seqa and seqb are aligned in parallel
  */
 static _force_inline
 void sam_print_seq_qual_forward(
@@ -323,35 +381,12 @@ void sam_print_seq_qual_forward(
 	struct gaba_path_section_s const *curr)
 {
 	/* determine direction and fix seq pointer */
-	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-	uint8_t const *seq = bsec->base;
-	int64_t hlen = curr->bpos;
-	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
-	
-	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
-	debug("print_seq, seq(%p), lim(%p), len(%lld, %u, %lld)",
-		seq, lim, hlen, curr->blen, tlen);
+	gref_section_t const *bsec = gref_get_section(q, gref_fw(curr->bid));
 
-	char const *decode = "NACMGRSVTWYHKDBN";
-
-	/* print unaligned region at the head */
-	if(aw->clip == 'S') {
-		for(int64_t i = 0; i < hlen; i++) {
-			zfputc(aw->fp, decode[seq[i]]);
-		}
-	}
-
-	/* print body */
-	for(int64_t i = 0; i < curr->blen; i++) {
-		zfputc(aw->fp, decode[seq[hlen + i]]);
-	}
-
-	/* print unaligned region at the tail */
-	if(aw->clip == 'S') {
-		for(int64_t i = 0; i < tlen; i++) {
-			zfputc(aw->fp, decode[seq[hlen + curr->blen + i]]);
-		}
-	}
+	/* include clipped sequence if clipping is 'S' */
+	sam_print_seq_forward(aw,
+		(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos],
+		(aw->clip == 'S') ? bsec->len : curr->blen);
 
 	/* print quality string */
 	zfprintf(aw->fp, "\t*\t");
@@ -360,6 +395,7 @@ void sam_print_seq_qual_forward(
 
 /**
  * @fn sam_write_segment_forward
+ * @brief seqa and seqb are aligned in parallel
  */
 static _force_inline
 void sam_write_segment_forward(
@@ -421,48 +457,8 @@ void sam_write_segment_forward(
 }
 
 /**
- * @fn sam_print_cigar_reverse
- */
-static _force_inline
-void sam_print_cigar_reverse(
-	aw_t *aw,
-	gref_acv_t const *q,
-	struct gaba_path_section_s const *curr,
-	struct gaba_path_s const *path)
-{
-	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-
-	debug("curr->bid(%u), bsec->gid(%u)", curr->bid, bsec->gid);
-
-	/* determine direction and calc margins */
-	int64_t hlen = curr->bpos;
-	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
-
-	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
-
-	/* print clip at the head */
-	if(tlen > 0) {
-		zfprintf(aw->fp, "%lld%c", tlen, aw->clip);
-	}
-
-	/* print cigar */
-	gaba_dp_print_cigar_reverse(
-		(gaba_dp_fprintf_t)aw_cigar_printf,
-		(void *)aw->fp,
-		path->array,
-		curr->ppos,
-		gaba_plen(curr));
-
-	/* print clip at the tail */
-	if(hlen > 0) {
-		zfprintf(aw->fp, "%lld%c", hlen, aw->clip);
-	}
-	zfputc(aw->fp, '\t');
-	return;
-}
-
-/**
  * @fn sam_print_seq_qual_reverse
+ * @brief seqa and seqb are aligned antiparallel
  */
 static _force_inline
 void sam_print_seq_qual_reverse(
@@ -471,35 +467,20 @@ void sam_print_seq_qual_reverse(
 	struct gaba_path_section_s const *curr)
 {
 	/* determine direction and fix seq pointer */
-	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-	uint8_t const *seq = bsec->base + bsec->len - 1;
-	int64_t hlen = curr->bpos;
-	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
-	
-	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
-	debug("print_seq, seq(%p), lim(%p), len(%lld, %u, %lld)",
-		seq, lim, hlen, curr->blen, tlen);
+	gref_section_t const *bsec = gref_get_section(q, gref_rv(curr->bid));
+	uint8_t const *lim = gref_get_lim(q);
 
-	// char const *decode = "NACMGRSVTWYHKDBN";
-	char const *decode = "NTGKCYSBAWRDMHVN";
-
-	/* print unaligned region at the head */
-	if(aw->clip == 'S') {
-		for(int64_t i = 0; i < hlen; i++) {
-			zfputc(aw->fp, decode[seq[-i]]);
-		}
-	}
-
-	/* print body */
-	for(int64_t i = 0; i < curr->blen; i++) {
-		zfputc(aw->fp, decode[seq[-hlen - i]]);
-	}
-
-	/* print unaligned region at the tail */
-	if(aw->clip == 'S') {
-		for(int64_t i = 0; i < tlen; i++) {
-			zfputc(aw->fp, decode[seq[-hlen - curr->blen - i]]);
-		}
+	if(bsec->base < lim) {
+		/* if reverse-complemented sequence is available */
+		sam_print_seq_forward(aw,
+			(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos],
+			(aw->clip == 'S') ? bsec->len : curr->blen);
+	} else {
+		/* if reverse-complemented sequence is not available */
+		gref_section_t const *r = gref_get_section(q, gref_fw(curr->bid));
+		sam_print_seq_reverse(aw,
+			(aw->clip == 'S') ? r->base : &r->base[r->len - (curr->bpos + curr->blen)],
+			(aw->clip == 'S') ? r->len : curr->blen);
 	}
 
 	/* print quality string */
@@ -509,6 +490,7 @@ void sam_print_seq_qual_reverse(
 
 /**
  * @fn sam_write_segment_reverse
+ * @brief seqa and seqb are aligned antiparallel
  */
 static _force_inline
 void sam_write_segment_reverse(
@@ -530,7 +512,7 @@ void sam_write_segment_reverse(
 	zfputc(aw->fp, '\t');
 
 	/* reference name and pos (name is skipped by default) */
-	aw_print_str(aw->fp, 
+	aw_print_str(aw->fp,
 		gref_get_name(r, curr->aid).ptr,
 		gref_get_name(r, curr->aid).len);
 	zfputc(aw->fp, '\t');
@@ -855,11 +837,8 @@ aw_t *aw_init(
 
 	/* copy params */
 	aw->format = params->format;
-	if(params->clip == 'S' || params->clip == 'H') {
-		aw->clip = params->clip;
-	} else {
-		aw->clip = 'S';
-	}
+	aw->clip = (params->clip == 'S' || params->clip == 'H') ? params->clip : 'S';
+	// aw->include_qual = (params->include_qual == 0) ? 0 : 1;
 	aw->program_id = params->program_id;
 	aw->program_name = (params->program_name != NULL)
 		? strdup_rm_tab(params->program_name) : NULL;
@@ -1194,14 +1173,14 @@ unittest()
 		"@SQ\tSN:sec1\tLN:4\n"
 		"@SQ\tSN:sec2\tLN:8\n"
 		"@RG\tID:1\n"
-		"sec0\t0\tsec0\t0\t255\t4M\tsec1\t0\t0\tGGRA\t*\tRG:Z:1\n"
-		"sec1\t0\tsec1\t0\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
-		"sec2\t0\tsec2\t0\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
-		"sec2\t16\tsec0\t0\t255\t4M4S\tsec1\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
-		"sec1\t16\tsec1\t0\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
-		"sec0\t16\tsec2\t0\t255\t2S2M\t*\t0\t0\tGGRA\t*\tRG:Z:1\n"
-		"sec0\t0\tsec0\t0\t255\t4M\tsec2\t0\t0\tGGRA\t*\tRG:Z:1\n"
-		"sec2\t0\tsec2\t0\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n";
+		"sec0\t0\tsec0\t1\t255\t4M\tsec1\t0\t0\tGGRA\t*\tRG:Z:1\n"
+		"sec1\t0\tsec1\t1\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
+		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
+		"sec2\t16\tsec0\t1\t255\t4M4S\tsec1\t0\t0\tACACBBGT\t*\tRG:Z:1\n"
+		"sec1\t16\tsec1\t1\t255\t4M\tsec2\t0\t0\tCCCK\t*\tRG:Z:1\n"
+		"sec0\t16\tsec2\t7\t255\t2S2M\t*\t0\t0\tTYCC\t*\tRG:Z:1\n"
+		"sec0\t0\tsec0\t1\t255\t4M\tsec2\t0\t0\tGGRA\t*\tRG:Z:1\n"
+		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n";
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
@@ -1231,14 +1210,14 @@ unittest()
 		"@SQ\tSN:sec1\tLN:4\n"
 		"@SQ\tSN:sec2\tLN:8\n"
 		"@RG\tID:1\n"
-		"sec0\t0\tsec0\t0\t255\t4M\tsec1\t0\t0\tGGRA\t*\tRG:Z:1\n"
-		"sec1\t0\tsec1\t0\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
-		"sec2\t0\tsec2\t0\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
-		"sec2\t16\tsec0\t0\t255\t4M4H\tsec1\t0\t0\tACVV\t*\tRG:Z:1\n"
-		"sec1\t16\tsec1\t0\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
-		"sec0\t16\tsec2\t0\t255\t2H2M\t*\t0\t0\tRA\t*\tRG:Z:1\n"
-		"sec0\t0\tsec0\t0\t255\t4M\tsec2\t0\t0\tGGRA\t*\tRG:Z:1\n"
-		"sec2\t0\tsec2\t0\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n";
+		"sec0\t0\tsec0\t1\t255\t4M\tsec1\t0\t0\tGGRA\t*\tRG:Z:1\n"
+		"sec1\t0\tsec1\t1\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
+		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
+		"sec2\t16\tsec0\t1\t255\t4M4H\tsec1\t0\t0\tBBGT\t*\tRG:Z:1\n"
+		"sec1\t16\tsec1\t1\t255\t4M\tsec2\t0\t0\tCCCK\t*\tRG:Z:1\n"
+		"sec0\t16\tsec2\t7\t255\t2H2M\t*\t0\t0\tTY\t*\tRG:Z:1\n"
+		"sec0\t0\tsec0\t1\t255\t4M\tsec2\t0\t0\tGGRA\t*\tRG:Z:1\n"
+		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n";
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
