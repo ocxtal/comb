@@ -616,11 +616,10 @@ struct fna_read_ret_s fna_read_seq_ascii(
 	uint8_t const *delim_table,
 	int64_t lim)
 {
-	int c;
+	int c = 0;
 	int64_t len = 0;
 	while(len < lim) {
-		c = zfgetc(fna->fp);
-		uint8_t type = delim_table[(uint8_t)c];
+		uint8_t type = delim_table[(uint8_t)(c = zfgetc(fna->fp))];
 		if(type & DELIM_TERM) { break; }
 		if(type != 0) { continue; }
 		debug("%c, %d", c, c);
