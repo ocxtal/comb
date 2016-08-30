@@ -230,7 +230,7 @@ ggsea_conf_t *ggsea_conf_init(
 	/* store constants */
 	conf->init_rep_hash_size = 1024;
 	conf->max_rep_vec_size = 128;
-	conf->overlap_width = 32;
+	conf->overlap_width = 48;
 	conf->res_lmm_size = 16 * 1024 * 1024;		/* 16MB */
 	conf->params = p;
 
@@ -1913,6 +1913,7 @@ unittest_config(
 #define _str(x)		x, strlen(x)
 #define _seq(x)		(uint8_t const *)(x), strlen(x)
 
+#define _pool(_k)		( GREF_PARAMS( .k = (_k), .seq_head_margin = 32, .seq_tail_margin = 32 ) )
 
 /* create conf */
 unittest()
@@ -1933,7 +1934,7 @@ unittest()
 		.score_matrix = GABA_SCORE_SIMPLE(2, 3, 5, 1),
 		.xdrop = 10));
 
-	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
+	gref_pool_t *pool = gref_init_pool(_pool(4));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_acv_t *acv = gref_freeze_pool(pool);
 	gref_idx_t *idx = gref_build_index(acv);
@@ -1977,7 +1978,7 @@ unittest(with_default_conf(4))
 	omajinai();
 
 	/* build sequence pool */
-	gref_pool_t *pool = gref_init_pool(GREF_PARAMS( .k = 4 ));
+	gref_pool_t *pool = gref_init_pool(_pool(4));
 	gref_append_segment(pool, _str("seq1"), _seq("ACGTACGTACGTAACCACGTACGTACGT"));
 	gref_idx_t *idx = gref_build_index(gref_freeze_pool(pool));
 
@@ -2001,13 +2002,13 @@ unittest(with_default_conf(14))
 	omajinai();
 
 	/* build reference index object */
-	gref_pool_t *rpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
+	gref_pool_t *rpool = gref_init_pool(_pool(14));
 	gref_append_segment(rpool, _str("ref1"),
 		_seq("CTCACCTCGCTCAAAAGGGCTGCCTCCGAGCGTGTGGGCGAGGACAACCGCCCCACAGTCAAGCTCGAATGGGTGCTATTGCGTAGCTAGGACCGGCACT"));
 	gref_idx_t *ref = gref_build_index(gref_freeze_pool(rpool));
 
 	/* build query sequence iterator */
-	gref_pool_t *qpool = gref_init_pool(GREF_PARAMS( .k = 14 ));
+	gref_pool_t *qpool = gref_init_pool(_pool(14));
 	gref_append_segment(qpool, _str("query1"),
 		_seq("GGCTGCCTCCGAGCGTGTGGGCGAGGACAACCGCCCCACAGTCAAGCTCGAA"));
 	gref_acv_t *query = gref_freeze_pool(qpool);
