@@ -369,7 +369,7 @@ size_t zfread(
 
 		/* update */
 		len -= buf_copy_size;
-		ptr += buf_copy_size;
+		(uintptr_t)ptr += buf_copy_size;
 		fio->curr += buf_copy_size;
 		copied_size += buf_copy_size;
 	}
@@ -414,7 +414,7 @@ size_t zfpeek(
 		
 		/* update length (without advancing pointer) */
 		len -= buf_copy_size;
-		ptr += buf_copy_size;
+		(uintptr_t)ptr += buf_copy_size;
 		copied_size += buf_copy_size;
 	}
 
