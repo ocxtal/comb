@@ -19,7 +19,7 @@
  * @macro popcnt
  */
 #if 1
-	#define popcnt(x)		_mm_popcnt_u64(x)
+	#define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
 #else
 	static inline
 	int popcnt(uint64_t n)
@@ -41,7 +41,7 @@
  */
 #if 1
 	/** immintrin.h is already included */
-	#define tzcnt(x)		_tzcnt_u64(x)
+	#define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
 #else
 	static inline
 	int tzcnt(uint64_t n)
@@ -61,7 +61,7 @@
  * @brief leading zero count (count #continuous zeros from MSb)
  */
 #if 1
-	#define lzcnt(x)		_lzcnt_u64(x)
+	#define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
 #else
 	static inline
 	int lzcnt(uint64_t n)
