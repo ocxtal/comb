@@ -391,7 +391,7 @@ ngx_ivtree_node_t *ivtree_next_node(
             node, node->lkey, node->rkey, node->rkey_max);
 
 		if(node->lkey >= tlim) { node = NULL; break; }
-		if((int64_t)(node->rkey - llim) < (rlim - llim)) { break; }
+		if((uint64_t)(node->rkey - llim) < (uint64_t)(rlim - llim)) { break; }
 
 		/* not found, get next */
 		node = (ngx_ivtree_node_t *)ngx_rbtree_find_right(
