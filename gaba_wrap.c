@@ -424,7 +424,7 @@ void gaba_dp_res_free(
 /**
  * @fn gaba_dp_print_cigar_forward
  */
-int64_t gaba_dp_print_cigar_forward(
+uint64_t gaba_dp_print_cigar_forward(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -437,7 +437,7 @@ int64_t gaba_dp_print_cigar_forward(
 /**
  * @fn gaba_dp_print_cigar_reverse
  */
-int64_t gaba_dp_print_cigar_reverse(
+uint64_t gaba_dp_print_cigar_reverse(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -450,7 +450,7 @@ int64_t gaba_dp_print_cigar_reverse(
 /**
  * @fn gaba_dp_dump_cigar_forward
  */
-int64_t gaba_dp_dump_cigar_forward(
+uint64_t gaba_dp_dump_cigar_forward(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -463,7 +463,7 @@ int64_t gaba_dp_dump_cigar_forward(
 /**
  * @fn gaba_dp_dump_cigar_reverse
  */
-int64_t gaba_dp_dump_cigar_reverse(
+uint64_t gaba_dp_dump_cigar_reverse(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,

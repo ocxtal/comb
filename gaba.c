@@ -3580,7 +3580,7 @@ int64_t parse_dump_gap_string(
 #define _parse_count_gap_forward(_arr) ({ \
 	uint64_t _a = (_arr); \
 	uint64_t mask = 0ULL - (_a & 0x01); \
-	int64_t gc = tzcnt(_a ^ mask) + (int64_t)mask; \
+	uint64_t gc = tzcnt(_a ^ mask) + (uint64_t)mask; \
 	debug("arr(%llx), mask(%llx), gc(%lld)", _a, mask, gc); \
 	gc; \
 })
@@ -3589,26 +3589,26 @@ int64_t parse_dump_gap_string(
  * @fn gaba_dp_print_cigar_forward
  * @brief parse path string and print cigar to file
  */
-int64_t suffix(gaba_dp_print_cigar_forward)(
+uint64_t suffix(gaba_dp_print_cigar_forward)(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
 	uint32_t offset,
 	uint32_t len)
 {
-	int64_t clen = 0;
+	uint64_t clen = 0;
 
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
-	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
-	int64_t ridx = len;
+	uint64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
+	uint64_t ridx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld), mod(%lld)", p, lim, ridx, ridx % 64);
 
 	while(1) {
-		int64_t rsidx = ridx;
+		uint64_t rsidx = ridx;
 		while(1) {
-			int64_t a = MIN2(
+			uint64_t a = MIN2(
 				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
 				ridx & ~0x01);
 			ridx -= a;
@@ -3616,7 +3616,7 @@ int64_t suffix(gaba_dp_print_cigar_forward)(
 
 			debug("bulk match");
 		}
-		int64_t m = (rsidx - ridx)>>1;
+		uint64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
 			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
@@ -3624,7 +3624,7 @@ int64_t suffix(gaba_dp_print_cigar_forward)(
 		if(ridx <= 0) { break; }
 
 		uint64_t arr;
-		int64_t g = MIN2(
+		uint64_t g = MIN2(
 			_parse_count_gap_forward(arr = parse_load_uint64(p, lim - ridx)),
 			ridx);
 		if(g > 0) {
@@ -3640,7 +3640,7 @@ int64_t suffix(gaba_dp_print_cigar_forward)(
  * @fn gaba_dp_dump_cigar_forward
  * @brief parse path string and store cigar to buffer
  */
-int64_t suffix(gaba_dp_dump_cigar_forward)(
+uint64_t suffix(gaba_dp_dump_cigar_forward)(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -3652,15 +3652,15 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
 
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
-	int64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
-	int64_t ridx = len;
+	uint64_t lim = offset + (((uint64_t)path & sizeof(uint32_t)) ? 32 : 0) + len;
+	uint64_t ridx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
 
 	while(1) {
-		int64_t rsidx = ridx;
+		uint64_t rsidx = ridx;
 		while(1) {
-			int64_t a = MIN2(
+			uint64_t a = MIN2(
 				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
 				ridx & ~0x01);
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
@@ -3669,7 +3669,7 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
 
 			debug("bulk match");
 		}
-		int64_t m = (rsidx - ridx)>>1;
+		uint64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
 			b += parse_dump_match_string(b, m);
 			debug("match m(%lld)", m);
@@ -3677,7 +3677,7 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
 		if(ridx <= 0 || b > blim) { break; }
 
 		uint64_t arr;
-		int64_t g = MIN2(
+		uint64_t g = MIN2(
 			_parse_count_gap_forward(arr = parse_load_uint64(p, lim - ridx)),
 			ridx);
 		if(g > 0) {
@@ -3704,7 +3704,7 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
 #define _parse_count_gap_reverse(_arr) ({ \
 	uint64_t _a = (_arr); \
 	uint64_t mask = (uint64_t)(((int64_t)_a)>>63); \
-	int64_t gc = lzcnt(_a ^ mask) - ((int64_t)mask + 1); \
+	uint64_t gc = lzcnt(_a ^ mask) - ((int64_t)mask + 1); \
 	debug("arr(%llx), mask(%llx), gc(%lld)", _a, mask, gc); \
 	gc; \
 })
@@ -3713,7 +3713,7 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
  * @fn gaba_dp_print_cigar_reverse
  * @brief parse path string and print cigar to file
  */
-int64_t suffix(gaba_dp_print_cigar_reverse)(
+uint64_t suffix(gaba_dp_print_cigar_reverse)(
 	gaba_dp_fprintf_t _fprintf,
 	void *fp,
 	uint32_t const *path,
@@ -3724,16 +3724,16 @@ int64_t suffix(gaba_dp_print_cigar_reverse)(
 
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
-	int64_t ofs = (int64_t)offset + (((uint64_t)path & sizeof(uint32_t)) ? -32 : -64);
-	int64_t idx = len;
+	uint64_t ofs = (int64_t)offset + (((uint64_t)path & sizeof(uint32_t)) ? -32 : -64);
+	uint64_t idx = len;
 
 	debug("path(%p, %x), p(%p, %llx), idx(%lld), mod(%lld)",
 		path, *path, p, *p, idx, idx % 64);
 
 	while(1) {
-		int64_t sidx = idx;
+		uint64_t sidx = idx;
 		while(1) {
-			int64_t a = MIN2(
+			uint64_t a = MIN2(
 				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
 				idx & ~0x01);
 			idx -= a;
@@ -3741,7 +3741,7 @@ int64_t suffix(gaba_dp_print_cigar_reverse)(
 
 			debug("bulk match");
 		}
-		int64_t m = (sidx - idx)>>1;
+		uint64_t m = (sidx - idx)>>1;
 		if(m > 0) {
 			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
@@ -3749,7 +3749,7 @@ int64_t suffix(gaba_dp_print_cigar_reverse)(
 		if(idx <= 0) { break; }
 
 		uint64_t arr;
-		int64_t g = MIN2(
+		uint64_t g = MIN2(
 			_parse_count_gap_reverse(arr = parse_load_uint64(p, idx + ofs)),
 			idx);
 		if(g > 0) {
@@ -3765,7 +3765,7 @@ int64_t suffix(gaba_dp_print_cigar_reverse)(
  * @fn gaba_dp_dump_cigar_reverse
  * @brief parse path string and store cigar to buffer
  */
-int64_t suffix(gaba_dp_dump_cigar_reverse)(
+uint64_t suffix(gaba_dp_dump_cigar_reverse)(
 	char *buf,
 	uint64_t buf_size,
 	uint32_t const *path,
@@ -3777,15 +3777,15 @@ int64_t suffix(gaba_dp_dump_cigar_reverse)(
 
 	/* convert path to uint64_t pointer */
 	uint64_t const *p = (uint64_t const *)((uint64_t)path & ~(sizeof(uint64_t) - 1));
-	int64_t ofs = (int64_t)offset + (((uint64_t)path & sizeof(uint32_t)) ? -32 : -64);
-	int64_t idx = len;
+	uint64_t ofs = (int64_t)offset + (((uint64_t)path & sizeof(uint32_t)) ? -32 : -64);
+	uint64_t idx = len;
 
 	debug("path(%p), lim(%lld), ridx(%lld)", p, lim, ridx);
 
 	while(1) {
-		int64_t sidx = idx;
+		uint64_t sidx = idx;
 		while(1) {
-			int64_t a = MIN2(
+			uint64_t a = MIN2(
 				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
 				idx & ~0x01);
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
@@ -3794,7 +3794,7 @@ int64_t suffix(gaba_dp_dump_cigar_reverse)(
 
 			debug("bulk match");
 		}
-		int64_t m = (sidx - idx)>>1;
+		uint64_t m = (sidx - idx)>>1;
 		if(m > 0) {
 			b += parse_dump_match_string(b, m);
 			debug("match m(%lld)", m);
@@ -3802,7 +3802,7 @@ int64_t suffix(gaba_dp_dump_cigar_reverse)(
 		if(idx <= 0 || b > blim) { break; }
 
 		uint64_t arr;
-		int64_t g = MIN2(
+		uint64_t g = MIN2(
 			_parse_count_gap_reverse(arr = parse_load_uint64(p, idx + ofs)),
 			idx);
 		if(g > 0) {

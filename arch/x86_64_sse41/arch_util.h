@@ -18,11 +18,11 @@
  * @macro popcnt
  */
 #ifdef __POPCNT__
-	#define popcnt(x)		_mm_popcnt_u64(x)
+	#define popcnt(x)		( (uint64_t)_mm_popcnt_u64(x) )
 #else
 	// #warning "popcnt instruction is not enabled."
 	static inline
-	int64_t popcnt(uint64_t n)
+	uint64_t popcnt(uint64_t n)
 	{
 		uint64_t c = 0;
 		c = (n & 0x5555555555555555) + ((n>>1) & 0x5555555555555555);
@@ -41,11 +41,11 @@
  */
 #ifdef __BMI__
 	/** immintrin.h is already included */
-	#define tzcnt(x)		_tzcnt_u64(x)
+	#define tzcnt(x)		( (uint64_t)_tzcnt_u64(x) )
 #else
 	// #warning "tzcnt instruction is not enabled."
 	static inline
-	int64_t tzcnt(uint64_t n)
+	uint64_t tzcnt(uint64_t n)
 	{
 		#ifdef __POPCNT__
 			return(popcnt(~n & (n - 1)));
@@ -66,11 +66,11 @@
  * @brief leading zero count (count #continuous zeros from MSb)
  */
 #ifdef __LZCNT__
-	#define lzcnt(x)		_lzcnt_u64(x)
+	#define lzcnt(x)		( (uint64_t)_lzcnt_u64(x) )
 #else
 	// #warning "lzcnt instruction is not enabled."
 	static inline
-	int64_t lzcnt(uint64_t n)
+	uint64_t lzcnt(uint64_t n)
 	{
 		if(n == 0) {
 			return(64);
@@ -79,15 +79,6 @@
 			__asm__( "bsrq %1, %0" : "=r"(res) : "r"(n) );
 			return(63 - res);
 		}
-		/*
-		n |= n>>1;
-		n |= n>>2;
-		n |= n>>4;
-		n |= n>>8;
-		n |= n>>16;
-		n |= n>>32;
-		return(64-popcnt(n));
-		*/
 	}
 #endif
 
