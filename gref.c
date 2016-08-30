@@ -987,8 +987,9 @@ struct gref_iter_kmer_s {
 _static_assert(sizeof(struct gref_iter_kmer_s) == 16);
 #define _kmer_size(x)			( sizeof(struct gref_iter_kmer_s) + (x).lim * sizeof(uint64_t) )
 // #define _kmer_tail(x)			( &(x).arr[(x).lim] )
-#define _kmer_tail(x)			( (struct gref_iter_kmer_s *)(x) + 1 )
+// #define _kmer_tail(x)			( (struct gref_iter_kmer_s *)(x) + 1 )
 #define _kmer_arr(x)			( (uint64_t *)((struct gref_iter_kmer_s *)(x) + 1) )
+#define _kmer_tail(x)			( _kmer_arr(x) + (x)->lim )
 
 /**
  * @fn gref_iter_kmer_flush
