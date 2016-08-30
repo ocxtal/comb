@@ -108,43 +108,8 @@ struct fna_seq_intl_s {
 	uint8_t seq_encode;			/** one of _fna_flag_encode */
 	uint16_t options;
 	union fna_seq_body_intl_u {
-		struct {
-			struct fna_str_s name;
-			struct fna_str_s comment;
-			struct fna_sarr_s seq;
-			struct fna_sarr_s qual;
-		} segment;
-		struct {
-			struct fna_str_s src;
-			int32_t src_ori;			/** 0: forward, 1: reverse */
-			struct fna_str_s dst;
-			int32_t dst_ori;			/** 0: forward, 1: reverse */
-			struct fna_cigar_s cigar;
-		} link;
-
-		#if 0
-		struct {
-			char *name;					/** sequence name */
-			char *comment;				/** space separated tail of the name */
-			int32_t name_len;
-			int32_t comment_len;
-			uint8_t *seq;				/** sequence */
-			int64_t seq_len;			/** sequence length */
-			uint8_t *qual;
-			int64_t qual_len;
-		} segment;
-		struct {
-			char *from;
-			void *pad;
-			int32_t from_len;
-			int32_t from_ori;
-			char *to;
-			int32_t to_len;
-			int32_t to_ori;
-			char *cigar;				/** contains link cigar string */
-			int64_t cigar_len;			/** contains link cigar string length (== strlen(seq)) */
-		} link;
-		#endif
+		struct fna_segment_s segment;
+		struct fna_link_s link;
 	} s;
 	uint16_t head_margin;	/** margin at the head of fna_seq_t */
 	uint16_t tail_margin;
@@ -155,24 +120,10 @@ _static_assert_offset(struct fna_seq_s, type, struct fna_seq_intl_s, type, 0);
 _static_assert_offset(struct fna_seq_s, seq_encode, struct fna_seq_intl_s, seq_encode, 0);
 _static_assert_offset(struct fna_seq_s, options, struct fna_seq_intl_s, options, 0);
 
-/* segment members */
-_static_assert_offset(struct fna_seq_s, s.segment.name.ptr, struct fna_seq_intl_s, s.segment.name.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.name.len, struct fna_seq_intl_s, s.segment.name.len, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.comment.ptr, struct fna_seq_intl_s, s.segment.comment.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.comment.len, struct fna_seq_intl_s, s.segment.comment.len, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.seq.ptr, struct fna_seq_intl_s, s.segment.seq.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.seq.len, struct fna_seq_intl_s, s.segment.seq.len, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.qual.ptr, struct fna_seq_intl_s, s.segment.qual.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.segment.qual.len, struct fna_seq_intl_s, s.segment.qual.len, 0);
-
-/* link members */
-_static_assert_offset(struct fna_seq_s, s.link.src.ptr, struct fna_seq_intl_s, s.link.src.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.link.src.len, struct fna_seq_intl_s, s.link.src.len, 0);
-_static_assert_offset(struct fna_seq_s, s.link.dst.ptr, struct fna_seq_intl_s, s.link.dst.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.link.dst.len, struct fna_seq_intl_s, s.link.dst.len, 0);
-_static_assert_offset(struct fna_seq_s, s.link.cigar.ptr, struct fna_seq_intl_s, s.link.cigar.ptr, 0);
-_static_assert_offset(struct fna_seq_s, s.link.cigar.len, struct fna_seq_intl_s, s.link.cigar.len, 0);
-
+/* segment and link objects */
+_static_assert(sizeof(struct fna_segment_s) == 64);
+_static_assert(sizeof(struct fna_link_s) == 64);
+_static_assert_offset(struct fna_seq_s, s, struct fna_seq_intl_s, s, 0);
 
 /* function delcarations */
 static int fna_read_head_fasta(struct fna_context_s *fna);

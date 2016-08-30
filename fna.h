@@ -157,6 +157,28 @@ struct fna_cigar_s {
 };
 
 /**
+ * @struct fna_segment_s
+ */
+struct fna_segment_s {
+	struct fna_str_s name;
+	struct fna_str_s comment;
+	struct fna_sarr_s seq;
+	struct fna_sarr_s qual;
+};
+
+/**
+ * @struct fna_link_s
+ */
+struct fna_link_s {
+	struct fna_str_s src;
+	struct fna_str_s dst;
+	int32_t src_ori;			/** 0: forward, 1: reverse */
+	int32_t dst_ori;			/** 0: forward, 1: reverse */
+	struct fna_cigar_s cigar;
+	int32_t _pad[2];
+};
+
+/**
  * @struct fna_seq_s
  *
  * @brief a struct to contain parsed sequence.
@@ -167,19 +189,8 @@ struct fna_seq_s {
 	uint8_t seq_encode;			/** one of fna_flag_encode */
 	uint16_t options;
 	union fna_seq_body_u {
-		struct {
-			struct fna_str_s name;
-			struct fna_str_s comment;
-			struct fna_sarr_s seq;
-			struct fna_sarr_s qual;
-		} segment;
-		struct {
-			struct fna_str_s src;
-			int32_t src_ori;			/** 0: forward, 1: reverse */
-			struct fna_str_s dst;
-			int32_t dst_ori;			/** 0: forward, 1: reverse */
-			struct fna_cigar_s cigar;
-		} link;
+		struct fna_segment_s segment;
+		struct fna_link_s link;
 	} s;
 	uint16_t reserved3[4];
 };
