@@ -97,7 +97,7 @@
 #define _ymm_wr_u(dst, n) _mm256_storeu_si256((__m256i *)(dst) + (n), (ymm##n))
 #define _memcpy_blk_intl(dst, src, size, _wr, _rd) { \
 	/** duff's device */ \
-	void *_src = (void *)(src), *_dst = (void *)(dst); \
+	uint8_t *_src = (uint8_t *)(src), *_dst = (uint8_t *)(dst); \
 	int64_t const _nreg = 16;		/** #ymm registers == 16 */ \
 	int64_t const _tcnt = (size) / sizeof(__m256i); \
 	int64_t const _offset = ((_tcnt - 1) & (_nreg - 1)) - (_nreg - 1); \
@@ -153,7 +153,7 @@
 #define _memcpy_blk_ua(dst, src, len)		_memcpy_blk_intl(dst, src, len, _ymm_wr_u, _ymm_rd_a)
 #define _memcpy_blk_uu(dst, src, len)		_memcpy_blk_intl(dst, src, len, _ymm_wr_u, _ymm_rd_u)
 #define _memset_blk_intl(dst, a, size, _wr) { \
-	void *_dst = (void *)(dst); \
+	uint8_t *_dst = (uint8_t *)(dst); \
 	__m256i const ymm0 = _mm256_set1_epi8((int8_t)a); \
 	int64_t i; \
 	for(i = 0; i < size / sizeof(__m256i); i++) { \

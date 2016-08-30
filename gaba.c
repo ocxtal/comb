@@ -3284,7 +3284,7 @@ struct gaba_result_s trace_init_alignment(
 
 	lmm_t *lmm = (lmm_t *)params->lmm;
 	struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin
-		+ ((lmm == NULL) ? gaba_dp_malloc(this, size) : lmm_malloc(lmm, size)));
+		+ (uintptr_t)((lmm == NULL) ? gaba_dp_malloc(this, size) : lmm_malloc(lmm, size)));
 	// struct gaba_alignment_s *aln = (struct gaba_alignment_s *)(this->head_margin + lmm_malloc(lmm, size));
 
 	debug("malloc trace mem(%p), lmm(%p), lim(%p)", aln, lmm, (lmm != NULL) ? lmm->lim : NULL);
@@ -4796,36 +4796,36 @@ unittest(with_seq_pair("A", "A"))
 
 	/* check fowrard sections */
 	assert(s->afsec.id == 0, "%d", s->afsec.id);
-	assert(s->afsec.base == s->a + 0, "%p", s->afsec.base);
+	assert((uintptr_t)s->afsec.base == (uintptr_t)s->a + 0, "%p", s->afsec.base);
 	assert(s->afsec.len == 1, "%u", s->afsec.len);
 
 	assert(s->aftail.id == 2, "%d", s->aftail.id);
-	assert(s->aftail.base == s->a + 1, "%p", s->aftail.base);
+	assert((uintptr_t)s->aftail.base == (uintptr_t)s->a + 1, "%p", s->aftail.base);
 	assert(s->aftail.len == 20, "%u", s->aftail.len);
 
 	assert(s->bfsec.id == 4, "%d", s->bfsec.id);
-	assert(s->bfsec.base == s->b + 0, "%p", s->bfsec.base);
+	assert((uintptr_t)s->bfsec.base == (uintptr_t)s->b + 0, "%p", s->bfsec.base);
 	assert(s->bfsec.len == 1, "%u", s->bfsec.len);
 
 	assert(s->bftail.id == 6, "%d", s->bftail.id);
-	assert(s->bftail.base == s->b + 1, "%p", s->bftail.base);
+	assert((uintptr_t)s->bftail.base == (uintptr_t)s->b + 1, "%p", s->bftail.base);
 	assert(s->bftail.len == 20, "%u", s->bftail.len);
 
 	/* check reverse sections */
 	assert(s->arsec.id == 1, "%d", s->arsec.id);
-	assert(s->arsec.base == (void const *)0x1000000000000 - (uint64_t)s->a - 1, "%p", s->arsec.base);
+	assert((uintptr_t)s->arsec.base == (uintptr_t)0x1000000000000 - (uintptr_t)s->a - 1, "%p", s->arsec.base);
 	assert(s->arsec.len == 1, "%u", s->arsec.len);
 
 	assert(s->artail.id == 3, "%d", s->artail.id);
-	assert(s->artail.base == (void const *)0x1000000000000 - (uint64_t)s->a - 21, "%p", s->artail.base);
+	assert((uintptr_t)s->artail.base == (uintptr_t)0x1000000000000 - (uintptr_t)s->a - 21, "%p", s->artail.base);
 	assert(s->artail.len == 20, "%u", s->artail.len);
 
 	assert(s->brsec.id == 5, "%d", s->brsec.id);
-	assert(s->brsec.base == (void const *)0x1000000000000 - (uint64_t)s->b - 1, "%p", s->brsec.base);
+	assert((uintptr_t)s->brsec.base == (uintptr_t)0x1000000000000 - (uintptr_t)s->b - 1, "%p", s->brsec.base);
 	assert(s->brsec.len == 1, "%u", s->brsec.len);
 
 	assert(s->brtail.id == 7, "%d", s->brtail.id);
-	assert(s->brtail.base == (void const *)0x1000000000000 - (uint64_t)s->b - 21, "%p", s->brtail.base);
+	assert((uintptr_t)s->brtail.base == (uintptr_t)0x1000000000000 - (uintptr_t)s->b - 21, "%p", s->brtail.base);
 	assert(s->brtail.len == 20, "%u", s->brtail.len);
 }
 
