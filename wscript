@@ -62,6 +62,11 @@ def configure(conf):
 	conf.env.append_value('CFLAGS', '-Wno-unused-parameter')
 	conf.env.append_value('CFLAGS', '-Wno-unused-function')
 
+
+	if conf.env.CC_NAME == 'icc':
+		conf.env.append_value('CFLAGS', '-inline-max-size=20000')
+		conf.env.append_value('CFLAGS', '-inline-max-total-size=50000')
+
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
 	conf.env.append_value('CFLAGS', '-march=native')
