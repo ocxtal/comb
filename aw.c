@@ -938,7 +938,7 @@ void *aw_unittest_init(
 			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
-			+ 3 * sizeof(uint32_t));
+			+ 4 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[0] + 1);
 		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0 /*, 8*/ };
@@ -950,6 +950,7 @@ void *aw_unittest_init(
 		p->array[0] = 0x55555555;
 		p->array[1] = 0x01;
 		p->array[2] = 0;
+		p->array[3] = 0;
 
 		res[0]->sec = s;
 		res[0]->path = p;
@@ -963,7 +964,7 @@ void *aw_unittest_init(
 			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
-			+ 3 * sizeof(uint32_t));
+			+ 4 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[1] + 1);
 		s[0] = (struct gaba_path_section_s){ 0, 5, 0, 4, 4, 4, 0 /*, 8*/ };
@@ -975,6 +976,7 @@ void *aw_unittest_init(
 		p->array[0] = 0x01555555;
 		p->array[1] = 0;
 		p->array[2] = 0;
+		p->array[3] = 0;
 
 		res[1]->sec = s;
 		res[1]->path = p;
@@ -988,7 +990,7 @@ void *aw_unittest_init(
 			  sizeof(struct gaba_alignment_s)
 			+ 3 * sizeof(struct gaba_path_section_s)
 			+ sizeof(struct gaba_path_s)
-			+ 3 * sizeof(uint32_t));
+			+ 4 * sizeof(uint32_t));
 
 		struct gaba_path_section_s *s = (struct gaba_path_section_s *)(res[2] + 1);
 		s[0] = (struct gaba_path_section_s){ 0, 0, 0, 0, 4, 4, 0 /*, 8*/ };
@@ -999,6 +1001,7 @@ void *aw_unittest_init(
 		p->array[0] = 0x01555555;
 		p->array[1] = 0;
 		p->array[2] = 0;
+		p->array[3] = 0;
 
 		res[2]->sec = s;
 		res[2]->path = p;
