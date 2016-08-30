@@ -561,7 +561,7 @@ ngx_rbtree_right_rotate(ngx_rbtree_node_t **root, ngx_rbtree_node_t *sentinel,
     node->parent = temp;
 }
 
-#if 1
+
 /* interval tree implementation */
 /* max and min */
 #define MAX2(x,y)       ( (x) > (y) ? (x) : (y) )
@@ -946,4 +946,6 @@ ngx_ivtree_right_rotate(ngx_ivtree_node_t **root, ngx_ivtree_node_t *sentinel,
 
 }
 
-#endif
+/**
+ * end of ngx_rbtree.c
+ */
