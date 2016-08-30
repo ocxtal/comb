@@ -61,15 +61,15 @@ lmm_t *lmm_init(
 	if(base != NULL && base_size > LMM_MIN_BASE_SIZE) {
 		struct lmm_s *lmm = (struct lmm_s *)base;
 		lmm->need_free = 0;
-		lmm->ptr = base + sizeof(struct lmm_s);
-		lmm->lim = base + _lmm_cutdown(base_size, LMM_ALIGN_SIZE);
+		lmm->ptr = (void *)((uintptr_t)base + sizeof(struct lmm_s));
+		lmm->lim = (void *)((uintptr_t)base + _lmm_cutdown(base_size, LMM_ALIGN_SIZE));
 		return((lmm_t *)lmm);
 	} else {
 		base_size = LMM_MAX2(base_size, LMM_DEFAULT_BASE_SIZE);
 		struct lmm_s *lmm = (struct lmm_s *)malloc(base_size);
 		lmm->need_free = 1;
 		lmm->ptr = (void *)(lmm + 1);
-		lmm->lim = (void *)lmm + base_size;
+		lmm->lim = (void *)((uintptr_t)lmm + base_size);
 		return((lmm_t *)lmm);
 	}
 
@@ -102,8 +102,8 @@ void *lmm_reserve_mem(
 	uint64_t *sp = (uint64_t *)ptr;
 	size = _lmm_roundup(size, LMM_ALIGN_SIZE);
 	*sp = size;
-	lmm->ptr = (void *)sp + LMM_ALIGN_SIZE + size;
-	return((void *)sp + LMM_ALIGN_SIZE);
+	lmm->ptr = (void *)((uintptr_t)sp + LMM_ALIGN_SIZE + size);
+	return((void *)((uintptr_t)sp + LMM_ALIGN_SIZE));
 }
 
 /**
@@ -120,7 +120,8 @@ void *lmm_malloc(
 
 #else
 
-	if(lmm != NULL && lmm->ptr + LMM_ALIGN_SIZE + size < lmm->lim) {
+	if(lmm != NULL
+	&& ((uintptr_t)lmm->ptr + LMM_ALIGN_SIZE + size) < (uintptr_t)lmm->lim) {
 		return(lmm_reserve_mem(lmm, lmm->ptr, size));
 	} else {
 		debug("malloc, lmm(%p), size(%lu)", lmm, size);
@@ -153,10 +154,12 @@ void *lmm_realloc(
 	/* check if prev mem (ptr) is inside mm */
 	if((void *)lmm < ptr && ptr < lmm->lim) {
 		
-		uint64_t prev_size = *((uint64_t *)(ptr - LMM_ALIGN_SIZE));
-		if(ptr + prev_size == lmm->ptr && ptr + size < lmm->lim) {
+		uint64_t prev_size = *((uint64_t *)((uintptr_t)ptr - LMM_ALIGN_SIZE));
+		if((uintptr_t)ptr + prev_size == (uintptr_t)lmm->ptr
+		&& (uintptr_t)ptr + size < (uintptr_t)lmm->lim) {
 			debug("expand current block");
-			return(lmm_reserve_mem(lmm, ptr - LMM_ALIGN_SIZE, size));
+			return(lmm_reserve_mem(lmm,
+				(void *)((uintptr_t)ptr - LMM_ALIGN_SIZE), size));
 		}
 		debug("malloc external memory");
 
@@ -189,9 +192,9 @@ void lmm_free(
 
 	if(lmm != NULL && (void *)lmm < ptr && ptr < lmm->lim) {
 		/* no need to free */
-		uint64_t prev_size = *((uint64_t *)(ptr - LMM_ALIGN_SIZE));
-		if(ptr + prev_size == lmm->ptr) {
-			lmm->ptr = ptr - LMM_ALIGN_SIZE;
+		uint64_t prev_size = *((uint64_t *)((uintptr_t)ptr - LMM_ALIGN_SIZE));
+		if((uintptr_t)ptr + prev_size == (uintptr_t)lmm->ptr) {
+			lmm->ptr = (void *)((uintptr_t)ptr - LMM_ALIGN_SIZE);
 		}
 		return;
 	}
