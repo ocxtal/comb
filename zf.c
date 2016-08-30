@@ -350,10 +350,11 @@ int zfclose(
  */
 size_t zfread(
 	zf_t *fp,
-	void *ptr,
+	void *_ptr,
 	size_t len)
 {
 	struct zf_intl_s *fio = (struct zf_intl_s *)fp;
+	uint8_t *ptr = (uint8_t *)_ptr;
 	size_t copied_size = 0;
 
 	/* check eof */
@@ -395,10 +396,11 @@ size_t zfread(
  */
 size_t zfpeek(
 	zf_t *fp,
-	void *ptr,
+	void *_ptr,
 	size_t len)
 {
 	struct zf_intl_s *fio = (struct zf_intl_s *)fp;
+	uint8_t *ptr = (uint8_t *)_ptr;
 	size_t copied_size = 0;
 
 	/* check eof */
