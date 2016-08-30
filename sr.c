@@ -218,8 +218,9 @@ struct sr_gref_s *sr_get_iter_read(
 	while((seq = fna_read(sr->fna)) != NULL) {
 		if(seq->type == FNA_SEGMENT) {
 			/*
-			for(int64_t i = 0; i < seq->s.segment.seq_len; i++) {
-				fprintf(stderr, "%c", " AC G   T"[seq->s.segment.seq[i]]);
+			debug("name(%s), comment(%s)", seq->s.segment.name.ptr, seq->s.segment.comment.ptr);
+			for(int64_t i = 0; i < seq->s.segment.seq.len; i++) {
+				fprintf(stderr, "%c", " AC G   T"[seq->s.segment.seq.ptr[i]]);
 			}
 			fprintf(stderr, "\n");
 			*/
