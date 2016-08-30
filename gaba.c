@@ -3574,7 +3574,7 @@ int64_t parse_dump_gap_string(
 	uint64_t m0 = _a & (_a>>1); \
 	uint64_t m1 = _a | (_a<<1); \
 	uint64_t m = m0 | ~m1; \
-	debug("m0(%llx), m1(%llx), m(%llx), tzcnt(%u)", m0, m1, m, tzcnt(m)); \
+	debug("m0(%llx), m1(%llx), m(%llx), tzcnt(%llu, %llu)", m0, m1, m, tzcnt(m), popcnt(~m & (m - 1))); \
 	tzcnt(m); \
 })
 #define _parse_count_gap_forward(_arr) ({ \
@@ -3612,9 +3612,10 @@ uint64_t suffix(gaba_dp_print_cigar_forward)(
 				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
 				ridx & ~0x01);
 			ridx -= a;
-			if(a < 64) { break; }
+			volatile uint64_t c = a;
+			if(c < 64) { break; }
 
-			debug("bulk match");
+			debug("bulk match, a(%llu)", a);
 		}
 		uint64_t m = (rsidx - ridx)>>1;
 		if(m > 0) {
@@ -3665,7 +3666,8 @@ uint64_t suffix(gaba_dp_dump_cigar_forward)(
 				ridx & ~0x01);
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
 			ridx -= a;
-			if(a < 64) { break; }
+			volatile uint64_t c = a;
+			if(c < 64) { break; }
 
 			debug("bulk match");
 		}
