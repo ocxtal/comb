@@ -63,7 +63,7 @@ _static_assert(K_MAX == GREF_K_MAX);
  * structs and typedefs
  */
 /* the code supposes NULL == (void *)0 */
-_static_assert(NULL == (void *)0);
+// _static_assert(NULL == (void *)0);
 
 /**
  * @struct gref_gid_pair_s
@@ -1041,7 +1041,7 @@ void gref_iter_kmer_append(
 		A = 0x00, C = 0x02, G = 0x04, T = 0x06
 	};
 	static uint8_t const shift_table[][3] = {
-		{},
+		{ 0 },
 		{ A },
 		{ C },
 		{ A, C },
@@ -1056,7 +1056,7 @@ void gref_iter_kmer_append(
 		{ G, T },
 		{ A, G, T },
 		{ C, G, T },
-		{},
+		{ 0 },
 	};
 
 	/* update count array */
