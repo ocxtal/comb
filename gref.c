@@ -982,11 +982,13 @@ struct gref_iter_kmer_s {
 	uint16_t idx;
 	uint16_t lim;
 	uint64_t cnt;
-	uint64_t arr[];
+	// uint64_t arr[];
 };
 _static_assert(sizeof(struct gref_iter_kmer_s) == 16);
-#define gref_iter_kmer_size(x)		( sizeof(struct gref_iter_kmer_s) + (x).lim * sizeof(uint64_t) )
-#define gref_iter_kmer_tail(x)		( &(x).arr[(x).lim] )
+#define _kmer_size(x)			( sizeof(struct gref_iter_kmer_s) + (x).lim * sizeof(uint64_t) )
+// #define _kmer_tail(x)			( &(x).arr[(x).lim] )
+#define _kmer_tail(x)			( (struct gref_iter_kmer_s *)(x) + 1 )
+#define _kmer_arr(x)			( (uint64_t *)((struct gref_iter_kmer_s *)(x) + 1) )
 
 /**
  * @fn gref_iter_kmer_flush
@@ -999,7 +1001,7 @@ void gref_iter_kmer_flush(
 	kmer->idx = 1;
 	kmer->lim = 1;
 	kmer->cnt = 0;
-	kmer->arr[0] = 0;
+	_kmer_arr(kmer)[0] = 0;
 
 	debug("flush kmer, vac_len(%u), idx(%u), lim(%u)", kmer->vac_len, kmer->idx, kmer->lim);
 	return;
@@ -1066,14 +1068,14 @@ void gref_iter_kmer_append(
 
 	/* branch */
 	switch(3 - pcnt) {
-		case 0: memcpy(&kmer->arr[2 * lim], kmer->arr, sizeof(uint64_t) * lim);
-		case 1: memcpy(&kmer->arr[lim], kmer->arr, sizeof(uint64_t) * lim);
+		case 0: memcpy(&_kmer_arr(kmer)[2 * lim], _kmer_arr(kmer), sizeof(uint64_t) * lim);
+		case 1: memcpy(&_kmer_arr(kmer)[lim], _kmer_arr(kmer), sizeof(uint64_t) * lim);
 		/* fall through */
 		default: break;		/* return(-1); */
 	}
 
 	/* append to vector */
-	uint64_t *p = kmer->arr;
+	uint64_t *p = _kmer_arr(kmer);
 	uint64_t mask = 0x03<<kmer->shift_len;
 	for(int64_t j = 0; j < pcnt; j++) {
 		uint64_t b = mask & (conv<<(kmer->shift_len - shift_table[c][j]));
@@ -1093,7 +1095,7 @@ void gref_iter_kmer_append(
 		// lim /= shrink_skip;
 		lim = (lim * ((shrink_skip == 2) ? 0x10000 : 0xaaab))>>17;
 		for(int64_t j = 0; j < lim; j++) {
-			kmer->arr[j] = kmer->arr[j * shrink_skip];
+			_kmer_arr(kmer)[j] = _kmer_arr(kmer)[j * shrink_skip];
 		}
 	}
 
@@ -1124,7 +1126,7 @@ static _force_inline
 uint64_t gref_iter_kmer_next(
 	struct gref_iter_kmer_s *kmer)
 {
-	return(kmer->arr[kmer->idx++]);
+	return(_kmer_arr(kmer)[kmer->idx++]);
 }
 
 /**
@@ -1237,7 +1239,7 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 {
 	/* fixme: check remaining memory size and malloc if there is no room */
 	// struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)((uint64_t *)(stack + 1) + stack->lim);
-	struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)gref_iter_kmer_tail(stack->kmer);
+	struct gref_iter_stack_s *new_stack = (struct gref_iter_stack_s *)_kmer_tail(&stack->kmer);
 
 	debug("stack(%p), lim(%u), new_stack(%p)", stack, stack->kmer.lim, new_stack);
 
@@ -1277,7 +1279,7 @@ struct gref_iter_stack_s *gref_iter_push_stack(
 	new_stack->link_base = iter->link_table + link_idx_base;
 
 	/* copy kmer buffer */
-	memcpy(&new_stack->kmer, &stack->kmer, gref_iter_kmer_size(stack->kmer));
+	memcpy(&new_stack->kmer, &stack->kmer, _kmer_size(stack->kmer));
 	return(new_stack);
 }
 
