@@ -57,9 +57,13 @@ def configure(conf):
 		conf.check_cc(lib = 'pthread')
 
 	conf.env.append_value('CFLAGS', '-Wall')
+	conf.env.append_value('CFLAGS', '-Wextra')
+	conf.env.append_value('CFLAGS', '-Wno-missing-field-initializers')
+	conf.env.append_value('CFLAGS', '-Wno-unused-parameter')
+	conf.env.append_value('CFLAGS', '-Wno-unused-function')
+
 	conf.env.append_value('CFLAGS', '-O3')
 	conf.env.append_value('CFLAGS', '-std=c99')
-	conf.env.append_value('CFLAGS', '-Wno-unused-function')
 	conf.env.append_value('CFLAGS', '-march=native')
 
 	conf.env.append_value('LIBS', conf.env.LIB_Z + conf.env.LIB_BZ2 + conf.env.LIB_PTHREAD)

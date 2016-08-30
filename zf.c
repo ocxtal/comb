@@ -30,8 +30,8 @@
 
 
 /* constants */
-#define ZF_BUF_SIZE					( 512 * 1024ULL )		/* 512KB */
-#define ZF_UNGETC_MARGIN_SIZE		( 32ULL )
+#define ZF_BUF_SIZE					( 512 * 1024 )		/* 512KB */
+#define ZF_UNGETC_MARGIN_SIZE		( 32 )
 
 /* function pointer type aliases */
 typedef void *(*zf_dopen_t)(
@@ -133,8 +133,8 @@ struct zf_intl_s {
 	void *fp;		/* one of {FILE * / gzFile / BZFILE *} */
 	struct zf_functions_s fn;
 	uint8_t *buf;
-	uint64_t size;
-	uint64_t curr, end;
+	int64_t size;
+	int64_t curr, end;
 	char ungetc_margin[ZF_UNGETC_MARGIN_SIZE];
 };
 _static_assert(offsetof(struct zf_intl_s, ungetc_margin) == sizeof(struct zf_s));
@@ -350,11 +350,10 @@ int zfclose(
  */
 size_t zfread(
 	zf_t *fp,
-	void *_ptr,
+	void *ptr,
 	size_t len)
 {
 	struct zf_intl_s *fio = (struct zf_intl_s *)fp;
-	uint8_t *ptr = (uint8_t *)_ptr;
 	size_t copied_size = 0;
 
 	/* check eof */
@@ -396,11 +395,10 @@ size_t zfread(
  */
 size_t zfpeek(
 	zf_t *fp,
-	void *_ptr,
+	void *ptr,
 	size_t len)
 {
 	struct zf_intl_s *fio = (struct zf_intl_s *)fp;
-	uint8_t *ptr = (uint8_t *)_ptr;
 	size_t copied_size = 0;
 
 	/* check eof */
@@ -437,7 +435,7 @@ size_t zfpeek(
 
 		/* update status */
 		copied_size += copy_size;
-		fio->eof = (read_size < fio->size - fio->end) + (copied_size == 0);
+		fio->eof = (read_size < (uint64_t)(fio->size - fio->end)) + (copied_size == 0);
 		fio->end += read_size;
 	}
 	return(copied_size);
@@ -517,7 +515,7 @@ int zfputc(
 	if(fio->curr == fio->size) {
 		fio->curr = 0;
 		uint64_t written = fio->fn.write(fio->fp, fio->buf, fio->size);
-		if(written != fio->size) {
+		if((int64_t)written != fio->size) {
 			return(-1);
 		}
 	}
@@ -554,7 +552,7 @@ int zfprintf(
 	if(fio->curr != 0) {
 		uint64_t flush = fio->fn.write(fio->fp, fio->buf, fio->curr);
 		/* something is wrong */
-		if(flush != fio->curr) {
+		if((int64_t)flush != fio->curr) {
 			return(0);
 		}
 	}
