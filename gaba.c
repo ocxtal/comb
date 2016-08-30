@@ -3611,8 +3611,8 @@ int64_t suffix(gaba_dp_print_cigar_forward)(
 			int64_t a = MIN2(
 				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
 				ridx & ~0x01);
-			if(a < 64) { ridx -= a; break; }
-			ridx -= 64;
+			ridx -= a;
+			if(a < 64) { break; }
 
 			debug("bulk match");
 		}
@@ -3664,8 +3664,8 @@ int64_t suffix(gaba_dp_dump_cigar_forward)(
 				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
 				ridx & ~0x01);
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
-			if(a < 64) { ridx -= a; break; }
-			ridx -= 64;
+			ridx -= a;
+			if(a < 64) { break; }
 
 			debug("bulk match");
 		}
@@ -3736,8 +3736,8 @@ int64_t suffix(gaba_dp_print_cigar_reverse)(
 			int64_t a = MIN2(
 				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
 				idx & ~0x01);
-			if(a < 64) { idx -= a; break; }
-			idx -= 64;
+			idx -= a;
+			if(a < 64) { break; }
 
 			debug("bulk match");
 		}
@@ -3789,8 +3789,8 @@ int64_t suffix(gaba_dp_dump_cigar_reverse)(
 				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
 				idx & ~0x01);
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
-			if(a < 64) { idx -= a; break; }
-			idx -= 64;
+			idx -= a;
+			if(a < 64) { break; }
 
 			debug("bulk match");
 		}
