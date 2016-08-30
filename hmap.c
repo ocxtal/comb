@@ -359,7 +359,7 @@ void hmap_expand(
 uint32_t hmap_get_id(
 	hmap_t *_hmap,
 	char const *str,
-	int32_t len)
+	uint32_t len)
 {
 	struct hmap_s *hmap = (struct hmap_s *)_hmap;
 

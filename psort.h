@@ -17,9 +17,9 @@
  */
 int psort_full(
 	void *ptr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads);
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads);
 
 /**
  * @fn psort_half
@@ -27,20 +27,20 @@ int psort_full(
  */
 int psort_half(
 	void *ptr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads);
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads);
 
 /**
  * @fn psort_partial
  */
 int psort_partial(
 	void *arr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads,
-	int64_t from,
-	int64_t to);
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads,
+	uint64_t from,
+	uint64_t to);
 
 #endif /* _PSORT_H_INCLUDED */
 /**

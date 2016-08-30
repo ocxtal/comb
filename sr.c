@@ -374,17 +374,18 @@ int fdump(
 	char const *content)
 {
 	FILE *fp = fopen(filename, "w");
-	int64_t l = fprintf(fp, "%s", content);
+	uint64_t l = fprintf(fp, "%s", content);
 	fclose(fp);
 	return(l == strlen(content));
 }
 
+#if 0
 /**
  * @fn fcmp
  * @brief compare file, returns zero if the content is equivalent to arr
  */
 static _force_inline
-int fcmp(char const *filename, int64_t size, uint8_t const *arr)
+int fcmp(char const *filename, uint64_t size, uint8_t const *arr)
 {
 	int64_t res;
 	struct stat st;
@@ -403,6 +404,7 @@ int fcmp(char const *filename, int64_t size, uint8_t const *arr)
 	fclose(fp);
 	return(res == 0);
 }
+#endif
 
 unittest()
 {

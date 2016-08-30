@@ -814,7 +814,7 @@ struct comb_align_params_s *comb_init_align(
 		{ "out", required_argument, NULL, 'o' },
 
 		/* indexing params */
-		{ "seedlength", required_argument, NULL, 'k' },
+		{ "seed-length", required_argument, NULL, 'k' },
 
 		/* filtering params */
 		{ "repcnt", required_argument, NULL, 'r' },
@@ -824,9 +824,10 @@ struct comb_align_params_s *comb_init_align(
 		/* scoring params */
 		{ "match", required_argument, NULL, 'a' },
 		{ "mismatch", required_argument, NULL, 'b' },
-		{ "gapopen", required_argument, NULL, 'p' },
-		{ "gapextend", required_argument, NULL, 'q' },
+		{ "gap-open", required_argument, NULL, 'p' },
+		{ "gap-extend", required_argument, NULL, 'q' },
 		{ "xdrop", required_argument, NULL, 'x' },
+		{ "clip-penalty", required_argument, NULL, 'C' },
 
 		/* reporting params */
 		{ "min", required_argument, NULL, 'm' },
@@ -1419,7 +1420,7 @@ int main(int argc, char *argv[])
 	};
 
 	struct comb_inst_s *(*init)(int argc, char *argv[]) = comb_init;
-	for(int64_t i = 0; i < sizeof(map) / sizeof(struct subc_map_s); i++) {
+	for(uint64_t i = 0; i < sizeof(map) / sizeof(struct subc_map_s); i++) {
 		if(strcmp(argv[1], map[i].sub) == 0) {
 			init = map[i].init; break;
 		}

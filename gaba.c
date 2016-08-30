@@ -1295,13 +1295,13 @@ struct gaba_joint_tail_s *fill_create_tail(
 	/* load mask pointer */ \
 	union gaba_mask_pair_u *ptr = (_blk)->mask; \
 	/* load vector registers */ \
-	vec_t register dh = _load(((_blk) - 1)->diff.dh); \
-	vec_t register dv = _load(((_blk) - 1)->diff.dv); \
+	register vec_t dh = _load(((_blk) - 1)->diff.dh); \
+	register vec_t dv = _load(((_blk) - 1)->diff.dv); \
 	_print(_add(dh, _load_ofsh(this->scv))); \
 	_print(_add(dv, _load_ofsv(this->scv))); \
 	/* load delta vectors */ \
-	vec_t register delta = _load(((_blk) - 1)->sd.delta); \
-	vec_t register max = _load(((_blk) - 1)->sd.max); \
+	register vec_t delta = _load(((_blk) - 1)->sd.delta); \
+	register vec_t max = _load(((_blk) - 1)->sd.max); \
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md))); \
 	/* load direction determiner */ \
@@ -1319,10 +1319,10 @@ struct gaba_joint_tail_s *fill_create_tail(
 	union gaba_mask_pair_u *ptr = (_blk)->mask; \
 	/* load vector registers */ \
 	vec_t const mask = _set(0x07); \
-	vec_t register dh = _load(((_blk) - 1)->diff.dh); \
-	vec_t register dv = _load(((_blk) - 1)->diff.dv); \
-	vec_t register de = _and(mask, dh); \
-	vec_t register df = _and(mask, dv); \
+	register vec_t dh = _load(((_blk) - 1)->diff.dh); \
+	register vec_t dv = _load(((_blk) - 1)->diff.dv); \
+	register vec_t de = _and(mask, dh); \
+	register vec_t df = _and(mask, dv); \
 	dh = _shr(_andn(mask, dh), 3); \
 	dv = _shr(_andn(mask, dv), 3); \
 	de = _add(dv, de); \
@@ -1333,8 +1333,8 @@ struct gaba_joint_tail_s *fill_create_tail(
 	_print(_sub(_sub(de, dv), _load_adjh(this->scv))); \
 	_print(_sub(_add(df, dh), _load_adjv(this->scv))); \
 	/* load delta vectors */ \
-	vec_t register delta = _load(((_blk) - 1)->sd.delta); \
-	vec_t register max = _load(((_blk) - 1)->sd.max); \
+	register vec_t delta = _load(((_blk) - 1)->sd.delta); \
+	register vec_t max = _load(((_blk) - 1)->sd.max); \
 	_print(max); \
 	_print_v32i16(_add_v32i16(_cvt_v32i8_v32i16(delta), _load_v32i16(_last_block(&this->tail)->md))); \
 	/* load direction determiner */ \
@@ -1350,7 +1350,7 @@ struct gaba_joint_tail_s *fill_create_tail(
  */
 #if MODEL == LINEAR
 #define _fill_body() { \
-	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
+	register vec_t t = _match(_loadu(aptr), _loadu(bptr)); \
 	/*t = _shuf(_load_sc(this, sb), t);*/ \
 	t = _shuf(_load_sb(this->scv), t); \
 	_print(t); \
@@ -1368,7 +1368,7 @@ struct gaba_joint_tail_s *fill_create_tail(
 }
 #else /* MODEL == AFFINE */
 #define _fill_body() { \
-	vec_t register t = _match(_loadu(aptr), _loadu(bptr)); \
+	register vec_t t = _match(_loadu(aptr), _loadu(bptr)); \
 	_print(_loadu(aptr)); \
 	_print(_loadu(bptr)); \
 	t = _shuf(_load_sb(this->scv), t); \
@@ -4383,7 +4383,7 @@ void *gaba_dp_malloc(
 
 	/* malloc */
 	debug("this(%p), stack_top(%p), size(%llu)", this, this->stack_top, size);
-	if((this->stack_end - this->stack_top) < size) {
+	if((uint64_t)(this->stack_end - this->stack_top) < size) {
 		if(gaba_dp_add_stack(this, size) != GABA_SUCCESS) {
 			return(NULL);
 		}
@@ -4565,7 +4565,7 @@ void *unittest_build_seqs(void *params)
 	uint32_t alen = atot - 20;
 	uint32_t blen = btot - 20;
 
-	int64_t margin = 64;
+	uint64_t margin = 64;
 	struct unittest_sections_s *sec = malloc(
 		sizeof(struct unittest_sections_s) + (atot + 1) + (btot + 1) + margin);
 
@@ -4574,10 +4574,10 @@ void *unittest_build_seqs(void *params)
 	uint8_t *cb = ca + atot + 1;
 	uint8_t *cm = cb + btot + 1;
 
-	for(int64_t i = 0; i < atot; i++) {
+	for(uint64_t i = 0; i < atot; i++) {
 		ca[i] = unittest_encode_base(a[i]);
 	}
-	for(int64_t i = 0; i < btot; i++) {
+	for(uint64_t i = 0; i < btot; i++) {
 		cb[i] = unittest_encode_base(b[i]);
 	}
 	ca[atot] = cb[btot] = '\0';
@@ -4703,7 +4703,7 @@ int check_cigar(
 
 	debug("path(%x), len(%lld)", aln->path->array[0], aln->path->len);
 
-	int64_t l = gaba_dp_dump_cigar_forward(
+	uint64_t l = gaba_dp_dump_cigar_forward(
 		buf, 1024, aln->path->array, 0, aln->path->len);
 
 	debug("cigar(%s)", buf);
@@ -4716,7 +4716,7 @@ int check_cigar(
 }
 
 #define decode_path(_r) ({ \
-	int64_t plen = (_r)->path->len, cnt = 0; \
+	uint64_t plen = (_r)->path->len, cnt = 0; \
 	uint32_t const *path = (_r)->path->array; \
 	uint32_t path_array = *path; \
 	char *ptr = alloca(plen); \
@@ -5339,22 +5339,22 @@ unittest(with_seq_pair("A", "A"))
 
 	/* forward-only traceback */
 	struct gaba_alignment_s *r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, (uint32_t)-1, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, (uint32_t)-1, 0, 0, 0), print_result(r));
 
 	/* section added */
 	f = gaba_dp_fill(d, f, &s->afsec, &s->bfsec);
 
 	/* forward-only traceback */
 	r = gaba_dp_trace(d, f, NULL, NULL);
-	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, (uint32_t)-1, 0, 0, 0), print_result(r));
 
 	/* forward-reverse traceback */
 	r = gaba_dp_trace(d, f, f, NULL);
-	assert(check_result(r, 0, 0, 0, -1, 0, 0, 0), print_result(r));
+	assert(check_result(r, 0, 0, 0, (uint32_t)-1, 0, 0, 0), print_result(r));
 
 	gaba_dp_clean(d);
 }
@@ -6206,10 +6206,10 @@ char *string_pair_diff(
 	char const *a,
 	char const *b)
 {
-	int64_t len = 2 * (strlen(a) + strlen(b));
+	uint64_t len = 2 * (strlen(a) + strlen(b));
 	char *base = malloc(len);
 	char *ptr = base, *tail = base + len - 1;
-	int64_t state = 0;
+	uint64_t state = 0;
 
 	#define push(ch) { \
 		*ptr++ = (ch); \
@@ -6221,12 +6221,12 @@ char *string_pair_diff(
 		} \
 	}
 	#define push_str(str) { \
-		for(int64_t i = 0; i < strlen(str); i++) { \
+		for(uint64_t i = 0; i < strlen(str); i++) { \
 			push(str[i]); \
 		} \
 	}
 
-	int64_t i;
+	uint64_t i;
 	for(i = 0; i < MIN2(strlen(a), strlen(b)); i++) {
 		if(state == 0 && a[i] != b[i]) {
 			push_str("\x1b[31m"); state = 1;
@@ -6239,7 +6239,7 @@ char *string_pair_diff(
 	for(; i < strlen(a); i++) { push(a[i]); }
 
 	push('\n');
-	for(int64_t i = 0; i < strlen(b); i++) {
+	for(uint64_t i = 0; i < strlen(b); i++) {
 		push(b[i]);
 	}
 

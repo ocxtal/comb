@@ -730,7 +730,7 @@ int gref_fw_nocopy_modify_seq(
 	uint8_t const *rv_lim = GREF_SEQ_LIM + (uint64_t)GREF_SEQ_LIM;
 
 	/* calc rv pos base */
-	for(int64_t i = 0; i < pool->sec_cnt; i++) {
+	for(uint64_t i = 0; i < pool->sec_cnt; i++) {
 		sec[i].rv_sec.base = rv_lim - (uint64_t)sec[i].fw_sec.base - sec[i].fw_sec.len;
 	}
 	return(0);
@@ -758,7 +758,7 @@ int gref_fr_copy_modify_seq(
 		0x01, 0x09, 0x05, 0x0d, 0x03, 0x0b, 0x07, 0x0f
 	};
 	uint64_t fw_tail_pos = pool->seq_len + pool->params.seq_head_margin;
-	for(int64_t i = 0; i < pool->seq_len; i++) {
+	for(uint64_t i = 0; i < pool->seq_len; i++) {
 		lmm_kv_at(pool->seq, fw_tail_pos + i) = comp[lmm_kv_at(pool->seq, fw_tail_pos - 1 - i)];
 	}
 
@@ -767,7 +767,7 @@ int gref_fr_copy_modify_seq(
 	uint8_t const *rv_lim = pool->seq_lim = seq_base + 2 * pool->seq_len;
 
 	/* add offset to fw pos base, then calc rv pos base */
-	for(int64_t i = 0; i < pool->sec_cnt; i++) {
+	for(uint64_t i = 0; i < pool->sec_cnt; i++) {
 		sec[i].rv_sec.base = rv_lim - (uint64_t)sec[i].fw_sec.base - sec[i].fw_sec.len;
 		sec[i].fw_sec.base += (uint64_t)seq_base;	/* convert pos to valid pointer */
 		debug("%llu", (uint64_t)(sec[i].rv_sec.base - sec[i].fw_sec.base));
@@ -1077,9 +1077,9 @@ void gref_iter_kmer_append(
 	/* append to vector */
 	uint64_t *p = _kmer_arr(kmer);
 	uint64_t mask = 0x03<<kmer->shift_len;
-	for(int64_t j = 0; j < pcnt; j++) {
+	for(uint64_t j = 0; j < pcnt; j++) {
 		uint64_t b = mask & (conv<<(kmer->shift_len - shift_table[c][j]));
-		for(int64_t k = 0; k < lim; k++) {
+		for(uint64_t k = 0; k < lim; k++) {
 			*p = (*p>>2) | b; p++;
 			debug("%lld, %lld, %lld, %x, %x, %llx",
 				j, k, j * lim + k, shift_table[c][j], 0x03 & (conv>>shift_table[c][j]), p[-1]);
@@ -1094,7 +1094,7 @@ void gref_iter_kmer_append(
 	if(shrink_skip > 1) {
 		// lim /= shrink_skip;
 		lim = (lim * ((shrink_skip == 2) ? 0x10000 : 0xaaab))>>17;
-		for(int64_t j = 0; j < lim; j++) {
+		for(uint64_t j = 0; j < lim; j++) {
 			_kmer_arr(kmer)[j] = _kmer_arr(kmer)[j * shrink_skip];
 		}
 	}

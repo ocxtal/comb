@@ -570,7 +570,7 @@ void *unittest_build_seqs(void *params)
 	uint32_t alen = atot - 20;
 	uint32_t blen = btot - 20;
 
-	int64_t margin = 64;
+	uint64_t margin = 64;
 	struct unittest_sections_s *sec = malloc(
 		sizeof(struct unittest_sections_s) + (atot + 1) + (btot + 1) + margin);
 
@@ -579,10 +579,10 @@ void *unittest_build_seqs(void *params)
 	uint8_t *cb = ca + atot + 1;
 	uint8_t *cm = cb + btot + 1;
 
-	for(int64_t i = 0; i < atot; i++) {
+	for(uint64_t i = 0; i < atot; i++) {
 		ca[i] = unittest_encode_base(a[i]);
 	}
-	for(int64_t i = 0; i < btot; i++) {
+	for(uint64_t i = 0; i < btot; i++) {
 		cb[i] = unittest_encode_base(b[i]);
 	}
 	ca[atot] = cb[btot] = '\0';

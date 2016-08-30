@@ -57,10 +57,10 @@ struct ggsea_conf_s {
 	gaba_t *gaba;
 
 	/* params */
-	int64_t init_rep_hash_size;
-	int64_t max_rep_vec_size;		/* max kmer vector size */
-	int64_t overlap_width;			/* overlap filter width */
-	int64_t res_lmm_size;			/* result memory manager size */
+	uint64_t init_rep_hash_size;
+	uint64_t max_rep_vec_size;		/* max kmer vector size */
+	uint64_t overlap_width;			/* overlap filter width */
+	uint64_t res_lmm_size;			/* result memory manager size */
 	struct ggsea_params_s params;
 };
 
@@ -1030,7 +1030,7 @@ struct qtree_node_s *qtree_advance(
 	struct qtree_node_s *qn,
 	struct gref_gid_pos_s qpos)
 {
-	while(qn != NULL && qn->h.key == _cast_u(qpos)) {
+	while(qn != NULL && (uint64_t)qn->h.key == _cast_u(qpos)) {
 		/*
 		 * current qpos hit at least one node in qtree
 		 */

@@ -163,9 +163,9 @@ void *psort_dispatcher(
  */
 int psort_full(
 	void *arr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads)
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads)
 {
 	switch(elem_size) {
 		case 2: psort_partialsort_parallel_16(arr, len, num_threads, 0, 2); return(0);
@@ -182,9 +182,9 @@ int psort_full(
  */
 int psort_half(
 	void *arr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads)
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads)
 {
 	switch(elem_size) {
 		case 2: psort_partialsort_parallel_16(arr, len, num_threads, 0, 1); return(0);
@@ -201,11 +201,11 @@ int psort_half(
  */
 int psort_partial(
 	void *arr,
-	int64_t len,
-	int64_t elem_size,
-	int64_t num_threads,
-	int64_t from,
-	int64_t to)
+	uint64_t len,
+	uint64_t elem_size,
+	uint64_t num_threads,
+	uint64_t from,
+	uint64_t to)
 {
 	switch(elem_size) {
 		case 2: psort_partialsort_parallel_16(arr, len, num_threads, from, to); return(0);

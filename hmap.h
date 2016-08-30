@@ -39,7 +39,7 @@ typedef struct hmap_s hmap_t;
  */
 struct hmap_key_s {
 	char const *ptr;
-	int32_t len;
+	uint32_t len;
 };
 typedef struct hmap_key_s hmap_key_t;
 
@@ -69,7 +69,7 @@ void hmap_flush(
 uint32_t hmap_get_id(
 	hmap_t *hmap,
 	char const *str,
-	int32_t len);
+	uint32_t len);
 
 /**
  * @fn hmap_get_key

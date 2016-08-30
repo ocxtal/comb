@@ -251,7 +251,7 @@ fna_t *fna_init(
 	 * 1. determine file format from the path extension
 	 */
 	if(fna->file_format == 0) {
-		int64_t path_len = strlen(fna->fp->path);
+		uint64_t path_len = strlen(fna->fp->path);
 		char const *path_tail = fna->fp->path + path_len;
 		for(ep = ext; ep->ext != NULL; ep++) {
 			/* skip if path string is shorter than extension string */
@@ -271,7 +271,7 @@ fna_t *fna_init(
 		/* peek the head of the file */
 		char buf[33] = { 0 };
 		uint64_t len = zfpeek(fna->fp, buf, 32);
-		for(int64_t i = 0; i < len; i++) {
+		for(uint64_t i = 0; i < len; i++) {
 			switch(buf[i]) {
 				case '>': fna->file_format = FNA_FASTA; break;
 				case '@': fna->file_format = FNA_FASTQ; break;
@@ -1622,7 +1622,7 @@ int fdump(
 	char const *content)
 {
 	FILE *fp = fopen(filename, "w");
-	int64_t l = fprintf(fp, "%s", content);
+	uint64_t l = fprintf(fp, "%s", content);
 	fclose(fp);
 	return(l == strlen(content));
 }
@@ -1632,7 +1632,7 @@ int fdump(
  * @brief compare file, returns zero if the content is equivalent to arr
  */
 static _force_inline
-int fcmp(char const *filename, int64_t size, uint8_t const *arr)
+int fcmp(char const *filename, uint64_t size, uint8_t const *arr)
 {
 	int64_t res;
 	struct stat st;
@@ -1643,7 +1643,7 @@ int fcmp(char const *filename, int64_t size, uint8_t const *arr)
 	fstat(fileno(fp), &st);
 	buf = malloc(sizeof(uint8_t) * st.st_size);
 
-	if(fread(buf, sizeof(uint8_t), st.st_size, fp) != st.st_size) {
+	if(fread(buf, sizeof(uint8_t), st.st_size, fp) != (size_t)st.st_size) {
 		return(0);
 	}
 	res = memcmp(buf, arr, size);

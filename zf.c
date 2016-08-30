@@ -30,8 +30,8 @@
 
 
 /* constants */
-#define ZF_BUF_SIZE					( 512 * 1024 )		/* 512KB */
-#define ZF_UNGETC_MARGIN_SIZE		( 32 )
+#define ZF_BUF_SIZE					( 512 * 1024ULL )		/* 512KB */
+#define ZF_UNGETC_MARGIN_SIZE		( 32ULL )
 
 /* function pointer type aliases */
 typedef void *(*zf_dopen_t)(
@@ -133,8 +133,8 @@ struct zf_intl_s {
 	void *fp;		/* one of {FILE * / gzFile / BZFILE *} */
 	struct zf_functions_s fn;
 	uint8_t *buf;
-	int64_t size;
-	int64_t curr, end;
+	uint64_t size;
+	uint64_t curr, end;
 	char ungetc_margin[ZF_UNGETC_MARGIN_SIZE];
 };
 _static_assert(offsetof(struct zf_intl_s, ungetc_margin) == sizeof(struct zf_s));
@@ -202,8 +202,8 @@ zf_t *zfopen(
 	}
 
 	/* check length */
-	int64_t path_len = strlen(path);
-	int64_t mode_len = strlen(mode);
+	uint64_t path_len = strlen(path);
+	uint64_t mode_len = strlen(mode);
 	if(path_len == 0 || mode_len == 0) {
 		return(NULL);
 	}
@@ -216,7 +216,7 @@ zf_t *zfopen(
 
 	/* determine format */
 	struct zf_functions_s const *fn = &fn_table[0];
-	for(int64_t i = 1; i < sizeof(fn_table) / sizeof(struct zf_functions_s); i++) {
+	for(uint64_t i = 1; i < sizeof(fn_table) / sizeof(struct zf_functions_s); i++) {
 		/* skip if ext string is longer than path string */
 		if(path_len < strlen(fn_table[i].ext)) { continue; }
 

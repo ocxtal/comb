@@ -118,8 +118,8 @@
 	int64_t const _offset = ((_tcnt - 1) & (_nreg - 1)) - (_nreg - 1); \
 	int64_t _jmp = _tcnt & (_nreg - 1); \
 	int64_t _lcnt = (_tcnt + _nreg - 1) / _nreg; \
-	__m128i register xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7; \
-	__m128i register xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15; \
+	register __m128i xmm0, xmm1, xmm2, xmm3, xmm4, xmm5, xmm6, xmm7; \
+	register __m128i xmm8, xmm9, xmm10, xmm11, xmm12, xmm13, xmm14, xmm15; \
 	_src += _offset * sizeof(__m128i); \
 	_dst += _offset * sizeof(__m128i); \
 	switch(_jmp) { \
@@ -228,8 +228,8 @@
 /* cache line operation */
 #define WCR_BUF_SIZE		( 64 )		/** 64 bytes */
 #define memcpy_buf(_dst, _src) { \
-	__m128i register *_s = (__m128i *)(_src); \
-	__m128i register *_d = (__m128i *)(_dst); \
+	register __m128i *_s = (__m128i *)(_src); \
+	register __m128i *_d = (__m128i *)(_dst); \
 	__m128i xmm0 = _mm_load_si128(_s); \
 	_mm_stream_si128(_d, xmm0); \
 	__m128i xmm1 = _mm_load_si128(_s + 1); \

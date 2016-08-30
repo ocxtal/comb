@@ -163,13 +163,13 @@ int aw_cigar_printf(
 	zf_t *fp = (zf_t *)ctx;
 	uint64_t const fmt_base_len = strlen("%" PRId64 "");
 
-	int64_t len = va_arg(l, int64_t);
+	uint64_t len = va_arg(l, uint64_t);
 	char op = (fmt[fmt_base_len] == '%') ? va_arg(l, int) : fmt[fmt_base_len];
 
 	int adv = 0;
 	if(len < 64) {
 		union aw_parse_cigar_table_u c = aw_parse_get_cigar_elem(len);
-		for(int64_t i = 0; i < c.table.len; i++) {
+		for(uint64_t i = 0; i < c.table.len; i++) {
 			zfputc(fp, c.table.str[i]);
 		}
 		zfputc(fp, op);
@@ -198,8 +198,8 @@ void sam_write_header(
 	zfprintf(aw->fp, "@HD\tVN:%s\tSO:unsorted\n", SAM_VERSION_STRING);
 
 	/* write reference sequence names */
-	int64_t ref_cnt = gref_get_section_count(r);
-	for(int64_t i = 0; i < ref_cnt; i++) {
+	uint64_t ref_cnt = gref_get_section_count(r);
+	for(uint64_t i = 0; i < ref_cnt; i++) {
 		zfprintf(aw->fp, "@SQ\tSN:%s\tLN:%u\n",
 			gref_get_name(r, gref_gid(i, 0)).ptr,
 			gref_get_section(r, gref_gid(i, 0))->len);
@@ -307,8 +307,8 @@ void sam_print_cigar_forward(
 	struct gaba_path_s const *path)
 {
 	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-	int64_t hlen = curr->bpos;
-	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
+	uint64_t hlen = curr->bpos;
+	uint64_t tlen = bsec->len - (curr->bpos + curr->blen);
 
 	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
 
@@ -344,8 +344,8 @@ void sam_print_cigar_reverse(
 	struct gaba_path_s const *path)
 {
 	gref_section_t const *bsec = gref_get_section(q, curr->bid);
-	int64_t hlen = curr->bpos;
-	int64_t tlen = bsec->len - (curr->bpos + curr->blen);
+	uint64_t hlen = curr->bpos;
+	uint64_t tlen = bsec->len - (curr->bpos + curr->blen);
 
 	debug("blen(%u), hlen(%lld), len(%u), tlen(%lld)", curr->blen, hlen, bsec->len, tlen);
 
@@ -583,7 +583,7 @@ void sam_write_alignment(
 	gaba_alignment_t const *aln)
 {
 	debug("slen(%u)", aln->slen);
-	for(int64_t i = 0; i < aln->slen - 1; i++) {
+	for(uint64_t i = 0; i < aln->slen - 1; i++) {
 		debug("i(%lld), path(%p), &sec[i](%p), &sec[i+1](%p)",
 			i, aln->path, &aln->sec[i], &aln->sec[i + 1]);
 		sam_write_segment(aw, r, q, aln->path, &aln->sec[i], &aln->sec[i + 1]);
@@ -726,7 +726,7 @@ void gpa_write_alignment(
 {
 	debug("slen(%u)", aln->slen);
 
-	for(int64_t i = 0; i < aln->slen; i++) {
+	for(uint64_t i = 0; i < aln->slen; i++) {
 		debug("i(%lld), path(%p), &sec[i](%p)", i, aln->path, &aln->sec[i]);
 		gpa_write_segment(aw, r, q, aln->path, &aln->sec[i], i == 0, i == (aln->slen - 1));
 		aw->aln_cnt++;
@@ -743,9 +743,9 @@ void aw_append_alignment(
 	gref_idx_t const *ref,
 	gref_acv_t const *query,
 	struct gaba_alignment_s const *const *aln,
-	int64_t cnt)
+	uint64_t cnt)
 {
-	for(int64_t i = 0; i < cnt; i++) {
+	for(uint64_t i = 0; i < cnt; i++) {
 		debug("append i(%lld), ref(%p), query(%p), aln[i](%p)", i, ref, query, aln[i]);
 		aw->conf.body(aw, ref, query, aln[i]);
 	}
@@ -760,7 +760,7 @@ char *strdup_rm_tab(
 {
 	char *copy = strdup(str);
 
-	for(int64_t i = 0; i < strlen(str); i++) {
+	for(uint64_t i = 0; i < strlen(str); i++) {
 		if(copy[i] == '\t') {
 			copy[i] = ' ';
 		}
@@ -817,7 +817,7 @@ aw_t *aw_init(
 	if(params->format != 0) {
 		aw->conf = conf[params->format];
 	} else {
-		for(int64_t i = 0; i < sizeof(conf) / sizeof(struct aw_conf_s); i++) {
+		for(uint64_t i = 0; i < sizeof(conf) / sizeof(struct aw_conf_s); i++) {
 			/* skip if extension string is not provided */
 			if(conf[i].ext == NULL) { continue; }
 
@@ -907,7 +907,7 @@ void aw_clean(
 struct aw_unittest_ctx_s {
 	gref_idx_t *idx;
 	gaba_alignment_t **res;
-	int64_t cnt;
+	uint64_t cnt;
 };
 
 void *aw_unittest_init(
@@ -1092,7 +1092,7 @@ unittest()
 	char *rbuf = (char *)malloc(strlen(sam) + 1);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, strlen(sam) + 1);
+	uint64_t size = zfread(fp, rbuf, strlen(sam) + 1);
 
 	assert(size == strlen(sam), "size(%lld, %lld)", size, strlen(sam));
 	assert(memcmp(rbuf, sam, MIN2(size, strlen(sam))) == 0, "%s%s", dump(rbuf, size), dump(sam, strlen(sam)));
@@ -1121,7 +1121,7 @@ unittest()
 	char *rbuf = (char *)malloc(strlen(sam) + 1);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, strlen(sam) + 1);
+	uint64_t size = zfread(fp, rbuf, strlen(sam) + 1);
 
 	assert(size == strlen(sam), "size(%lld, %lld)", size, strlen(sam));
 	assert(memcmp(rbuf, sam, MIN2(size, strlen(sam))) == 0, "%s%s", dump(rbuf, size), dump(sam, strlen(sam)));
@@ -1150,7 +1150,7 @@ unittest()
 	char *rbuf = (char *)malloc(strlen(sam) + 1);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, strlen(sam) + 1);
+	uint64_t size = zfread(fp, rbuf, strlen(sam) + 1);
 
 	assert(size == strlen(sam), "size(%lld, %lld)", size, strlen(sam));
 	assert(memcmp(rbuf, sam, MIN2(size, strlen(sam))) == 0, "%s%s", dump(rbuf, size), dump(sam, strlen(sam)));
@@ -1187,7 +1187,7 @@ unittest()
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, 1024);
+	uint64_t size = zfread(fp, rbuf, 1024);
 
 	assert(size == strlen(sam), "size(%lld, %lld)", size, strlen(sam));
 	assert(memcmp(rbuf, sam, MIN2(size, strlen(sam))) == 0, "%s%s, %s, %s", dump(rbuf, size), dump(sam, strlen(sam)), rbuf, sam);
@@ -1224,7 +1224,7 @@ unittest()
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, 1024);
+	uint64_t size = zfread(fp, rbuf, 1024);
 
 	assert(size == strlen(sam), "size(%lld, %lld)", size, strlen(sam));
 	assert(memcmp(rbuf, sam, MIN2(size, strlen(sam))) == 0, "%s%s, %s, %s", dump(rbuf, size), dump(sam, strlen(sam)), rbuf, sam);
@@ -1262,7 +1262,7 @@ unittest()
 	char *rbuf = (char *)malloc(strlen(gpa) + 1);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, strlen(gpa) + 1);
+	uint64_t size = zfread(fp, rbuf, strlen(gpa) + 1);
 
 	assert(size == strlen(gpa), "size(%lld, %lld)", size, strlen(gpa));
 	assert(memcmp(rbuf, gpa, MIN2(size, strlen(gpa))) == 0, "%s%s", dump(rbuf, size), dump(gpa, strlen(gpa)));
@@ -1295,7 +1295,7 @@ unittest()
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, 1024);
+	uint64_t size = zfread(fp, rbuf, 1024);
 
 	assert(size == strlen(gpa), "size(%lld, %lld)", size, strlen(gpa));
 	assert(memcmp(rbuf, gpa, MIN2(size, strlen(gpa))) == 0, "%s%s, %s, %s", dump(rbuf, size), dump(gpa, strlen(gpa)), rbuf, gpa);
@@ -1328,7 +1328,7 @@ unittest()
 	char *rbuf = (char *)malloc(1024);
 
 	zf_t *fp = zfopen(path, "r");
-	int64_t size = zfread(fp, rbuf, 1024);
+	uint64_t size = zfread(fp, rbuf, 1024);
 
 	assert(size == strlen(gpa), "size(%lld, %lld)", size, strlen(gpa));
 	assert(memcmp(rbuf, gpa, MIN2(size, strlen(gpa))) == 0, "%s%s, %s, %s", dump(rbuf, size), dump(gpa, strlen(gpa)), rbuf, gpa);

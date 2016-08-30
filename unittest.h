@@ -31,15 +31,6 @@
 #define _BSD_SOURCE
 #endif
 
-/* to allow unittest_config with tail semicolon */
-#pragma GCC diagnostic ignored "-Wextra-semi"
-
-/* to allow assert macro with no print message */
-#pragma GCC diagnostic ignored "-Wgnu-zero-variadic-macro-arguments"
-
-/* to allow ut_dump */
-#pragma GCC diagnostic ignored "-Wgnu-statement-expression"
-
 /* end */
 
 #include <alloca.h>
@@ -535,19 +526,19 @@ struct ut_printer_s ut_json_printer = {
 	char *_str = alloca(_size); \
 	char *_s = _str; \
 	/* make header */ \
-	_s += sprintf(_s, "\n`%s' len: %" PRId64 "\n", #ptr, (int64_t)len); \
+	_s += sprintf(_s, "\n`%s' len: %" PRIu64 "\n", #ptr, (uint64_t)len); \
 	_s += sprintf(_s, "                   "); \
-	for(int64_t i = 0; i < 16; i++) { \
+	for(uint64_t i = 0; i < 16; i++) { \
 		_s += sprintf(_s, " %02x", (uint8_t)i); \
 	} \
 	_s += sprintf(_s, "\n"); \
-	for(int64_t i = 0; i < ((len) + 15) / 16; i++) { \
+	for(uint64_t i = 0; i < ((len) + 15) / 16; i++) { \
 		_s += sprintf(_s, "0x%016" PRIx64 ":", (uint64_t)_ptr); \
-		for(int64_t j = 0; j < 16; j++) { \
+		for(uint64_t j = 0; j < 16; j++) { \
 			_s += sprintf(_s, " %02x", (uint8_t)_ptr[j]); \
 		} \
 		_s += sprintf(_s, "  "); \
-		for(int64_t j = 0; j < 16; j++) { \
+		for(uint64_t j = 0; j < 16; j++) { \
 			_s += sprintf(_s, "%c", isprint(_ptr[j]) ? _ptr[j] : ' '); \
 		} \
 		_s += sprintf(_s, "\n"); \
@@ -608,7 +599,7 @@ static inline
 char *ut_build_nm_cmd(
 	char const *filename)
 {
-	int64_t const filename_len_limit = 1024;
+	uint64_t const filename_len_limit = 1024;
 	char const *cmd_base = "nm ";
 
 	/* check the length of the filename */
