@@ -57,10 +57,10 @@ def configure(conf):
 		conf.check_cc(lib = 'pthread')
 
 	conf.env.append_value('CFLAGS', '-Wall')
-	conf.env.append_value('CFLAGS', '-Wextra')
-	conf.env.append_value('CFLAGS', '-Wno-missing-field-initializers')
-	conf.env.append_value('CFLAGS', '-Wno-unused-parameter')
-	conf.env.append_value('CFLAGS', '-Wno-unused-function')
+	# conf.env.append_value('CFLAGS', '-Wextra')
+	# conf.env.append_value('CFLAGS', '-Wno-missing-field-initializers')
+	# conf.env.append_value('CFLAGS', '-Wno-unused-parameter')
+	# conf.env.append_value('CFLAGS', '-Wno-unused-function')
 
 
 	if conf.env.CC_NAME == 'icc':
