@@ -313,7 +313,8 @@ void gaba_dp_flush(
 	uint8_t const *alim,
 	uint8_t const *blim)
 {
-	return(gaba_dp_flush_linear(this, alim, blim));
+	gaba_dp_flush_linear(this, alim, blim);
+	return;
 }
 
 /**
@@ -332,7 +333,8 @@ void gaba_dp_flush_stack(
 	gaba_dp_t *this,
 	gaba_stack_t const *stack)
 {
-	return(gaba_dp_flush_stack_linear(this, stack));
+	gaba_dp_flush_stack_linear(this, stack);
+	return;
 }
 
 /**
