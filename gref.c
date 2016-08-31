@@ -1801,12 +1801,13 @@ char unittest_random_base(void)
 /**
  * @fn unittest_generate_random_sequence
  */
+#define UNITTEST_SEQ_MARGIN			( 8 )
 static _force_inline
 char *unittest_generate_random_sequence(
 	int64_t len)
 {
 	char *seq;		/** a pointer to sequence */
-	seq = (char *)malloc(sizeof(char) * (len + 1));
+	seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
 
 	if(seq == NULL) { return NULL; }
 	for(int64_t i = 0; i < len; i++) {
