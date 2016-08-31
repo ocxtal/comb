@@ -395,7 +395,8 @@ void ggsea_flush(
 	/* flush result vector */
 	ctx->res_lmm = lmm;
 	lmm_kv_init(ctx->res_lmm, ctx->aln);
-	debug("flushed, aln(%p), lmm(%p), lim(%p)", lmm_kv_ptr(ctx->aln), ctx->res_lmm, ctx->res_lmm->lim);
+	debug("flushed, aln(%p), lmm(%p), lim(%p)", lmm_kv_ptr(ctx->aln), ctx->res_lmm,
+		(ctx->res_lmm != NULL) ? ctx->res_lmm->lim : NULL);
 	return;
 }
 
@@ -929,6 +930,9 @@ struct rtree_node_s *rtree_advance(
 	/* fetch next */
 	struct rtree_node_s *next = (struct rtree_node_s *)rbtree_right(
 		ctx->rtree, (rbtree_node_t *)rn);
+	debug("fetched rnode, rn(%p, %lld), next(%p, %lld)",
+		rn, rn->h.key,
+		next, (next != NULL) ? next->h.key : -1);
 
 	/* remove node if it reached the end */
 	if(rn->path_ridx <= 0) {
@@ -1388,7 +1392,7 @@ struct pp_match_s pp_match_section_forward(
 
 			int64_t pofs = (int64_t)gaba_plen(xp) - (int64_t)gaba_plen(yp);
 			debug("yofs(%lld), xplen(%u), yplen(%u), det(%lld)",
-				yofs, xp->plen, yp->plen, (yofs<<1) + (pofs>>63));
+				yofs, gaba_plen(xp), gaba_plen(yp), (yofs<<1) + (pofs>>63));
 
 			return((struct pp_match_s){
 				.cmp = pp_clip_cmp((yofs == 0) ? pofs : yofs),
@@ -1444,7 +1448,7 @@ struct pp_match_s pp_match_section_reverse(
 
 			int64_t pofs = (int64_t)gaba_plen(xp) - (int64_t)gaba_plen(yp);
 			debug("yofs(%lld), xplen(%u), yplen(%u), det(%lld)",
-				yofs, xp->plen, yp->plen, (yofs<<1) + (pofs>>63));
+				yofs, gaba_plen(xp), gaba_plen(yp), (yofs<<1) + (pofs>>63));
 
 			return((struct pp_match_s){
 				.cmp = pp_clip_cmp((yofs == 0) ? pofs : yofs),
@@ -1770,6 +1774,7 @@ struct qtree_node_s *ggsea_evaluate_seeds(
 	/* iterate over rtree */
 	struct rtree_node_s *rn = (struct rtree_node_s *)
 		rbtree_search_key_right(ctx->rtree, INT64_MIN);
+	debug("init rnode, rn(%p, %lld)", rn, (rn != NULL) ? rn->h.key : -1);
 	for(int64_t i = 0; i < rlen; i++) {
 
 		debug("seed: i(%lld), rpos(%llx)", i, _cast_u(rarr[i]));
