@@ -5783,6 +5783,7 @@ int8_t unittest_naive_encode(char a)
  * @brief naive implementation of the forward semi-global alignment algorithm
  * left-aligned gap and left-aligned deletion
  */
+#define UNITTEST_SEQ_MARGIN			( 8 )			/* add margin to avoid warnings in the glibc strlen */
 #define UNITTEST_NAIVE_FORWARD 		( 0 )
 #define UNITTEST_NAIVE_REVERSE 		( 1 )
 #if MODEL == LINEAR
@@ -5866,7 +5867,7 @@ struct unittest_naive_result_s unittest_naive(
 		.apos = max.apos,
 		.bpos = max.bpos,
 		.path_length = max.apos + max.bpos + 1,
-		.path = (char *)malloc(max.apos + max.bpos + 1)
+		.path = (char *)malloc(max.apos + max.bpos + UNITTEST_SEQ_MARGIN)
 	};
 	if(dir == UNITTEST_NAIVE_FORWARD) {
 		/* forward trace */
@@ -6024,7 +6025,7 @@ struct unittest_naive_result_s unittest_naive(
 		.apos = max.apos,
 		.bpos = max.bpos,
 		.path_length = max.apos + max.bpos + 1,
-		.path = (char *)malloc(max.apos + max.bpos + 1)
+		.path = (char *)malloc(max.apos + max.bpos + UNITTEST_SEQ_MARGIN)
 	};
 	if(dir == UNITTEST_NAIVE_FORWARD) {
 		int64_t path_index = max.apos + max.bpos + 1;
@@ -6126,7 +6127,7 @@ char *unittest_generate_random_sequence(
 	int64_t len)
 {
 	char *seq;		/** a pointer to sequence */
-	seq = (char *)malloc(sizeof(char) * (len + 1));
+	seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
 
 	if(seq == NULL) { return NULL; }
 	for(int64_t i = 0; i < len; i++) {
@@ -6151,7 +6152,7 @@ char *unittest_generate_mutated_sequence(
 	char *mutated_seq;
 
 	if(seq == NULL) { return NULL; }
-	mutated_seq = (char *)malloc(sizeof(char) * (len + 1));
+	mutated_seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
 	if(mutated_seq == NULL) { return NULL; }
 	for(int64_t i = 0, j = 0; i < len; i++) {
 		if(((double)rand() / (double)RAND_MAX) < x) {
@@ -6184,7 +6185,7 @@ char *unittest_add_tail(
 	int64_t tail_len)
 {
 	int64_t len = strlen(seq);
-	seq = realloc(seq, len + tail_len + 1);
+	seq = realloc(seq, len + tail_len + UNITTEST_SEQ_MARGIN);
 
 	for(int64_t i = 0; i < tail_len; i++) {
 		seq[len + i] = (c == 0) ? unittest_random_base() : c;
