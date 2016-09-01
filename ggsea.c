@@ -77,6 +77,7 @@ struct rep_seed_s {
 /**
  * @struct rtree_node_s
  */
+#if 0
 struct rtree_node_s {
 	rbtree_node_t h;		/* (40) */
 	uint32_t prev_qpos;		/* q-coordinate at the previous r-index update */
@@ -91,6 +92,23 @@ struct rtree_node_s {
 
 	struct qtree_node_s *qhead;
 	uint32_t pad2[2];
+};
+#endif
+struct rtree_node_s {
+	rbtree_node_t h;		/* (40) */
+	uint32_t prev_qpos;		/* q-coordinate on the previous r-index update */
+	uint32_t path_qpos;		/* q-coordinate on the previous path adjustment */
+	uint32_t qlim;			/* tail q-coordinate */
+	uint32_t pad1;
+
+	int64_t path_ridx;		/* reverse index of the path string after the previous path adjustment */
+	uint64_t const *ptail;	/* path tail of the current section */
+
+	struct gaba_alignment_s const *aln;
+	uint32_t sidx;
+	uint32_t pad2;
+
+	struct qtree_node_s *qhead;
 };
 _static_assert(sizeof(struct rtree_node_s) == 96);
 
@@ -800,18 +818,22 @@ struct gaba_alignment_s const *dp_extend_seed(
 }
 
 
-/* seed filtering */
+/* result containers and seed filtering */
 /**
  * @fn load_u64
  */
 static inline
 uint64_t load_u64(
 	uint64_t const *ptr,
-	int64_t pos)
+	int64_t ridx)
 {
-	int64_t rem = pos & 63;
-	uint64_t a = (ptr[pos>>6]>>rem) | ((ptr[(pos>>6) + 1]<<(63 - rem))<<1);
-	return(a);
+	uint64_t const mask = 0xaaaaaaaaaaaaaaaa;
+	int64_t idx = (-ridx)>>6;
+	uint64_t farr = (idx <= 0) ? ptr[idx] : mask;
+	uint64_t larr = (idx < 0) ? ptr[idx + 1] : mask;
+
+	int64_t rem = (-ridx) & 63;
+	return((farr>>rem) | ((larr<<(63 - rem))<<1));
 }
 
 /**
@@ -841,9 +863,10 @@ struct rtree_node_s *rtree_append_result(
 		})),
 		.prev_qpos = qpos.pos,
 		.path_qpos = qpos.pos,
-		.path_ridx = plen - aln->rppos,
-		.path_rem = (64 - 1) & plen,
-		.ptail = path + (rsec->ppos + plen) / 64,
+		.qlim = rsec->bpos + rsec->blen,
+
+		.path_ridx = (plen - aln->rppos) & ~(64 - 1),
+		.ptail = path + ((rsec->ppos + plen)>>6),
 
 		.aln = aln,
 		.sidx = aln->rsidx,
@@ -851,8 +874,8 @@ struct rtree_node_s *rtree_append_result(
 		.qhead = qhead
 	};
 
-	debug("append result, rn(%p), qpos(%u), rsec(%x), h.key(%llu), prev_qpos(%u), path_ridx(%u), path_rem(%u)",
-		rn, qpos.pos, aln->rsidx, 0xffffffff & rn->h.key, rn->prev_qpos, rn->path_ridx, rn->path_rem);
+	debug("append result, rn(%p), a(%u, %u), b(%u, %u)",
+		rn, rsec->apos, rsec->alen, rsec->bpos, rsec->blen);
 	rbtree_insert(ctx->rtree, (rbtree_node_t *)rn);
 	return((struct rtree_node_s *)rbtree_right(ctx->rtree, (rbtree_node_t *)rn));
 }
@@ -881,9 +904,8 @@ uint64_t rtree_update(
 		int64_t q = qpos.pos - rn->path_qpos;
 		int64_t rpos = rn->h.key;
 		int64_t ridx = rn->path_ridx;
-		int64_t rem = rn->path_rem;
 
-		debug("q(%lld), ridx(%lld), rem(%lld)", q, ridx, rem);
+		debug("q(%lld), ridx(%lld)", q, ridx);
 
 		while(q > 0) {
 
@@ -891,13 +913,7 @@ uint64_t rtree_update(
 			int64_t qlen = MIN2(q, 32);
 
 			/* load path array */
-			uint64_t path_array = load_u64(rn->ptail, rem - ridx);
-
-			/* append phantom diagonals */
-			if(ridx < 64) {
-				path_array = ((path_array<<(63 - ridx))<<1) | (0xaaaaaaaaaaaaaaaa>>ridx);
-				// path_array = ((path_array<<(63 - ridx))<<1) | (0x5555555555555555>>ridx);
-			}
+			uint64_t path_array = load_u64(rn->ptail, ridx);
 
 			/* count vertical elements */
 			int64_t dcnt = popcnt(path_array<<(64 - 2*qlen));
@@ -913,7 +929,7 @@ uint64_t rtree_update(
 		/* write back indices */
 		rn->h.key = rpos;
 		rn->path_qpos = qpos.pos;
-		rn->path_ridx = MAX2(ridx, 0);
+		rn->path_ridx = ridx;
 	}
 	return(rn->h.key);
 }
@@ -935,8 +951,9 @@ struct rtree_node_s *rtree_advance(
 		next, (next != NULL) ? next->h.key : -1);
 
 	/* remove node if it reached the end */
-	if(rn->path_ridx <= 0) {
-		debug("remove rnode, rn(%p), pridx(%u), next(%p)", rn, rn->path_ridx, next);
+	// if(rn->path_ridx == 0) {
+	if(qpos.pos > rn->qlim) {
+		debug("remove rnode, rn(%p), pridx(%lld), next(%p)", rn, rn->path_ridx, next);
 		rbtree_remove(ctx->rtree, (rbtree_node_t *)rn);
 	}
 	return(next);
@@ -975,11 +992,8 @@ void rtree_replace(
 		.gid = rsec->aid,
 		.pos = aln->rapos + ctx->conf.overlap_width
 	}));
-	// rn->prev_qpos = qpos.pos;
-	// rn->path_qpos = qpos.pos;
-	rn->path_ridx = plen - aln->rppos;
-	rn->path_rem = (64 - 1) & plen;
-	rn->ptail = path + (rsec->ppos + plen) / 64;
+	rn->path_ridx = (plen - aln->rppos) & ~(64 - 1),
+	rn->ptail = path + ((rsec->ppos + plen)>>6);
 
 	rn->aln = aln;
 	rn->sidx = aln->rsidx;
@@ -1052,9 +1066,10 @@ struct qtree_node_s *qtree_advance(
 			})),
 			.prev_qpos = qpos.pos,
 			.path_qpos = qpos.pos,
-			.path_ridx = plen,
-			.path_rem = (64 - 1) & plen,
-			.ptail = (uint64_t const *)qn->aln->path + (sec->ppos + plen) / 64,
+			.qlim = sec->bpos + sec->blen,
+
+			.path_ridx = plen & ~(64 - 1),
+			.ptail = (uint64_t const *)qn->aln->path + ((sec->ppos + plen)>>6),
 
 			.aln = qn->aln,
 			.sidx = qn->sidx
@@ -1093,7 +1108,6 @@ struct qtree_node_s *qtree_append_result(
 
 	/* append all sections to qtree except root */
 	for(int64_t i = 0; i < aln->slen; i++) {
-		// if(i == aln->rsidx) { continue; }			/* skip root section */
 
 		/* create qnode */
 		struct qtree_node_s *qn = (struct qtree_node_s *)
@@ -1176,6 +1190,87 @@ struct qtree_node_s *qtree_replace(
 
 	#undef _set_qn
 	return(head);
+}
+
+
+/* adjacent filter */
+/**
+ * @fn adjacent_filter_skip_nodes
+ */
+static _force_inline
+struct gref_gid_pos_s const *adjacent_filter_skip_nodes(
+	struct gref_gid_pos_s rpos,
+	struct gref_gid_pos_s const *parr,
+	struct gref_gid_pos_s const *ptail)
+{
+	while(parr < ptail && _cast_u(*parr) + 1 < _cast_u(rpos)) {
+		parr++;
+	}
+	return(parr);
+}
+
+/**
+ * @fn adjacent_filter_test
+ */
+static _force_inline
+int64_t adjacent_filter_test(
+	struct gref_gid_pos_s rpos,
+	struct gref_gid_pos_s const *parr,
+	struct gref_gid_pos_s const *ptail)
+{
+	debug("adjacent filter test, ppos(%u), rpos(%u)", parr->pos, rpos.pos);
+	return(parr < ptail && _cast_u(*parr) + 1 == _cast_u(rpos));
+}
+
+
+/* overlap filters */
+/**
+ * @struct rtree_node_pair_s
+ */
+struct rtree_node_pair_s {
+	struct rtree_node_s *left;
+	struct rtree_node_s *right;
+};
+
+/**
+ * @fn overlap_filter_skip_nodes
+ */
+static _force_inline
+struct rtree_node_pair_s overlap_filter_skip_nodes(
+	struct ggsea_ctx_s *ctx,
+	struct rtree_node_pair_s r,
+	struct gref_gid_pos_s rpos,
+	struct gref_gid_pos_s qpos)
+{
+	while(r.right != NULL && rtree_update(ctx, r.right, qpos) < _cast_u(rpos)) {
+		r.right = rtree_advance(ctx, (r.left = r.right), qpos);
+	}
+	return(r);
+}
+
+/**
+ * @fn overlap_filter_test
+ */
+static _force_inline
+int64_t overlap_filter_test(
+	struct ggsea_ctx_s *ctx,
+	struct rtree_node_pair_s r,
+	struct gref_gid_pos_s rpos)
+{
+	/* check if seed overlaps with previous results */
+	debug("overlap filter test, rn(%p), rpos(%llu), diff(%lld)",
+		r.right,
+		(r.right != NULL) ? (0xffffffff & r.right->h.key) : (int64_t)-1,
+		(r.right != NULL) ? (r.right->h.key - _cast_u(rpos)) : (int64_t)-1);
+
+	/*
+	if(r.right != NULL && (uint64_t)(r.right->h.key + 1000 - _cast_u(rpos)) < 2000) {
+		debug("%lld", r.right->h.key - _cast_u(rpos));
+	}
+	*/
+
+	uint64_t window = 2 * ctx->conf.overlap_width;
+	return(r.right != NULL && (uint64_t)(r.right->h.key - _cast_u(rpos)) < window);
 }
 
 
@@ -1710,7 +1805,6 @@ struct gaba_alignment_s const *pp_process_alignment(
 static _force_inline
 struct rtree_node_s *ggsea_append_result(
 	struct ggsea_ctx_s *ctx,
-	struct rtree_node_s *rn,
 	struct gref_gid_pos_s qpos,
 	struct gaba_alignment_s const *aln)
 {
@@ -1723,13 +1817,35 @@ struct rtree_node_s *ggsea_append_result(
  * @fn ggsea_evaluate_alignment
  */
 static _force_inline
-struct rtree_node_s *ggsea_evaluate_alignment(
+struct rtree_node_pair_s ggsea_evaluate_alignment(
 	struct ggsea_ctx_s *ctx,
-	struct rtree_node_s *rn,
+	struct rtree_node_pair_s r,
 	struct gref_gid_pos_s rpos,
 	struct gref_gid_pos_s qpos,
 	struct gaba_alignment_s const *aln)
 {
+	debug("right(%p), left(%p)", r.right, r.left);
+
+	if(r.right != NULL) {
+		if((aln = pp_process_alignment(ctx, r.right, rpos, qpos, aln)) == NULL) {
+			debug("replaced with right");
+			return(r);
+		}		
+	}
+
+	if(r.left != NULL) {
+		if((aln = pp_process_alignment(ctx, r.left, rpos, qpos, aln)) == NULL) {
+			debug("replaced with left");
+			return(r);
+		}		
+	}
+
+	return((struct rtree_node_pair_s){
+		.left = r.left,
+		.right = ggsea_append_result(ctx, qpos, aln)
+	});
+
+	#if 0
 	/* current rnode */
 	if(rn == NULL) {
 		return(ggsea_append_result(ctx, rn, qpos, aln));
@@ -1748,7 +1864,9 @@ struct rtree_node_s *ggsea_evaluate_alignment(
 	}
 
 	return(ggsea_append_result(ctx, rn, qpos, aln));
+	#endif
 }
+
 
 /**
  * @fn ggsea_evaluate_seeds
@@ -1772,55 +1890,34 @@ struct qtree_node_s *ggsea_evaluate_seeds(
 	debug("init adjacent filter, parr(%p), ptail(%p), plen(%lld)", parr, ptail, plen);
 
 	/* iterate over rtree */
-	struct rtree_node_s *rn = (struct rtree_node_s *)
-		rbtree_search_key_right(ctx->rtree, INT64_MIN);
-	debug("init rnode, rn(%p, %lld)", rn, (rn != NULL) ? rn->h.key : -1);
+	struct rtree_node_pair_s r = {
+		.left = NULL,
+		.right = (struct rtree_node_s *)rbtree_search_key_right(
+			ctx->rtree, INT64_MIN)
+	};
+	debug("init rnode, rn(%p, %lld)", r.right, (r.right != NULL) ? r.right->h.key : -1);
 	for(int64_t i = 0; i < rlen; i++) {
+		struct gref_gid_pos_s rpos = rarr[i];
 
-		debug("seed: i(%lld), rpos(%llx)", i, _cast_u(rarr[i]));
+		debug("seed: i(%lld), rpos(%llx)", i, _cast_u(rpos));
 
 		/* first check the adjacency to the previous seeds */
-		while(parr < ptail && _cast_u(*parr) + 1 < _cast_u(rarr[i])) {
-			parr++;
-		}
+		parr = adjacent_filter_skip_nodes(rpos, parr, ptail);
+		if(adjacent_filter_test(rpos, parr, ptail)) { continue; }
 
-		debug("adjacent filter test, ppos(%u), rpos(%u)", parr->pos, rarr[i].pos);
-		if(parr < ptail && _cast_u(*parr) + 1 == _cast_u(rarr[i])) {
-			debug("adjacent filter hit, skip seed");
-			continue;
-		}
-
-		/* get the next rnode */
-		while(rn != NULL && rtree_update(ctx, rn, qpos) < _cast_u(rarr[i])) {
-			rn = rtree_advance(ctx, rn, qpos);
-		}
-
-		/* check if seed overlaps with previous results */
-		debug("overlap filter test, rn(%p), i(%lld), rarr[i](%u), rpos(%llu), diff(%lld)",
-			rn, i, rarr[i].pos,
-			(rn != NULL) ? (0xffffffff & rn->h.key) : (int64_t)-1,
-			(rn != NULL) ? (rn->h.key - _cast_u(rarr[i])) : (int64_t)-1);
-
-		if(rn != NULL && (uint64_t)(rn->h.key + 1000 - _cast_u(rarr[i])) < 2000) {
-			debug("%lld", rn->h.key - _cast_u(rarr[i]));
-		}
-
-		if(rn != NULL && (uint64_t)(rn->h.key - _cast_u(rarr[i])) < 2 * ctx->conf.overlap_width) {
-			debug("overlap filter hit, skip seed");
-			continue;		/* skip */
-		}
-		debug("filter passed, i(%lld), rarr[i](%u)", i, rarr[i].pos);
+		/* next overlap filter */
+		r = overlap_filter_skip_nodes(ctx, r, rpos, qpos);
+		if(overlap_filter_test(ctx, r, rpos)) { continue; }
+		debug("filter passed, i(%lld), rpos(%u)", i, rpos.pos);
 
 		/* extend */
-		struct gaba_alignment_s const *aln = dp_extend_seed(ctx, rarr[i], qpos);
-		if(aln == NULL) {
-			continue;
-		}
+		struct gaba_alignment_s const *aln = dp_extend_seed(ctx, rpos, qpos);
+		if(aln == NULL) { continue; }
 
 		/* postprocess */
-		rn = ggsea_evaluate_alignment(ctx, rn, rarr[i], qpos, aln);
+		r = ggsea_evaluate_alignment(ctx, r, rpos, qpos, aln);
 		qn = qtree_refresh_node(ctx, qpos);
-		debug("extend finished, rn(%p), qn(%p), score(%lld)", rn, qn, (aln != NULL) ? aln->score : 0);
+		debug("extend finished, rn(%p), qn(%p), score(%lld)", r.right, qn, (aln != NULL) ? aln->score : 0);
 	}
 	return(qn);
 }
