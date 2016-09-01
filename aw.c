@@ -45,6 +45,10 @@ struct aw_conf_s {
 		gref_idx_t const *r,
 		gref_acv_t const *q,
 		gaba_alignment_t const *aln);
+	void (*unmapped)(
+		aw_t *aw,
+		gref_idx_t const *r,
+		gref_acv_t const *q);
 	void (*footer)(
 		aw_t *aw,
 		gref_idx_t const *r,
@@ -417,7 +421,7 @@ void sam_write_segment_forward(
 	zfputc(aw->fp, '\t');
 
 	/* reference name and pos (name is skipped by default) */
-	aw_print_str(aw->fp, 
+	aw_print_str(aw->fp,
 		gref_get_name(r, curr->aid).ptr,
 		gref_get_name(r, curr->aid).len);
 	zfputc(aw->fp, '\t');
@@ -595,6 +599,46 @@ void sam_write_alignment(
 	return;
 }
 
+/**
+ * @fn sam_write_unmapped
+ */
+static
+void sam_write_unmapped(
+	aw_t *aw,
+	gref_idx_t const *r,
+	gref_acv_t const *q)
+{
+	for(uint32_t i = 0; i < gref_get_section_count(q); i++) {
+
+		uint32_t gid = gref_gid(i, GREF_FW);
+
+		/* query name */
+		aw_print_str(aw->fp,
+			gref_get_name(q, gid).ptr,
+			gref_get_name(q, gid).len);
+		zfputc(aw->fp, '\t');
+
+		/* flags (revcomp indicator) */
+		aw_print_num(aw->fp, 0x04);
+		zfputc(aw->fp, '\t');
+
+		/* reference name and pos, mapq, cigar, next section, template len */
+		zfprintf(aw->fp, "*\t0\t0\t*\t*\t0\t0\t");
+
+		/* seq and qual */
+		gref_section_t const *bsec = gref_get_section(q, gid);
+		sam_print_seq_forward(aw, bsec->base, bsec->len);
+
+		/* print quality string */
+		zfprintf(aw->fp, "\t*\t");
+
+		/* print option tags */
+		sam_print_option_tags(aw, q, NULL, NULL);
+		zfputc(aw->fp, '\n');
+	}
+	return;
+}
+
 
 /* gpa format writers */
 
@@ -734,6 +778,19 @@ void gpa_write_alignment(
 	return;
 }
 
+/**
+ * @fn gpa_write_unmapped
+ */
+static
+void gpa_write_unmapped(
+	aw_t *aw,
+	gref_idx_t const *r,
+	gref_acv_t const *q)
+{
+	/* nothing to do */
+	return;
+}
+
 
 /**
  * @fn aw_append_alignment
@@ -749,6 +806,18 @@ void aw_append_alignment(
 		debug("append i(%lld), ref(%p), query(%p), aln[i](%p)", i, ref, query, aln[i]);
 		aw->conf.body(aw, ref, query, aln[i]);
 	}
+	return;
+}
+
+/**
+ * @fn aw_append_unmapped
+ */
+void aw_append_unmapped(
+	aw_t *aw,
+	gref_idx_t const *ref,
+	gref_acv_t const *query)
+{
+	aw->conf.unmapped(aw, ref, query);
 	return;
 }
 
@@ -795,6 +864,7 @@ aw_t *aw_init(
 			.mode = "w",
 			.header = gpa_write_header,
 			.body = gpa_write_alignment,
+			.unmapped = gpa_write_unmapped,
 			.footer = NULL
 		},
 		[AW_SAM] = {
@@ -802,6 +872,7 @@ aw_t *aw_init(
 			.mode = "w",
 			.header = sam_write_header,
 			.body = sam_write_alignment,
+			.unmapped = sam_write_unmapped,
 			.footer = NULL
 		},
 		[AW_GPA] = {
@@ -809,6 +880,7 @@ aw_t *aw_init(
 			.mode = "w",
 			.header = gpa_write_header,
 			.body = gpa_write_alignment,
+			.unmapped = gpa_write_unmapped,
 			.footer = NULL
 		}
 	};

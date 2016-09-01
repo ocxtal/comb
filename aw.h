@@ -14,10 +14,10 @@
  * @enum aw_file_format
  */
 enum aw_file_format {
-	AW_SAM = 1,
-	AW_BAM = 2,
-	AW_MAF = 3,
-	AW_GPA = 4			/* graphical pairwise alignment format */
+	AW_SAM = 16,
+	AW_BAM = 17,
+	AW_MAF = 18,
+	AW_GPA = 19			/* graphical pairwise alignment format */
 };
 
 /**
@@ -81,6 +81,15 @@ void aw_append_alignment(
 	gref_acv_t const *query,
 	struct gaba_alignment_s const *const *aln,
 	uint64_t cnt);
+
+/**
+ * @fn aw_append_unmapped
+ */
+void aw_append_unmapped(
+	aw_t *aw,
+	gref_idx_t const *ref,
+	gref_acv_t const *query);
+
 
 #endif /* _SAM_H_INCLUDED */
 /**
