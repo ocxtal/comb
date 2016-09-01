@@ -4689,7 +4689,7 @@ int check_path(
 		uint32_t array = 0;
 		for(int64_t i = 0; i < 32; i++) {
 			if(plen-- == 0) {
-				array = (array>>(32 - i)) | ((uint64_t)0x01<<i);
+				array = (array>>(32 - i)) | ((uint64_t)0x55555555<<i);
 				break;
 			}
 			array = (array>>1) | ((*str++ == 'D') ? 0x80000000 : 0);
