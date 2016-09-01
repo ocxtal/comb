@@ -64,6 +64,10 @@ struct comb_align_params_s {
 	char *query_name;
 	char *out_name;
 
+	uint8_t ref_format;
+	uint8_t query_format;
+	uint8_t out_format;
+
 	/* indexing parameters */
 	int64_t k;
 
@@ -76,7 +80,10 @@ struct comb_align_params_s {
 	int64_t xdrop;
 	int8_t m, x, gi, ge;
 	char clip;
-	int8_t pad2[3];
+	int8_t pad2[2];
+
+	/* reporting parameters */
+	uint8_t include_unmapped;
 	int64_t score_thresh;
 };
 
@@ -221,7 +228,11 @@ void comb_align_drain(
 	struct comb_align_worker_item_s *i = (struct comb_align_worker_item_s *)item;
 
 	/* append to result queue */
-	aw_append_alignment(a->aw, i->res->ref, i->res->query, i->res->aln, i->res->cnt);
+	if(i->res->cnt == 0 && a->params->include_unmapped != 0) {
+		aw_append_unmapped(a->aw, i->res->ref, i->res->query);
+	} else {
+		aw_append_alignment(a->aw, i->res->ref, i->res->query, i->res->aln, i->res->cnt);
+	}
 
 	/* cleanup */
 	ggsea_aln_free(i->res);
@@ -312,6 +323,7 @@ int comb_align(
 	/* build reference sequence index */
 	ref = sr_init(params->ref_name,
 		SR_PARAMS(
+			.format = params->ref_format,
 			.k = params->k,
 			.seq_direction = SR_FW_ONLY,
 			.num_threads = params->num_threads
@@ -321,6 +333,7 @@ int comb_align(
 	/* build read pool */
 	query = sr_init(params->query_name,
 		SR_PARAMS(
+			.format = params->query_format,
 			.k = params->k,
 			.seq_direction = SR_FW_ONLY,
 			// .num_threads = params->num_threads
@@ -332,6 +345,7 @@ int comb_align(
 	comb_align_error(r != NULL, "Failed to build reference index.");
 	aw = aw_init(params->out_name, r->gref,
 		AW_PARAMS(
+			.format = params->out_format,
 			.clip = params->clip,
 			.program_id = params->program_id,
 			.program_name = params->program_name,
@@ -556,6 +570,7 @@ char *comb_build_short_option_string(
 	for(po = opts; po->val != 0; po++) { len++; }
 	str = ps = (char *)malloc(2 * len + 1);
 	for(po = opts; po->val != 0; po++) {
+		if(!isalnum(po->val)) { continue; }
 		*ps++ = (char)po->val;
 		if(po->has_arg != no_argument) {
 			*ps++ = ':';
@@ -641,6 +656,41 @@ int64_t comb_atoi(
 	} else {
 		return(comb_atoi_dec(val));
 	}
+}
+
+/**
+ * @fn comb_parse_format
+ */
+static _force_inline
+int comb_parse_format(
+	char const *str)
+{
+	struct format_map_s {
+		char const *str;
+		int format;
+	};
+
+	static struct format_map_s const map[] = {
+		{ "fasta", SR_FASTA },
+		{ "fa", SR_FASTA },
+		{ "fastq", SR_FASTQ },
+		{ "fq", SR_FASTQ },
+		{ "fast5", SR_FAST5 },
+		{ "f5", SR_FAST5 },
+		{ "sam", AW_SAM },
+		{ "bam", AW_BAM },
+		{ "maf", AW_MAF },
+		{ "gpa", AW_GPA },
+		{ NULL, 0 }
+	};
+	for(uint64_t i = 0; i < sizeof(map) / sizeof(struct format_map_s); i++) {
+		if(map[i].str == NULL) { continue; }
+		if(strcmp(str, map[i].str) == 0) {
+			return(map[i].format);
+		}
+
+	}
+	return(0);
 }
 
 
@@ -770,6 +820,12 @@ int64_t comb_init_align_default_score_thresh(
 /**
  * @fn comb_init_align
  */
+#define ID_BASE					( 256 )
+#define ID_REF_FORMAT			( ID_BASE + 1 )
+#define ID_QUERY_FORMAT			( ID_BASE + 2 )
+#define ID_OUT_FORMAT			( ID_BASE + 3 )
+#define ID_INCLUDE_UNMAPPED		( ID_BASE + 4 )
+#define ID_OMIT_UNMAPPED		( ID_BASE + 5 )
 static
 struct comb_align_params_s *comb_init_align(
 	char const *base,
@@ -801,6 +857,7 @@ struct comb_align_params_s *comb_init_align(
 		.xdrop = 0,		/* default xdrop threshold is derived from scoring parameters */
 		.m = 1, .x = 2, .gi = 2, .ge = 1,
 		.clip = 'S',
+		.include_unmapped = 1,
 		.score_thresh = 0
 	};
 
@@ -812,6 +869,14 @@ struct comb_align_params_s *comb_init_align(
 		{ "threads", required_argument, NULL, 't' },
 		{ "memory", required_argument, NULL, 'M' },
 		{ "out", required_argument, NULL, 'o' },
+
+		/* file formats */
+		{ "ref-format", required_argument, NULL, ID_REF_FORMAT },
+		{ "query-format", required_argument, NULL, ID_QUERY_FORMAT },
+		{ "output-format", required_argument, NULL, ID_OUT_FORMAT },
+		{ "rf", required_argument, NULL, ID_REF_FORMAT },
+		{ "qf", required_argument, NULL, ID_QUERY_FORMAT },
+		{ "of", required_argument, NULL, ID_OUT_FORMAT },
 
 		/* indexing params */
 		{ "seed-length", required_argument, NULL, 'k' },
@@ -832,6 +897,8 @@ struct comb_align_params_s *comb_init_align(
 		/* reporting params */
 		{ "min", required_argument, NULL, 'm' },
 		{ "clip", required_argument, NULL, 'c' },
+		{ "include-unmapped", no_argument, NULL, ID_INCLUDE_UNMAPPED },
+		{ "omit-unmapped", no_argument, NULL, ID_OMIT_UNMAPPED },
 		{ 0 }
 	};
 	char *opts_short = comb_build_short_option_string(opts_long);
@@ -848,6 +915,11 @@ struct comb_align_params_s *comb_init_align(
 			case 'M': params->mem_size = comb_atoi(optarg); break;
 			case 'o': params->out_name = strdup(optarg); break;
 
+			/* formats */
+			case ID_REF_FORMAT: params->ref_format = comb_parse_format(optarg); break;
+			case ID_QUERY_FORMAT: params->query_format = comb_parse_format(optarg); break;
+			case ID_OUT_FORMAT: params->out_format = comb_parse_format(optarg); break;
+
 			/* params */
 			case 'k': params->k = comb_atoi(optarg); break;
 			case 'r': params->kmer_cnt_thresh = comb_atoi(optarg); break;
@@ -860,6 +932,8 @@ struct comb_align_params_s *comb_init_align(
 			case 'x': params->xdrop = comb_atoi(optarg); break;
 			case 'm': params->score_thresh = comb_atoi(optarg); break;
 			case 'c': params->clip = optarg[0]; break;
+			case ID_INCLUDE_UNMAPPED: params->include_unmapped = 1; break;
+			case ID_OMIT_UNMAPPED: params->include_unmapped = 0; break;
 			
 			/* unknown option */
 			default: comb_print_unknown_option(c); break;
@@ -1195,15 +1269,17 @@ struct comb_align_params_s *comb_init_bwa_mem(
 		.program_name = strdup("comb"),
 		.program_id = UNITTEST_UNIQUE_ID,
 		.out_name = strdup("-"),
+		.out_format = AW_SAM,
 
-		.k = 19,
+		.k = 14,
 		.kmer_cnt_thresh = 500,
 		.overlap_thresh = 3,
 		.gapless_thresh = 0,
 		.xdrop = 100,
 		.m = 1, .x = 4, .gi = 6, .ge = 1,
 		.clip = 'S',
-		.score_thresh = 30
+		.score_thresh = 30,
+		.include_unmapped = 1
 	};
 
 	static struct option const opts_long[] = {
