@@ -77,23 +77,6 @@ struct rep_seed_s {
 /**
  * @struct rtree_node_s
  */
-#if 0
-struct rtree_node_s {
-	rbtree_node_t h;		/* (40) */
-	uint32_t prev_qpos;		/* q-coordinate at the previous r-index update */
-	uint32_t path_qpos;		/* q-coordinate at the previous path adjustment */
-	uint32_t path_ridx;		/* reverse index of the path string after the previous path adjustment */
-	uint32_t path_rem;		/* rem length from the tail */
-	uint64_t const *ptail;	/* path tail of the current section */
-
-	struct gaba_alignment_s const *aln;
-	uint32_t sidx;
-	uint32_t pad1;
-
-	struct qtree_node_s *qhead;
-	uint32_t pad2[2];
-};
-#endif
 struct rtree_node_s {
 	rbtree_node_t h;		/* (40) */
 	uint32_t prev_qpos;		/* q-coordinate on the previous r-index update */
@@ -117,10 +100,11 @@ _static_assert(sizeof(struct rtree_node_s) == 96);
  */
 struct qtree_node_s {
 	rbtree_node_t h;		/* key: (id, pos) pair on query side */	
-	struct gaba_alignment_s const *aln;
+	// struct gaba_alignment_s const *aln;
 	uint32_t sidx;			/* section array index */
 	uint32_t res_id;
 
+	struct qtree_node_s *head;
 	struct qtree_node_s *next;
 };
 _static_assert(sizeof(struct qtree_node_s) == 64);
@@ -818,7 +802,176 @@ struct gaba_alignment_s const *dp_extend_seed(
 }
 
 
-/* result containers and seed filtering */
+/* result object pool */
+/**
+ * @struct resv_score_pos_s
+ */
+#if 1
+struct resv_score_pos_s {
+	uint32_t idx;
+	uint32_t pos;
+	int64_t score;
+};
+#else
+struct resv_score_pos_s {
+	int64_t score;
+	uint32_t gid;
+	uint32_t idx;
+}
+#endif
+
+/**
+ * @fn resv_register
+ */
+static _force_inline
+uint32_t resv_register(
+	struct ggsea_ctx_s *ctx,
+	struct gaba_alignment_s const *aln)
+{
+	lmm_kv_push(ctx->res_lmm, ctx->aln, aln);
+	return(lmm_kv_size(ctx->aln) - 1);
+}
+
+/**
+ * @fn resv_get
+ */
+static _force_inline
+struct gaba_alignment_s const *resv_get(
+	struct ggsea_ctx_s *ctx,
+	uint32_t idx)
+{
+	return(lmm_kv_at(ctx->aln, idx));
+}
+
+/**
+ * @fn resv_replace
+ */
+static _force_inline
+void resv_replace(
+	struct ggsea_ctx_s *ctx,
+	uint32_t idx,
+	struct gaba_alignment_s const *aln)
+{
+	lmm_kv_at(ctx->aln, idx) = aln;
+	return;
+}
+
+/**
+ * @fn resv_unregister
+ */
+static _force_inline
+void resv_unregister(
+	struct ggsea_ctx_s *ctx,
+	uint32_t idx)
+{
+	lmm_kv_at(ctx->aln, idx) = NULL;
+	return;
+}
+
+/**
+ * @fn resv_cmp_result
+ */
+static _force_inline
+int64_t resv_cmp_result(
+	struct gaba_alignment_s const *const *aln,
+	struct resv_score_pos_s const *karr,
+	int64_t i,
+	int64_t j)
+{
+	debug("compare i(%lld) and j(%lld), [i].score(%lld), [j].score(%lld), [i].aid(%u), [i].bid(%u), [j].aid(%u), [j].bid(%u)",
+		i, j,
+		aln[karr[i].idx]->score, aln[karr[i].idx]->score,
+		aln[karr[i].idx]->sec[0].aid, aln[karr[i].idx]->sec[0].bid,
+		aln[karr[j].idx]->sec[0].aid, aln[karr[j].idx]->sec[0].bid);
+	return(aln[karr[i].idx]->score - aln[karr[j].idx]->score);
+}
+
+/**
+ * @fn resv_dedup_result
+ */
+static _force_inline
+int64_t resv_dedup_result(
+	struct ggsea_ctx_s *ctx,
+	struct gaba_alignment_s const **aln,
+	int64_t const cnt)
+{
+	int64_t eff_cnt = 0;
+	struct resv_score_pos_s karr[cnt];
+	for(int64_t i = 0; i < cnt; i++) {
+		if(aln[i] == NULL) { continue; }
+
+		debug("score(%lld)", aln[i]->score);
+		karr[eff_cnt++] = (struct resv_score_pos_s){
+			.score = -aln[i]->score,		/* score in descending order */
+			.pos = aln[i]->sec[0].aid + aln[i]->sec[0].bid,
+			.idx = i
+		};
+		debug("pushed, i(%u), score(%lld), pos(%u)",
+			karr[eff_cnt - 1].idx, karr[eff_cnt - 1].score, karr[eff_cnt - 1].pos);
+	}
+	psort_full(karr, eff_cnt, 16, 0);
+
+	for(int64_t i = 0; i < eff_cnt; i++) {
+		debug("sorted, i(%lld), idx(%u), score(%lld), pos(%u), score(%lld)",
+			i, karr[i].idx, karr[i].score, karr[i].pos, aln[karr[i].idx]->score);
+	}
+
+	/* dedup */
+	int64_t j = 0;
+	for(int64_t i = 0; i < eff_cnt; i++) {
+		if(resv_cmp_result(aln, karr, i, j) == 0) {
+			continue;
+		}
+
+		debug("move to next, j(%lld)", j + 1);
+		karr[++j] = karr[i];
+	}
+	int64_t dedup_cnt = j + 1;
+
+	/* build shrinked result array */
+	#if 0
+	for(int64_t i = 0; i < dedup_cnt; i++) {
+		/* swap elem */
+		struct gaba_alignment_s const *tmp = aln[i];
+		aln[i] = aln[karr[i].idx];
+		aln[karr[i].idx] = tmp;
+		debug("i(%lld) push(%u)", i, karr[i].idx);
+	}
+	debug("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
+	#endif
+	return(dedup_cnt);
+}
+
+/**
+ * @fn resv_pack_result
+ */
+static _force_inline
+struct ggsea_result_s *resv_pack_result(
+	struct ggsea_ctx_s *ctx)
+{
+	/* build array and sort */
+	struct gaba_alignment_s const **aln = lmm_kv_ptr(ctx->aln);
+	int64_t const cnt = lmm_kv_size(ctx->aln);
+
+	/* dedup result */
+	int64_t dedup_cnt = (cnt != 0) ? resv_dedup_result(ctx, aln, cnt) : 0;
+
+	/* pack pointer and length */
+	struct ggsea_result_s *res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
+	*res = (struct ggsea_result_s){
+		.reserved1 = (void *)ctx->res_lmm,
+		.ref = ctx->r,
+		.query = ctx->q,
+		.aln = aln,
+		.cnt = dedup_cnt,
+		.reserved2 = cnt
+	};
+	debug("result, ptr(%p), aln(%p)", res, res->aln);
+	return(res);
+}
+
+
+/* overlap filter trees (rtree and qtree) */
 /**
  * @fn load_u64
  */
@@ -1056,7 +1209,8 @@ struct qtree_node_s *qtree_advance(
 			rbtree_create_node(ctx->rtree);
 
 		/* build rnode from qnode */
-		struct gaba_path_section_s const *sec = &qn->aln->sec[qn->sidx];
+		struct gaba_alignment_s const *aln = resv_get(ctx, qn->res_id);
+		struct gaba_path_section_s const *sec = &aln->sec[qn->sidx];
 		uint32_t plen = gaba_plen(sec);
 
 		*rn = (struct rtree_node_s){
@@ -1069,10 +1223,12 @@ struct qtree_node_s *qtree_advance(
 			.qlim = sec->bpos + sec->blen,
 
 			.path_ridx = plen & ~(64 - 1),
-			.ptail = (uint64_t const *)qn->aln->path + ((sec->ppos + plen)>>6),
+			.ptail = (uint64_t const *)aln->path + ((sec->ppos + plen)>>6),
 
-			.aln = qn->aln,
-			.sidx = qn->sidx
+			.aln = aln,
+			.sidx = qn->sidx,
+
+			.qhead = qn->head
 		};
 		rbtree_insert(ctx->rtree, (rbtree_node_t *)rn);
 
@@ -1113,21 +1269,21 @@ struct qtree_node_s *qtree_append_result(
 		struct qtree_node_s *qn = (struct qtree_node_s *)
 			rbtree_create_node(ctx->qtree);
 
-		/* set index and result pointer */
-		struct gaba_path_section_s const *sec = &aln->sec[i];
-		*qn = (struct qtree_node_s){
-			.h.key = _cast_u(((struct gref_gid_pos_s){ sec->aid, sec->apos })),
-			.sidx = i,
-			.aln = aln,
-			.res_id = res_id
-		};
-
 		/* set link pointer */
 		if(prev == NULL) {
 			prev = head = qn;
 		} else {
 			prev->next = qn; prev = qn;
 		}
+
+		/* set index and result pointer */
+		struct gaba_path_section_s const *sec = &aln->sec[i];
+		*qn = (struct qtree_node_s){
+			.h.key = _cast_u(((struct gref_gid_pos_s){ sec->bid, sec->bpos })),
+			.sidx = i,
+			.res_id = res_id,
+			.head = head
+		};
 
 		/* append it to tree */
 		rbtree_insert(ctx->qtree, (rbtree_node_t *)qn);
@@ -1147,18 +1303,18 @@ static _force_inline
 struct qtree_node_s *qtree_replace(
 	struct ggsea_ctx_s *ctx,
 	struct qtree_node_s *_qn,
-	// struct gref_gid_pos_s qpos,
 	struct gaba_alignment_s const *aln,
 	uint32_t res_id,
 	int64_t ofs)
 {
 	#define _set_qn(qn, i) { \
+		if(prev == NULL) { prev = head = (qn); } else { prev->next = (qn); prev = (qn); } \
 		struct gaba_path_section_s const *sec = &aln->sec[(i)]; \
 		(qn)->h.key = _cast_u(((struct gref_gid_pos_s){ sec->aid, sec->apos })); \
+		/*(qn)->aln = aln;*/ \
 		(qn)->sidx = (i); \
-		(qn)->aln = aln; \
 		(qn)->res_id = res_id; \
-		if(prev == NULL) { prev = head = (qn); } else { prev->next = (qn); prev = (qn); } \
+		(qn)->head = head; \
 	}
 
 	struct qtree_node_s *prev = NULL, *head = NULL;
@@ -1263,164 +1419,8 @@ int64_t overlap_filter_test(
 		(r.right != NULL) ? (0xffffffff & r.right->h.key) : (int64_t)-1,
 		(r.right != NULL) ? (r.right->h.key - _cast_u(rpos)) : (int64_t)-1);
 
-	/*
-	if(r.right != NULL && (uint64_t)(r.right->h.key + 1000 - _cast_u(rpos)) < 2000) {
-		debug("%lld", r.right->h.key - _cast_u(rpos));
-	}
-	*/
-
 	uint64_t window = 2 * ctx->conf.overlap_width;
 	return(r.right != NULL && (uint64_t)(r.right->h.key - _cast_u(rpos)) < window);
-}
-
-
-/* result vector handling */
-/**
- * @struct resv_score_pos_s
- */
-struct resv_score_pos_s {
-	uint32_t idx;
-	uint32_t pos;
-	int64_t score;
-};
-
-/**
- * @fn resv_register
- */
-static _force_inline
-uint32_t resv_register(
-	struct ggsea_ctx_s *ctx,
-	struct gaba_alignment_s const *aln)
-{
-	lmm_kv_push(ctx->res_lmm, ctx->aln, aln);
-	return(lmm_kv_size(ctx->aln) - 1);
-}
-
-/**
- * @fn resv_replace
- */
-static _force_inline
-void resv_replace(
-	struct ggsea_ctx_s *ctx,
-	uint32_t idx,
-	struct gaba_alignment_s const *aln)
-{
-	lmm_kv_at(ctx->aln, idx) = aln;
-	return;
-}
-
-/**
- * @fn resv_unregister
- */
-static _force_inline
-void resv_unregister(
-	struct ggsea_ctx_s *ctx,
-	uint32_t idx)
-{
-	lmm_kv_at(ctx->aln, idx) = NULL;
-	return;
-}
-
-/**
- * @fn resv_cmp_result
- */
-static _force_inline
-int64_t resv_cmp_result(
-	struct gaba_alignment_s const *const *aln,
-	struct resv_score_pos_s const *karr,
-	int64_t i,
-	int64_t j)
-{
-	debug("compare i(%lld) and j(%lld), [i].score(%lld), [j].score(%lld), [i].aid(%u), [i].bid(%u), [j].aid(%u), [j].bid(%u)",
-		i, j,
-		aln[karr[i].idx]->score, aln[karr[i].idx]->score,
-		aln[karr[i].idx]->sec[0].aid, aln[karr[i].idx]->sec[0].bid,
-		aln[karr[j].idx]->sec[0].aid, aln[karr[j].idx]->sec[0].bid);
-	return(aln[karr[i].idx]->score - aln[karr[j].idx]->score);
-}
-
-/**
- * @fn resv_dedup_result
- */
-static _force_inline
-int64_t resv_dedup_result(
-	struct ggsea_ctx_s *ctx,
-	struct gaba_alignment_s const **aln,
-	int64_t const cnt)
-{
-	int64_t eff_cnt = 0;
-	struct resv_score_pos_s karr[cnt];
-	for(int64_t i = 0; i < cnt; i++) {
-		if(aln[i] == NULL) { continue; }
-
-		debug("score(%lld)", aln[i]->score);
-		karr[eff_cnt++] = (struct resv_score_pos_s){
-			.score = -aln[i]->score,		/* score in descending order */
-			.pos = aln[i]->sec[0].aid + aln[i]->sec[0].bid,
-			.idx = i
-		};
-		debug("pushed, i(%u), score(%lld), pos(%u)",
-			karr[eff_cnt - 1].idx, karr[eff_cnt - 1].score, karr[eff_cnt - 1].pos);
-	}
-	psort_full(karr, eff_cnt, 16, 0);
-
-	for(int64_t i = 0; i < eff_cnt; i++) {
-		debug("sorted, i(%lld), idx(%u), score(%lld), pos(%u), score(%lld)",
-			i, karr[i].idx, karr[i].score, karr[i].pos, aln[karr[i].idx]->score);
-	}
-
-	/* dedup */
-	int64_t j = 0;
-	for(int64_t i = 0; i < eff_cnt; i++) {
-		if(resv_cmp_result(aln, karr, i, j) == 0) {
-			continue;
-		}
-
-		debug("move to next, j(%lld)", j + 1);
-		karr[++j] = karr[i];
-	}
-	int64_t dedup_cnt = j + 1;
-
-	/* build shrinked result array */
-	#if 0
-	for(int64_t i = 0; i < dedup_cnt; i++) {
-		/* swap elem */
-		struct gaba_alignment_s const *tmp = aln[i];
-		aln[i] = aln[karr[i].idx];
-		aln[karr[i].idx] = tmp;
-		debug("i(%lld) push(%u)", i, karr[i].idx);
-	}
-	debug("dedup finished, ptr(%p), cnt(%lld), dedup_cnt(%lld)", aln, cnt, dedup_cnt);
-	#endif
-	return(dedup_cnt);
-}
-
-/**
- * @fn resv_pack_result
- */
-static _force_inline
-struct ggsea_result_s *resv_pack_result(
-	struct ggsea_ctx_s *ctx)
-{
-	/* build array and sort */
-	struct gaba_alignment_s const **aln = lmm_kv_ptr(ctx->aln);
-	int64_t const cnt = lmm_kv_size(ctx->aln);
-
-	/* dedup result */
-	int64_t dedup_cnt = (cnt != 0) ? resv_dedup_result(ctx, aln, cnt) : 0;
-
-	/* pack pointer and length */
-	struct ggsea_result_s *res = lmm_malloc(ctx->res_lmm, sizeof(struct ggsea_result_s));
-	*res = (struct ggsea_result_s){
-		.reserved1 = (void *)ctx->res_lmm,
-		.ref = ctx->r,
-		.query = ctx->q,
-		.aln = aln,
-		.cnt = dedup_cnt,
-		.reserved2 = cnt
-	};
-	debug("result, ptr(%p), aln(%p)", res, res->aln);
-	return(res);
 }
 
 
@@ -1452,6 +1452,7 @@ int64_t pp_clip_cmp(
 
 /**
  * @fn pp_match_section_forward
+ * @brief 0 if eq. length, 1 if x is longer, -1 if y is longer
  */
 static _force_inline
 struct pp_match_s pp_match_section_forward(
@@ -1511,6 +1512,7 @@ struct pp_match_s pp_match_section_forward(
 
 /**
  * @fn pp_match_section_reverse
+ * @brief 0 if eq. length, 1 if x is longer, -1 if y is longer
  */
 static _force_inline
 struct pp_match_s pp_match_section_reverse(
@@ -1751,10 +1753,10 @@ struct gaba_alignment_s const *pp_replace(
 }
 
 /**
- * @fn pp_process_alignment
+ * @fn pp_process_rnode
  */
 static _force_inline
-struct gaba_alignment_s const *pp_process_alignment(
+struct gaba_alignment_s const *pp_process_rnode(
 	struct ggsea_ctx_s *ctx,
 	struct rtree_node_s *rn,
 	struct gref_gid_pos_s rpos,
@@ -1793,10 +1795,63 @@ struct gaba_alignment_s const *pp_process_alignment(
 			[0] = pp_recomb_tail,
 			[1] = pp_replace,
 			[2] = pp_replace
-		},
+		}
 	};
 	return(process[h.cmp + 1][t.cmp + 1](ctx, rn, aln, h.xidx, h.yidx, t.xidx - h.xidx));
-	// return(aln);
+}
+
+/**
+ * @fn pp_process_qnode
+ * @brief process_qnode is called when duplicate alignment is not found on rtree
+ * the function first enumerate qnodes whose head of the section is aligned with aln,
+ * extend the alignment toward the head of the alignment and recombine or replace
+ * the aln in the qnode with it.
+ */
+static _force_inline
+struct gaba_alignment_s const *pp_process_qnode(
+	struct ggsea_ctx_s *ctx,
+	struct qtree_node_s *qn,
+	struct gref_gid_pos_s rpos,
+	struct gref_gid_pos_s qpos,
+	struct gaba_alignment_s const *aln)
+{
+	struct gaba_alignment_s const *x = aln, *y = resv_get(ctx, qn->res_id);
+	uint32_t xsidx = aln->rsidx, ysidx = qn->sidx;
+
+	struct pp_match_s h = pp_match_section_reverse(x, xsidx, y, ysidx);
+	if(!pp_is_head_aligned(x, h)) {
+		return(x);
+	}
+
+	if(h.cmp == 0) {
+
+		debug("replace (qnode)");
+		/* x and y have equal length, replace y with x */
+		resv_replace(ctx, qn->res_id, aln);
+		struct qtree_node_s *qhead = qtree_replace(
+			ctx, qn->head, aln, qn->res_id, (int64_t)xsidx - (int64_t)ysidx);
+		rtree_append_result(ctx, qhead, qpos, aln);
+		return(NULL);
+
+	} else if(h.cmp < 0) {
+
+		debug("recombine (qnode)");
+		/* if y is longer recombine */
+		uint32_t len = xsidx - h.xidx;
+		struct pp_recomb_s p = pp_calc_recomb_pos(x, xsidx, y, ysidx, len);
+		x = gaba_dp_recombine(ctx->dp,
+			(struct gaba_alignment_s *)x, p.hidx,
+			(struct gaba_alignment_s *)y, p.tidx);
+
+		/* replace nodes */
+		resv_replace(ctx, qn->res_id, x);
+		struct qtree_node_s *qhead = qtree_replace(
+			ctx, qn->head, x, qn->res_id, (int64_t)xsidx - (int64_t)ysidx);
+		rtree_append_result(ctx, qhead, qpos, aln);
+		return(NULL);
+
+	}
+	return(x);
 }
 
 /**
@@ -1827,44 +1882,36 @@ struct rtree_node_pair_s ggsea_evaluate_alignment(
 	debug("right(%p), left(%p)", r.right, r.left);
 
 	if(r.right != NULL) {
-		if((aln = pp_process_alignment(ctx, r.right, rpos, qpos, aln)) == NULL) {
+		if((aln = pp_process_rnode(ctx, r.right, rpos, qpos, aln)) == NULL) {
 			debug("replaced with right");
 			return(r);
-		}		
+		}
 	}
 
 	if(r.left != NULL) {
-		if((aln = pp_process_alignment(ctx, r.left, rpos, qpos, aln)) == NULL) {
+		if((aln = pp_process_rnode(ctx, r.left, rpos, qpos, aln)) == NULL) {
 			debug("replaced with left");
 			return(r);
-		}		
+		}
+	}
+
+	/* check qnodes */
+	uint64_t qkey = _cast_u(((struct gref_gid_pos_s){ qpos.gid, aln->sec[aln->rsidx].bpos }));
+	struct qtree_node_s *qn = (struct qtree_node_s *)rbtree_search_key(
+		ctx->qtree, qkey);
+	while(qn != NULL && qn->h.key == qkey) {
+		debug("check qnode(%p)", qn);
+
+		if((aln = pp_process_qnode(ctx, qn, rpos, qpos, aln)) == NULL) {
+			return(r);
+		}
+		qn = (struct qtree_node_s *)rbtree_right(ctx->qtree, (rbtree_node_t *)qn);
 	}
 
 	return((struct rtree_node_pair_s){
 		.left = r.left,
 		.right = ggsea_append_result(ctx, qpos, aln)
 	});
-
-	#if 0
-	/* current rnode */
-	if(rn == NULL) {
-		return(ggsea_append_result(ctx, rn, qpos, aln));
-	}
-	if((aln = pp_process_alignment(ctx, rn, rpos, qpos, aln)) == NULL) {
-		return(rn);
-	}
-
-	/* previous rnode */
-	rn = (struct rtree_node_s *)rbtree_left(ctx->rtree, (rbtree_node_t *)rn);
-	if(rn == NULL) {
-		return(ggsea_append_result(ctx, rn, qpos, aln));
-	}
-	if((aln = pp_process_alignment(ctx, rn, rpos, qpos, aln)) == NULL) {
-		return(rn);
-	}
-
-	return(ggsea_append_result(ctx, rn, qpos, aln));
-	#endif
 }
 
 
