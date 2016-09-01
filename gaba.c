@@ -3107,7 +3107,8 @@ struct gaba_path_s *trace_finalize_path(
 
 
 	/* add terminator at the end of path array */
-	*tail |= 0x01<<p.tofs;
+	tail[0] |= 0x55555555<<p.tofs;
+	tail[1] = 0x55555555;
 
 	#if 0
 	/* make the pointer 8byte aligned */
