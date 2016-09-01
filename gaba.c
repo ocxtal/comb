@@ -3292,7 +3292,9 @@ struct gaba_result_s trace_init_alignment(
 
 	aln->lmm = (void *)lmm;
 	aln->score = fw_tail->max + rv_tail->max + this->m * params->k;
-	aln->reserved[0] = this->head_margin;
+	aln->reserved1 = sec_size;
+	aln->reserved2 = path_size;
+	aln->reserved3 = this->head_margin;
 
 	/* set pointers */
 	struct gaba_path_section_s *msec = (struct gaba_path_section_s *)(aln + 1);
@@ -3455,6 +3457,10 @@ struct gaba_alignment_s *suffix(gaba_dp_recombine)(
 	struct gaba_alignment_s *y,
 	uint32_t ysid)
 {
+	debug("recombine called, x(%p, %lld), a(%u, %u), b(%u, %u), y(%p, %lld), a(%u, %u), b(%u, %u)",
+		x, x->score, x->sec[0].apos, x->sec[0].alen, x->sec[0].bpos, x->sec[0].blen,
+		y, y->score, y->sec[0].apos, y->sec[0].alen, y->sec[0].bpos, y->sec[0].blen);
+
 	gaba_dp_res_free(y);
 	return(x);
 }
@@ -3467,8 +3473,8 @@ void suffix(gaba_dp_res_free)(
 {
 	if(aln->lmm != NULL) {
 		lmm_t *lmm = (lmm_t *)aln->lmm;
-		debug("free mem, ptr(%p), lmm(%p)", (void *)aln - aln->reserved[0], lmm);
-		lmm_free(lmm, (void *)((uint8_t *)aln - aln->reserved[0]));
+		debug("free mem, ptr(%p), lmm(%p)", (void *)aln - aln->reserved3, lmm);
+		lmm_free(lmm, (void *)((uint8_t *)aln - aln->reserved3));
 	}
 	return;
 }

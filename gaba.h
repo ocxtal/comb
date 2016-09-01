@@ -209,11 +209,11 @@ typedef struct gaba_path_s gaba_path_t;
 struct gaba_alignment_s {
 	void *lmm;
 	int64_t score;
-	int32_t reserved[2];
+	uint32_t reserved1, reserved2;
 	uint32_t rapos, rbpos;
 	uint32_t rppos;				/** (4) local path index in the root section */
 	uint32_t rsidx;				/** (4) index of the root section */
-	uint32_t pad;
+	uint32_t reserved3;
 	uint32_t slen;
 	struct gaba_path_section_s const *sec;
 	struct gaba_path_s const *path;
