@@ -3143,7 +3143,7 @@ void trace_cat_path(
 	uint32_t *dt = dst->tail;
 
 	/* concatenate heads */
-	uint64_t prev_array = *dt;
+	uint64_t prev_array = ((uint64_t)*dt) & ((0x01ULL<<dst->tofs) - 1);
 	uint64_t curr_array = ((uint64_t)*sh++)>>(32 - src->hofs);
 
 	dt[0] = prev_array | (curr_array<<dst->tofs);
