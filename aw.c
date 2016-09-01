@@ -295,7 +295,7 @@ void sam_print_seq_reverse(
 	uint8_t const *p = seq + len;
 	uint8_t const *lim = seq;
 	while(p > lim) {
-		zfputc(aw->fp, decode[*--p]);		
+		zfputc(aw->fp, decode[*--p]);
 	}
 	return;
 }
@@ -474,16 +474,17 @@ void sam_print_seq_qual_reverse(
 	gref_section_t const *bsec = gref_get_section(q, gref_rv(curr->bid));
 	uint8_t const *lim = gref_get_lim(q);
 
+	debug("base(%p), lim(%p)", bsec->base, lim);
 	if(bsec->base < lim) {
 		/* if reverse-complemented sequence is available */
 		sam_print_seq_forward(aw,
-			(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos],
+			(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos + curr->blen],
 			(aw->clip == 'S') ? bsec->len : curr->blen);
 	} else {
 		/* if reverse-complemented sequence is not available */
 		gref_section_t const *r = gref_get_section(q, gref_fw(curr->bid));
 		sam_print_seq_reverse(aw,
-			(aw->clip == 'S') ? r->base : &r->base[r->len - (curr->bpos + curr->blen)],
+			(aw->clip == 'S') ? r->base : &r->base[curr->bpos],
 			(aw->clip == 'S') ? r->len : curr->blen);
 	}
 
@@ -1288,9 +1289,9 @@ unittest()
 		"sec0\t0\tsec0\t1\t255\t4M\tsec1\t0\t0\tGGRA\t*\tRG:Z:1\n"
 		"sec1\t0\tsec1\t1\t255\t4M\tsec2\t0\t0\tMGGG\t*\tRG:Z:1\n"
 		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n"
-		"sec2\t16\tsec0\t1\t255\t4M4H\tsec1\t0\t0\tBBGT\t*\tRG:Z:1\n"
+		"sec2\t16\tsec0\t1\t255\t4M4H\tsec1\t0\t0\tACAC\t*\tRG:Z:1\n"
 		"sec1\t16\tsec1\t1\t255\t4M\tsec2\t0\t0\tCCCK\t*\tRG:Z:1\n"
-		"sec0\t16\tsec2\t7\t255\t2H2M\t*\t0\t0\tTY\t*\tRG:Z:1\n"
+		"sec0\t16\tsec2\t7\t255\t2H2M\t*\t0\t0\tCC\t*\tRG:Z:1\n"
 		"sec0\t0\tsec0\t1\t255\t4M\tsec2\t0\t0\tGGRA\t*\tRG:Z:1\n"
 		"sec2\t0\tsec2\t1\t255\t8M\t*\t0\t0\tACVVGTGT\t*\tRG:Z:1\n";
 	char *rbuf = (char *)malloc(1024);
