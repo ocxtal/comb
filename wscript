@@ -11,10 +11,13 @@ def isxdigit(string):
 
 def check_output(*args):
 	import subprocess
-	process = subprocess.Popen(stdout = subprocess.PIPE, *args)
-	output, unused_err = process.communicate()
-	retcode = process.poll()
-	return(output if retcode == 0 else None)
+	try:
+		process = subprocess.Popen(stdout = subprocess.PIPE, *args)
+		output, unused_err = process.communicate()
+		retcode = process.poll()
+		return(output if retcode == 0 else None)
+	except:
+		return(None)
 
 def get_hash(default_version_string):
 	s = check_output(['git', 'rev-parse', 'HEAD'])
