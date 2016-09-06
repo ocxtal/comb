@@ -457,7 +457,7 @@ int gref_append_segment(
 	// debug("append segment");
 
 	/* gref object is mutable only when type == POOL */
-	if(pool == NULL || pool->type != GREF_POOL || seq_len <= 0) { return(-1); }
+	if(pool == NULL || pool->type != GREF_POOL) { return(-1); }
 
 	/* add sequence at the tail of the seq buffer */
 	struct gref_seq_interval_s iv = pool->append_seq(pool, seq, seq_len);
@@ -1352,7 +1352,7 @@ uint8_t gref_iter_fetch(
 	struct gref_iter_s *iter)
 {
 	debug("iter_fetch called, check rem_len(%u)", iter->stack->rem_len);
-	if(iter->stack->rem_len == 0) {
+	while(iter->stack->rem_len == 0) {
 		/* fetch link */
 		if((iter->stack = gref_iter_fetch_link(iter, iter->stack)) == NULL) {
 			return(0);
