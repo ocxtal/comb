@@ -88,6 +88,9 @@
 #define MEM_MARGIN_SIZE				( 2048 )
 #define PSUM_BASE					( 1 )
 
+_static_assert(V2I32_MASK_01 == GABA_STATUS_UPDATE_A);
+_static_assert(V2I32_MASK_10 == GABA_STATUS_UPDATE_B);
+
 
 /**
  * @macro _likely, _unlikely
@@ -2263,7 +2266,7 @@ void trace_load_section_a(
 
 	debug("adjust len(%d), idx(%d)", len, idx);
 	while(idx <= 0) {
-		for(tail = tail->tail; tail->apos != 0; tail = tail->tail) {}
+		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_A) == 0; tail = tail->tail) {}
 		idx += (len = tail->alen);
 		debug("adjust again len(%d), idx(%d)", len, idx);
 	}
@@ -2290,7 +2293,7 @@ void trace_load_section_b(
 
 	debug("adjust len(%d), idx(%d)", len, idx);
 	while(idx <= 0) {
-		for(tail = tail->tail; tail->bpos != 0; tail = tail->tail) {}
+		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_B) == 0; tail = tail->tail) {}
 		idx += (len = tail->blen);
 		debug("adjust again len(%d), idx(%d)", len, idx);
 	}
