@@ -88,12 +88,17 @@ void sr_dump_seq(
 
 		if(seq->type == FNA_SEGMENT) {
 			/*
-			for(int64_t i = 0; i < seq->s.segment.seq_len; i++) {
-				fprintf(stderr, "%c", " AC G   T"[seq->s.segment.seq[i]]);
+			for(int64_t i = 0; i < seq->s.segment.seq.len; i++) {
+				fprintf(stderr, "%c", " AC G   T"[seq->s.segment.seq.ptr[i]]);
 			}
 			fprintf(stderr, "\n");
 			*/
 
+			if(seq->s.segment.seq.len == 0) {
+				log("zero-length segment is not supported (ignored).");
+				fna_seq_free(seq);
+				continue;
+			}
 			gref_append_segment(pool,
 				seq->s.segment.name.ptr,
 				seq->s.segment.name.len,
@@ -102,17 +107,17 @@ void sr_dump_seq(
 		} else if(seq->type == FNA_LINK) {
 			/* check cigar starts from '0' (indicating cigar is "0M") */
 			if(seq->s.link.cigar.ptr[0] != '0') {
-				debug("overlapping link is not supported.");
-				break;
-			} else {
-				gref_append_link(pool,
-					seq->s.link.src.ptr,
-					seq->s.link.src.len,
-					seq->s.link.src_ori,
-					seq->s.link.dst.ptr,
-					seq->s.link.dst.len,
-					seq->s.link.dst_ori);
+				log("overlapping link is not supported (ignored).");
+				fna_seq_free(seq);
+				continue;
 			}
+			gref_append_link(pool,
+				seq->s.link.src.ptr,
+				seq->s.link.src.len,
+				seq->s.link.src_ori,
+				seq->s.link.dst.ptr,
+				seq->s.link.dst.len,
+				seq->s.link.dst_ori);
 		} else {
 			/* unknown type */
 			debug("unknown sequence type appeared.");
@@ -224,6 +229,12 @@ struct sr_gref_s *sr_get_iter_read(
 			}
 			fprintf(stderr, "\n");
 			*/
+
+			if(seq->s.segment.seq.len == 0) {
+				log("zero-length segment is not supported (ignored).");
+				fna_seq_free(seq);
+				continue;
+			}
 
 			gref_pool_t *pool = gref_init_pool(GREF_PARAMS(
 				.k = sr->params.k,
