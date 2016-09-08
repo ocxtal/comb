@@ -2248,6 +2248,20 @@ void leaf_search(
 	return;
 }
 
+/**
+ * @fn gaba_dp_search_max
+ */
+struct gaba_pos_pair_s suffix(gaba_dp_search_max)(
+	struct gaba_dp_context_s *this,
+	struct gaba_fill_s const *tail)
+{
+	struct gaba_leaf_s leaf;
+	leaf_search(this, _tail(tail), &leaf);
+	return((struct gaba_pos_pair_s){
+		.apos = _tail(tail)->alen - leaf.aridx,
+		.bpos = _tail(tail)->blen - leaf.bridx
+	});
+}
 
 /* path trace functions */
 /**

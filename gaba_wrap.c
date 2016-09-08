@@ -100,6 +100,9 @@ gaba_fill_t *gaba_dp_merge_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+gaba_pos_pair_t gaba_dp_search_max_linear(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec);
 gaba_alignment_t *gaba_dp_trace_linear(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
@@ -173,6 +176,9 @@ gaba_fill_t *gaba_dp_merge_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+gaba_pos_pair_t gaba_dp_search_max_affine(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec);
 gaba_alignment_t *gaba_dp_trace_affine(
 	gaba_dp_t *this,
 	gaba_fill_t const *fw_tail,
@@ -383,6 +389,16 @@ gaba_fill_t *gaba_dp_merge(
 {
 	// return(_api(this)->dp_merge(this, sec_list, sec_list_len));
 	return(NULL);		/* not implemented yet */
+}
+
+/**
+ * @fn gaba_dp_search_max
+ */
+gaba_pos_pair_t gaba_dp_search_max(
+	gaba_dp_t *this,
+	gaba_fill_t const *sec)
+{
+	return(gaba_dp_search_max_linear(this, sec));
 }
 
 /**
