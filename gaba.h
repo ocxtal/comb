@@ -181,6 +181,14 @@ enum gaba_status {
 };
 
 /**
+ * @struct gaba_pos_pair_s
+ */
+struct gaba_pos_pair_s {
+	uint32_t apos, bpos;
+};
+typedef struct gaba_pos_pair_s gaba_pos_pair_t;
+
+/**
  * @struct gaba_path_section_s
  */
 struct gaba_path_section_s {
@@ -253,7 +261,7 @@ gaba_dp_t *gaba_dp_init(
  * @brief flush stack (flush all if NULL) 
  */
 void gaba_dp_flush(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	uint8_t const *alim,
 	uint8_t const *blim);
 
@@ -261,26 +269,26 @@ void gaba_dp_flush(
  * @fn gaba_dp_save_stack
  */
 gaba_stack_t const *gaba_dp_save_stack(
-	gaba_dp_t *this);
+	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_flush_stack
  */
 void gaba_dp_flush_stack(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_stack_t const *stack);
 
 /**
  * @fn gaba_dp_clean
  */
 void gaba_dp_clean(
-	gaba_dp_t *this);
+	gaba_dp_t *dp);
 
 /**
  * @fn gaba_dp_fill_root
  */
 gaba_fill_t *gaba_dp_fill_root(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_section_t const *a,
 	uint32_t apos,
 	gaba_section_t const *b,
@@ -291,7 +299,7 @@ gaba_fill_t *gaba_dp_fill_root(
  * @brief fill dp matrix inside section pairs
  */
 gaba_fill_t *gaba_dp_fill(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *prev_sec,
 	gaba_section_t const *a,
 	gaba_section_t const *b);
@@ -300,9 +308,16 @@ gaba_fill_t *gaba_dp_fill(
  * @fn gaba_dp_merge
  */
 gaba_fill_t *gaba_dp_merge(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *sec_list,
 	uint64_t sec_list_len);
+
+/**
+ * @fn gaba_dp_search_max
+ */
+gaba_pos_pair_t gaba_dp_search_max(
+	gaba_dp_t *dp,
+	gaba_fill_t const *sec);
 
 /**
  * @struct gaba_trace_params_s
@@ -337,7 +352,7 @@ typedef int (*gaba_alignment_writer)(int c);
  * @brief generate alignment result string
  */
 gaba_alignment_t *gaba_dp_trace(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_fill_t const *fw_tail,
 	gaba_fill_t const *rv_tail,
 	gaba_trace_params_t const *params);
@@ -348,7 +363,7 @@ gaba_alignment_t *gaba_dp_trace(
  * @brief recombine two alignments x and y at xsid and ysid.
  */
 gaba_alignment_t *gaba_dp_recombine(
-	gaba_dp_t *this,
+	gaba_dp_t *dp,
 	gaba_alignment_t *x,
 	uint32_t xsid,
 	gaba_alignment_t *y,
