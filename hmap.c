@@ -327,11 +327,11 @@ void hmap_expand(
 	memset(&hmap->table[prev_size], 0xff, sizeof(struct hmap_pair_s) * prev_size);
 
 	/* rehash */
+	#define _isvacant(id)	( ((id) & (uint32_t)-2) == (uint32_t)-2 )
 	for(int64_t i = 0; i < prev_size; i++) {
 		/* check id */
-		uint32_t const invalid_id = (uint32_t)-1;
 		uint32_t id = hmap->table[i].id;
-		if(id == invalid_id) { continue; }
+		if(_isvacant(id)) { continue; }
 
 		/* check if move is needed */
 		uint32_t base_hash_val = hmap->table[i].hash_val;
@@ -339,11 +339,14 @@ void hmap_expand(
 
 		/* move */
 		uint32_t hash_val = base_hash_val;
-		while(hmap->table[hmap->mask & hash_val].id != invalid_id) {
-			hash_val = hash_uint32(hash_val);
+		while(_isvacant(hmap->table[mask & hash_val].id)) {
+			hash_val++;
 		}
-		hmap->table[i] = (struct hmap_pair_s){ (uint32_t)-1, (uint32_t)-1 };
-		hmap->table[hmap->mask & hash_val] = (struct hmap_pair_s){
+		hmap->table[i] = (struct hmap_pair_s){
+			.id = (uint32_t)-2,			/* mark moved */
+			.hash_val = (uint32_t)-1
+		};
+		hmap->table[mask & hash_val] = (struct hmap_pair_s){
 			.id = id,
 			.hash_val = base_hash_val
 		};
@@ -357,65 +360,71 @@ void hmap_expand(
  * @fn hmap_get_id
  */
 uint32_t hmap_get_id(
-	hmap_t *_hmap,
+	struct hmap_s *hmap,
 	char const *str,
 	uint32_t len)
 {
-	struct hmap_s *hmap = (struct hmap_s *)_hmap;
-
 	uint32_t const invalid_id = (uint32_t)-1;
+	uint32_t const moved_id = (uint32_t)-2;
 	uint32_t id = invalid_id;
-	uint32_t tmp_id = invalid_id;
+	uint32_t mask = hmap->mask;
 
 	uint32_t base_hash_val = hash_string(str, len);
-	uint32_t hash_val = base_hash_val;
+	uint32_t hash_val = base_hash_val, vacant_hash_val = base_hash_val;
+	while((id = hmap->table[mask & hash_val].id) != invalid_id) {
+		if(id == moved_id) {
+			vacant_hash_val = hash_val; hash_val++;
+			continue;
+		}
 
-	while((tmp_id = hmap->table[hmap->mask & hash_val].id) != invalid_id) {
-		struct hmap_key_s ex_key = hmap_object_get_key(hmap, tmp_id);
-		debug("ex_key at %u: str(%p), len(%d)", tmp_id, ex_key.ptr, ex_key.len);
+		/* id is valid id, check string matches */
+		debug("inspect id(%u)", id);
+		struct hmap_key_s ex_key = hmap_object_get_key(hmap, id);
+		debug("ex_key at %u: str(%p), len(%d)", id, ex_key.ptr, ex_key.len);
 
 		/* compare string */
 		if(ex_key.len == len && strncmp(ex_key.ptr, str, MIN2(ex_key.len, len) + 1) == 0) {
 			/* matched with existing string in the section array */
-			id = tmp_id; break;
+			return(id);
 		}
 
-		debug("collision at %u, key(%s), ex_key(%s), hash_val(%x)",
-			hmap->mask & hash_val, str, ex_key.ptr, hash_uint32(hash_val));
+		debug("collision at %u, key(%s), hash_val(%x)",
+			mask & hash_val, str, hash_val + 1);
 
 		/* not matched, rehash */
-		hash_val = hash_uint32(hash_val);
+		hash_val++;
 	}
 
-	if(id == invalid_id) {
-		/* rehash if occupancy exceeds 0.5 */
-		if(hmap->next_id > (hmap->mask + 1) / 2) {
-			debug("check size next_id(%u), size(%u)",
-				hmap->next_id, (hmap->mask + 1) / 2);
-			hmap_expand(hmap);
-		}
+	/* not found in the hash table */
+	hash_val = (vacant_hash_val == base_hash_val) ? hash_val : vacant_hash_val;
 
-		/* add (hash_val, id) pair to table */
-		debug("id(%u), mask(%x), hash_val(%x), id(%u), base_hash_val(%x)",
-			hmap->mask & hash_val, hmap->mask, hash_val, hmap->next_id, base_hash_val);
-		hmap->table[hmap->mask & hash_val] = (struct hmap_pair_s){
-			.id = (id = hmap->next_id++),
-			.hash_val = base_hash_val
-		};
+	/* allocate new id */
+	debug("id(%u), mask(%x), hash_val(%x), id(%u), base_hash_val(%x)",
+		mask & hash_val, mask, hash_val, hmap->next_id, base_hash_val);
+	hmap->table[mask & hash_val] = (struct hmap_pair_s){
+		.id = (id = hmap->next_id++),
+		.hash_val = base_hash_val
+	};
 
-		/* reserve working area */
-		uint8_t tmp[hmap->object_size];
-		struct hmap_header_intl_s *h = (struct hmap_header_intl_s *)tmp;
-		h->key_len = len;
-		h->key_base = lmm_kv_size(hmap->key_arr);
+	/* reserve working area */
+	uint8_t tmp[hmap->object_size];
+	struct hmap_header_intl_s *h = (struct hmap_header_intl_s *)tmp;
+	h->key_len = len;
+	h->key_base = lmm_kv_size(hmap->key_arr);
 
-		/* push key string to key_arr */
-		lmm_kv_pushm(hmap->lmm, hmap->key_arr, str, len);
-		lmm_kv_push(hmap->lmm, hmap->key_arr, '\0');
+	/* push key string to key_arr */
+	lmm_kv_pushm(hmap->lmm, hmap->key_arr, str, len);
+	lmm_kv_push(hmap->lmm, hmap->key_arr, '\0');
 
-		/* add object to object array */
-		memset((void *)(h + 1), 0, hmap->object_size - sizeof(struct hmap_header_intl_s));
-		lmm_kv_pushm(hmap->lmm, hmap->object_arr, tmp, hmap->object_size);
+	/* add object to object array */
+	memset((void *)(h + 1), 0, hmap->object_size - sizeof(struct hmap_header_intl_s));
+	lmm_kv_pushm(hmap->lmm, hmap->object_arr, tmp, hmap->object_size);
+
+	/* rehash if occupancy exceeds 0.5 */
+	if(hmap->next_id > (mask + 1) / 2) {
+		debug("check size next_id(%u), size(%u)",
+			hmap->next_id, (mask + 1) / 2);
+		hmap_expand(hmap);
 	}
 	return(id);
 }
