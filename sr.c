@@ -94,11 +94,6 @@ void sr_dump_seq(
 			fprintf(stderr, "\n");
 			*/
 
-			if(seq->s.segment.seq.len == 0) {
-				log("zero-length segment is not supported (ignored).");
-				fna_seq_free(seq);
-				continue;
-			}
 			gref_append_segment(pool,
 				seq->s.segment.name.ptr,
 				seq->s.segment.name.len,
@@ -229,12 +224,6 @@ struct sr_gref_s *sr_get_iter_read(
 			}
 			fprintf(stderr, "\n");
 			*/
-
-			if(seq->s.segment.seq.len == 0) {
-				log("zero-length segment is not supported (ignored).");
-				fna_seq_free(seq);
-				continue;
-			}
 
 			gref_pool_t *pool = gref_init_pool(GREF_PARAMS(
 				.k = sr->params.k,
