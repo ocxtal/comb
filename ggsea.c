@@ -497,6 +497,7 @@ gaba_fill_t const *dp_extend_leaf(
 	debug("fill leaf");
 
 	/* fill loop */
+	trigger_mask |= GABA_STATUS_TERM;
 	while(1) {
 		fill = gaba_dp_fill(ctx->dp, fill,
 			(struct gaba_section_s *)rsec,
@@ -531,10 +532,12 @@ gaba_fill_t const *dp_extend_update_queue(
 	/* retrieve link info if update flag is set */
 	struct gref_link_s rlink = { (uint32_t const *)rsec, 1 };
 	struct gref_link_s qlink = { (uint32_t const *)qsec, 1 };
-	uint32_t trigger_mask = GABA_STATUS_TERM;
+	// uint32_t trigger_mask = GABA_STATUS_TERM;
+	uint32_t trigger_mask = 0;
 
 	if(_rup(fill) != 0) {
 		rlink = gref_get_link(ctx->r, rsec->gid);
+		// debug("fetch rseq(%u), link_len(%lld)", rsec->gid, rlink.len);
 		
 		/* replace leaf link if no successors found */
 		if(rlink.len == 0) {
@@ -544,6 +547,7 @@ gaba_fill_t const *dp_extend_update_queue(
 	}
 	if(_qup(fill) != 0) {
 		qlink = gref_get_link(ctx->q, qsec->gid);
+		// debug("fetch qseq(%u), link_len(%lld)", qsec->gid, qlink.len);
 
 		/* replace leaf link if no successors found */
 		if(qlink.len == 0) {
@@ -556,11 +560,15 @@ gaba_fill_t const *dp_extend_update_queue(
 		return(dp_extend_leaf(ctx, fill, max, rsec, qsec, trigger_mask));
 	}
 
+	// debug("rlen(%llu), qlen(%llu)", rlink.len, qlink.len);
+
 	/* push section pairs */
 	for(int64_t i = 0; i < rlink.len; i++) {
 		for(int64_t j = 0; j < qlink.len; j++) {
-			debug("push queue, fill(%p), psum(%lld), r(%u), q(%u)",
-				fill, fill->psum, rlink.gid_arr[i], qlink.gid_arr[j]);
+/*			debug("push queue, fill(%p), psum(%lld), r(%u, %s), q(%u, %s)",
+				fill, fill->psum,
+				rlink.gid_arr[i], gref_get_name(ctx->r, rlink.gid_arr[i]).ptr,
+				qlink.gid_arr[j], gref_get_name(ctx->q, qlink.gid_arr[j]).ptr);*/
 
 			kv_hq_push(ctx->queue, ((struct dp_front_s){
 				.psum = (int64_t)fill->psum,
@@ -609,8 +617,8 @@ gaba_fill_t const *dp_extend_intl(
 	/* loop */
 	while(kv_hq_size(ctx->queue) > 0) {
 		struct dp_front_s seg = kv_hq_pop(ctx->queue);
-		debug("pop queue, fill(%p), psum(%lld), r(%u), q(%u)",
-			seg.fill, seg.psum, seg.rgid, seg.qgid);
+		/*debug("pop queue, fill(%p), psum(%lld), r(%u), q(%u)",
+			seg.fill, seg.psum, seg.rgid, seg.qgid);*/
 
 		if(seg.fill == NULL) {
 			debug("fill == NULL (unexpected NULL pointer detected)");
@@ -632,13 +640,13 @@ gaba_fill_t const *dp_extend_intl(
 			(struct gaba_section_s const *)qsec);
 
 		/* update max */
-		debug("check max, max(%lld), prev_max(%lld)", fill->max, max->max);
+		// debug("check max, max(%lld), prev_max(%lld)", fill->max, max->max);
 		max = (fill->max > max->max) ? fill : max;
 
 		/* check xdrop term */
 		if((fill->status & GABA_STATUS_TERM) == 0) {
 			max = dp_extend_update_queue(ctx, fill, max, rsec, qsec);
-			debug("queue updated, max(%lld)", max->max);
+			// debug("queue updated, max(%lld)", max->max);
 		}
 	}
 
@@ -1027,8 +1035,8 @@ struct rtree_node_s *rtree_append_result(
 		.qhead = qhead
 	};
 
-	debug("append result, rn(%p), a(%u, %u), b(%u, %u)",
-		rn, rsec->apos, rsec->alen, rsec->bpos, rsec->blen);
+	debug("append result, rn(%p), a(%u, %u), b(%u, %u), ridx(%lld)",
+		rn, rsec->apos, rsec->alen, rsec->bpos, rsec->blen, rn->path_ridx);
 	rbtree_insert(ctx->rtree, (rbtree_node_t *)rn);
 	return((struct rtree_node_s *)rbtree_right(ctx->rtree, (rbtree_node_t *)rn));
 }
@@ -1046,8 +1054,8 @@ uint64_t rtree_update(
 	/* advance pos */
 	int64_t inc = qpos.pos - rn->prev_qpos;
 
-	debug("update rtree, rpos(%llu), inc(%lld), prev_qpos(%x), path_qpos(%x), qpos(%x)",
-		0xffffffff & rn->h.key + inc, inc, rn->prev_qpos, rn->path_qpos, qpos.pos);
+	debug("update rtree, rn(%p), rpos(%llu), inc(%lld), prev_qpos(%x), path_qpos(%x), qpos(%x)",
+		rn, 0xffffffff & rn->h.key + inc, inc, rn->prev_qpos, rn->path_qpos, qpos.pos);
 
 	rn->h.key += inc;
 	rn->prev_qpos = qpos.pos;
@@ -1201,7 +1209,16 @@ struct qtree_node_s *qtree_advance(
 	struct qtree_node_s *qn,
 	struct gref_gid_pos_s qpos)
 {
+	debug("check qnode(%p), key(%u, %u), pos(%u, %u)", qn,
+		(uint32_t)(qn != NULL) ? _cast_p(qn->h.key).gid : -1,
+		(uint32_t)(qn != NULL) ? _cast_p(qn->h.key).pos : -1,
+		qpos.gid, qpos.pos);
+	while(qn != NULL && (uint64_t)qn->h.key < _cast_u(qpos)) {
+		qn = (struct qtree_node_s *)rbtree_right(ctx->qtree, (rbtree_node_t *)qn);
+	}
+
 	while(qn != NULL && (uint64_t)qn->h.key == _cast_u(qpos)) {
+		debug("hit qnode, qpos(%lld)", qn->h.key);
 		/*
 		 * current qpos hit at least one node in qtree
 		 */
@@ -1212,6 +1229,7 @@ struct qtree_node_s *qtree_advance(
 		struct gaba_alignment_s const *aln = resv_get(ctx, qn->res_id);
 		struct gaba_path_section_s const *sec = &aln->sec[qn->sidx];
 		uint32_t plen = gaba_plen(sec);
+		debug("sidx(%u), a(%u, %u, %u), b(%u, %u, %u)", qn->sidx, sec->aid, sec->apos, sec->alen, sec->bid, sec->bpos, sec->blen);
 
 		*rn = (struct rtree_node_s){
 			.h.key = _cast_u(((struct gref_gid_pos_s){		/* rpos */
@@ -1230,6 +1248,7 @@ struct qtree_node_s *qtree_advance(
 
 			.qhead = qn->head
 		};
+		debug("insert rnode, gid(%u), pos(%llu), key(%lld)", sec->aid, sec->apos + ctx->conf.overlap_width, rn->h.key);
 		rbtree_insert(ctx->rtree, (rbtree_node_t *)rn);
 
 		/* fetch the next node */
@@ -1278,8 +1297,9 @@ struct qtree_node_s *qtree_append_result(
 
 		/* set index and result pointer */
 		struct gaba_path_section_s const *sec = &aln->sec[i];
+		debug("append qnode, i(%lld), a(%u, %u, %u), b(%u, %u, %u)", i, sec->aid, sec->apos, sec->alen, sec->bid, sec->bpos, sec->blen);
 		*qn = (struct qtree_node_s){
-			.h.key = _cast_u(((struct gref_gid_pos_s){ sec->bid, sec->bpos })),
+			.h.key = _cast_u(((struct gref_gid_pos_s){ .gid = sec->bid, .pos = sec->bpos })),
 			.sidx = i,
 			.res_id = res_id,
 			.head = head
@@ -1310,7 +1330,7 @@ struct qtree_node_s *qtree_replace(
 	#define _set_qn(qn, i) { \
 		if(prev == NULL) { prev = head = (qn); } else { prev->next = (qn); prev = (qn); } \
 		struct gaba_path_section_s const *sec = &aln->sec[(i)]; \
-		(qn)->h.key = _cast_u(((struct gref_gid_pos_s){ sec->aid, sec->apos })); \
+		(qn)->h.key = _cast_u(((struct gref_gid_pos_s){ .gid = sec->bid, .pos = sec->bpos })); \
 		/*(qn)->aln = aln;*/ \
 		(qn)->sidx = (i); \
 		(qn)->res_id = res_id; \
@@ -1739,6 +1759,10 @@ struct gaba_alignment_s const *pp_replace(
 	uint32_t yidx,
 	uint32_t len)
 {
+	if(rn->aln->score > aln->score) {
+		return(aln);
+	}
+
 	uint32_t xsidx = aln->rsidx, ysidx = rn->sidx;
 
 	/* remove previous result */
@@ -1896,7 +1920,7 @@ struct rtree_node_pair_s ggsea_evaluate_alignment(
 	}
 
 	/* check qnodes */
-	uint64_t qkey = _cast_u(((struct gref_gid_pos_s){ qpos.gid, aln->sec[aln->rsidx].bpos }));
+	uint64_t qkey = _cast_u(((struct gref_gid_pos_s){ .gid = qpos.gid, .pos = aln->sec[aln->rsidx].bpos }));
 	struct qtree_node_s *qn = (struct qtree_node_s *)rbtree_search_key(
 		ctx->qtree, qkey);
 	while(qn != NULL && qn->h.key == qkey) {
@@ -1964,7 +1988,9 @@ struct qtree_node_s *ggsea_evaluate_seeds(
 		/* postprocess */
 		r = ggsea_evaluate_alignment(ctx, r, rpos, qpos, aln);
 		qn = qtree_refresh_node(ctx, qpos);
-		debug("extend finished, rn(%p), qn(%p), score(%lld)", r.right, qn, (aln != NULL) ? aln->score : 0);
+		debug("extend finished, rpos(%u, %u), qpos(%u, %u), rn(%p), qn(%p), score(%lld)",
+			rpos.gid, rpos.pos, qpos.gid, qpos.pos,
+			r.right, qn, (aln != NULL) ? aln->score : 0);
 	}
 	return(qn);
 }
@@ -1994,8 +2020,13 @@ ggsea_result_t *ggsea_align(
 	struct gref_match_res_s p = init;
 
 	/* iterate seeds over query sequence */
+	uint32_t prev_gid = (uint32_t)-1;
 	struct gref_kmer_tuple_s t;
 	while((t = gref_iter_next(iter)).gid_pos.gid != (uint32_t)-1) {
+		if(t.gid_pos.gid != prev_gid) {
+			/* entered new section, flush rtree */
+			rbtree_flush(ctx->rtree);
+		}
 
 		/* fetch the next intersecting region */
 		qn = qtree_advance(ctx, qn, t.gid_pos);
@@ -2024,6 +2055,7 @@ ggsea_result_t *ggsea_align(
 
 		/* save previous seeds */
 		p = m;
+		prev_gid = t.gid_pos.gid;
 	}
 
 	/* cleanup iterator */
