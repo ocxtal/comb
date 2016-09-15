@@ -179,6 +179,7 @@ struct gref_s {
 		int64_t len);
 };
 _static_assert(sizeof(struct gref_params_s) == 24);
+#define _invalid_seq(x)		( (uint8_t *)((struct gref_s *)(x) + 1) + ((struct gref_s *)(x))->params.seq_head_margin )
 
 /**
  * @fn gref_encode_2bit
@@ -344,7 +345,8 @@ gref_pool_t *gref_init_pool(
 
 	/* malloc mem */
 	lmm_t *lmm = (lmm_t *)p.lmm;
-	struct gref_s *pool = (struct gref_s *)lmm_malloc(lmm, sizeof(struct gref_s));
+	struct gref_s *pool = (struct gref_s *)lmm_malloc(lmm,
+		sizeof(struct gref_s) + p.seq_head_margin + p.seq_tail_margin);
 	if(pool == NULL) {
 		return(NULL);
 	}
@@ -433,7 +435,6 @@ void gref_clean(
 		hmap_clean(gref->hmap); gref->hmap = NULL;
 		lmm_kv_destroy(gref->lmm, gref->seq);
 		lmm_kv_destroy(gref->lmm, gref->link);
-		// free(gref->link_table); gref->link_table = NULL;
 		lmm_free(gref->lmm, gref->kmer_idx_table); gref->kmer_idx_table = NULL;
 		lmm_free(gref->lmm, gref->kmer_table); gref->kmer_table = NULL;
 		lmm_free(gref->lmm, gref);
@@ -458,6 +459,8 @@ int gref_append_segment(
 
 	/* gref object is mutable only when type == POOL */
 	if(pool == NULL || pool->type != GREF_POOL) { return(-1); }
+
+	debug("append segment, name(%s, %u), cnt(%u)", name, name_len, hmap_get_count(pool->hmap));
 
 	/* add sequence at the tail of the seq buffer */
 	struct gref_seq_interval_s iv = pool->append_seq(pool, seq, seq_len);
@@ -506,7 +509,7 @@ int gref_append_link(
 	int32_t dst_ori)
 {
 	struct gref_s *pool = (struct gref_s *)_pool;
-	debug("append link, src(%s), dst(%s), cnt(%u)", src, dst, hmap_get_count(pool->hmap));
+	debug("append link, src(%s, %u), dst(%s, %u), cnt(%u)", src, src_len, dst, dst_len, hmap_get_count(pool->hmap));
 
 	/* gref object is mutable only when type == POOL */
 	if(pool == NULL || pool->type != GREF_POOL) { return(-1); }
@@ -587,7 +590,6 @@ gref_pool_t *gref_merge_pools(
 
 
 /* build link table (pool -> acv conversion) */
-
 /**
  * @fn gref_add_tail_section
  */
@@ -617,8 +619,10 @@ void gref_add_tail_section(
 	} while(id != tail_id && len < 256);
 
 	/* make margin at the tail (leave uninitialized) */
-	lmm_kv_reserve(pool->lmm, pool->seq, lmm_kv_size(pool->seq) + pool->params.seq_tail_margin);
-	lmm_kv_size(pool->seq) += pool->params.seq_tail_margin;
+	if(pool->params.copy_mode == GREF_COPY) {
+		lmm_kv_reserve(pool->lmm, pool->seq, lmm_kv_size(pool->seq) + pool->params.seq_tail_margin);
+		lmm_kv_size(pool->seq) += pool->params.seq_tail_margin;
+	}
 
 	/* set info */
 	struct gref_section_intl_s *tail_sec =
@@ -711,6 +715,7 @@ int gref_fw_copy_modify_seq(
 	/* add offset to fw pos base, then calc rv pos base */
 	uint64_t seq_base = (uint64_t)lmm_kv_ptr(pool->seq) + pool->params.seq_head_margin;
 	for(int64_t i = 0; i < pool->sec_cnt; i++) {
+		/* ptr automatically points to head of seq array if base is zero */
 		sec[i].fw_sec.base += seq_base;			/* convert pos to valid pointer */
 		sec[i].rv_sec.base = rv_lim - (uint64_t)sec[i].fw_sec.base - sec[i].fw_sec.len;
 	}
@@ -731,6 +736,12 @@ int gref_fw_nocopy_modify_seq(
 
 	/* calc rv pos base */
 	for(uint64_t i = 0; i < pool->sec_cnt; i++) {
+		/* compensate sequence pointer if no sequence found */
+		debug("base(%p)", sec[i].fw_sec.base);
+		sec[i].fw_sec.base = (sec[i].fw_sec.base == NULL)
+			? _invalid_seq(pool)
+			: sec[i].fw_sec.base;
+		debug("base(%p)", sec[i].fw_sec.base);
 		sec[i].rv_sec.base = rv_lim - (uint64_t)sec[i].fw_sec.base - sec[i].fw_sec.len;
 	}
 	return(0);
@@ -768,6 +779,7 @@ int gref_fr_copy_modify_seq(
 
 	/* add offset to fw pos base, then calc rv pos base */
 	for(uint64_t i = 0; i < pool->sec_cnt; i++) {
+		/* ptr automatically points to head of seq array if base is zero */
 		sec[i].rv_sec.base = rv_lim - (uint64_t)sec[i].fw_sec.base - sec[i].fw_sec.len;
 		sec[i].fw_sec.base += (uint64_t)seq_base;	/* convert pos to valid pointer */
 		debug("%llu", (uint64_t)(sec[i].rv_sec.base - sec[i].fw_sec.base));
@@ -788,6 +800,12 @@ int gref_fr_nocopy_modify_seq(
 
 	/* calc rv pos base */
 	for(int64_t i = 0; i < pool->sec_cnt; i++) {
+		/* compensate sequence pointer if no sequence found */
+		debug("base(%p)", sec[i].fw_sec.base);
+		sec[i].fw_sec.base = (sec[i].fw_sec.base == NULL)
+			? _invalid_seq(pool)
+			: sec[i].fw_sec.base;
+		debug("base(%p)", sec[i].fw_sec.base);
 		sec[i].rv_sec.base = sec[i].fw_sec.base + sec[i].fw_sec.len;
 	}
 	return(0);
