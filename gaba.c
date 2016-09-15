@@ -2291,17 +2291,19 @@ void trace_load_section_a(
 	int32_t len = tail->alen;
 	int32_t idx = this->w.l.aidx + len;
 
-	debug("adjust len(%d), idx(%d)", len, idx);
+	debug("adjust len(%d), idx(%d), tail(%p)", len, idx, tail);
 	while(idx <= 0) {
+		debug("tail(%p, %p)", tail, tail->tail != NULL ? tail->tail : NULL);
 		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_A) == 0; tail = tail->tail) {}
 		idx += (len = tail->alen);
-		debug("adjust again len(%d), idx(%d)", len, idx);
+		debug("adjust again len(%d), idx(%d), tail(%p)", len, idx, tail);
 	}
 
 	/* reload finished, store section info */
-	this->w.l.atail = tail;
+	this->w.l.atail = tail->tail;
 	this->w.l.alen = len;
 	this->w.l.aid = tail->aid;
+	debug("finished, id(%u) len(%d), idx(%d), tail(%p)", tail->aid, len, idx, tail);
 
 	this->w.l.aidx = idx;
 	this->w.l.asidx = idx;
@@ -2318,17 +2320,19 @@ void trace_load_section_b(
 	int32_t len = tail->blen;
 	int32_t idx = this->w.l.bidx + len;
 
-	debug("adjust len(%d), idx(%d)", len, idx);
+	debug("adjust len(%d), idx(%d), tail(%p)", len, idx, tail);
 	while(idx <= 0) {
+		debug("tail(%p, %p)", tail, tail->tail != NULL ? tail->tail : NULL);
 		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_B) == 0; tail = tail->tail) {}
 		idx += (len = tail->blen);
-		debug("adjust again len(%d), idx(%d)", len, idx);
+		debug("adjust again len(%d), idx(%d), tail(%p)", len, idx, tail);
 	}
 
 	/* reload finished, store section info */
-	this->w.l.btail = tail;
+	this->w.l.btail = tail->tail;
 	this->w.l.blen = len;
 	this->w.l.bid = tail->bid;
+	debug("finished, id(%u) len(%d), idx(%d), tail(%p)", tail->bid, len, idx, tail);
 
 	this->w.l.bidx = idx;
 	this->w.l.bsidx = idx;
@@ -2929,7 +2933,7 @@ void trace_forward_push(
 	// this->w.l.sec.head->plen = plen;
 	this->w.l.sec.head->ppos = 0;
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), len(%u)",
+	debug("push current section forward a(%u, %u, %u), b(%u, %u, %u), len(%u)",
 		this->w.l.sec.head->aid,
 		this->w.l.sec.head->apos,
 		this->w.l.sec.head->alen,
@@ -2971,7 +2975,7 @@ void trace_reverse_push(
 	// this->w.l.sec.tail->plen = plen;
 	this->w.l.sec.tail->ppos = ppos;
 
-	debug("push current section info a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%u)",
+	debug("push current section reverse a(%u, %u, %u), b(%u, %u, %u), pos(%lld), len(%u)",
 		this->w.l.sec.tail->aid,
 		this->w.l.sec.tail->apos,
 		this->w.l.sec.tail->alen,
@@ -3267,7 +3271,9 @@ struct trace_boundary_s trace_cat_section(
 
 	/* copy sections */
 	while(sh < st) {
-		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), ppos(%llu)", dt, sh, _plen(dt), _plen(sh), ppos);
+		debug("dt(%p), sh(%p), dt->plen(%u), sh->plen(%u), a(%u, %u, %u), b(%u, %u, %u), ppos(%llu)",
+			dt, sh, _plen(dt), _plen(sh),
+			sh->aid, sh->apos, sh->alen, sh->bid, sh->bpos, sh->blen, ppos);
 		*dt = *sh;
 		dt++->ppos = ppos;
 		ppos += _plen(sh); sh++;
@@ -4830,7 +4836,7 @@ unittest(with_seq_pair("A", "A"))
 	assert(s->alen == 21, "%llu", s->alen);
 	assert(s->blen == 21, "%llu", s->blen);
 
-	/* check fowrard sections */
+	/* check forward sections */
 	assert(s->afsec.id == 0, "%d", s->afsec.id);
 	assert((uintptr_t)s->afsec.base == (uintptr_t)s->a + 0, "%p", s->afsec.base);
 	assert(s->afsec.len == 1, "%u", s->afsec.len);
