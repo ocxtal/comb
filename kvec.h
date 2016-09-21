@@ -90,7 +90,7 @@ int main() {
 	uint64_t _size = kv_max2(KVEC_INIT_SIZE, (s)); \
 	(v).m = _size; \
 	(v).n = kv_min2((v).n, _size); \
-	(v).a = realloc((lmm), (v).a, sizeof(*(v).a) * (v).m); \
+	(v).a = realloc((v).a, sizeof(*(v).a) * (v).m); \
 })
 
 #define kv_reserve(v, s) ( \
@@ -225,7 +225,7 @@ int main() {
 	uint64_t _size = kv_max2(KVEC_INIT_SIZE, (s)); \
 	(v).m = _size; \
 	(v).n = kv_min2((v).n, _size); \
-	(v).a = realloc((lmm), (v).a, sizeof(*(v).a) * kpv_amax(v)); \
+	(v).a = realloc((v).a, sizeof(*(v).a) * kpv_amax(v)); \
 })
 
 #define kpv_reserve(v, s) ( \
