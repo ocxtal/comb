@@ -3665,7 +3665,7 @@ uint64_t suffix(gaba_dp_print_cigar_forward)(
 			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
 		}
-		if(ridx <= 0) { break; }
+		if(ridx == 0) { break; }
 
 		uint64_t arr;
 		uint64_t g = MIN2(
@@ -3719,7 +3719,7 @@ uint64_t suffix(gaba_dp_dump_cigar_forward)(
 			b += parse_dump_match_string(b, m);
 			debug("match m(%lld)", m);
 		}
-		if(ridx <= 0 || b > blim) { break; }
+		if(ridx == 0 || b > blim) { break; }
 
 		uint64_t arr;
 		uint64_t g = MIN2(
@@ -3791,7 +3791,7 @@ uint64_t suffix(gaba_dp_print_cigar_reverse)(
 			clen += _fprintf(fp, "%" PRId64 "M", m);
 			debug("match m(%lld)", m);
 		}
-		if(idx <= 0) { break; }
+		if(idx == 0) { break; }
 
 		uint64_t arr;
 		uint64_t g = MIN2(
@@ -3841,7 +3841,7 @@ uint64_t suffix(gaba_dp_dump_cigar_reverse)(
 			b += parse_dump_match_string(b, m);
 			debug("match m(%lld)", m);
 		}
-		if(idx <= 0 || b > blim) { break; }
+		if(idx == 0 || b > blim) { break; }
 
 		uint64_t arr;
 		uint64_t g = MIN2(
@@ -6187,12 +6187,11 @@ char *unittest_generate_mutated_sequence(
 	double d,
 	int bw)
 {
+	if(seq == NULL) { return NULL; }
+
 	int64_t wave = 0;			/** wave is q-coordinate of the alignment path */
 	int64_t len = strlen(seq);
-	char *mutated_seq;
-
-	if(seq == NULL) { return NULL; }
-	mutated_seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
+	char *mutated_seq = (char *)malloc(sizeof(char) * (len + UNITTEST_SEQ_MARGIN));
 	if(mutated_seq == NULL) { return NULL; }
 	for(int64_t i = 0, j = 0; i < len; i++) {
 		if(((double)rand() / (double)RAND_MAX) < x) {
