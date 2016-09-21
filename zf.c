@@ -555,6 +555,7 @@ int zfprintf(
 		uint64_t flush = fio->fn.write(fio->fp, fio->buf, fio->curr);
 		/* something is wrong */
 		if((int64_t)flush != fio->curr) {
+			va_end(l);
 			return(0);
 		}
 	}
