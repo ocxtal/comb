@@ -1644,6 +1644,7 @@ int fcmp(char const *filename, uint64_t size, uint8_t const *arr)
 	buf = malloc(sizeof(uint8_t) * st.st_size);
 
 	if(fread(buf, sizeof(uint8_t), st.st_size, fp) != (size_t)st.st_size) {
+		free(buf);
 		return(0);
 	}
 	res = memcmp(buf, arr, size);
