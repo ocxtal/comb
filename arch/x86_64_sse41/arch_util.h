@@ -236,7 +236,7 @@
 #define rd_128(_ptr)		( _mm_load_si128((__m128i *)(_ptr)) )
 #define wr_128(_ptr, _e)	{ _mm_store_si128((__m128i *)(_ptr), (_e)); }
 #define _ex_128(k, h)		( _mm_extract_epi64((elem_128_t)k, h) )
-#define ex_128(k, p)		( (((p)>>3 ? _ex_128(k, 1) : _ex_128(k, 0))>>(((p) & 0x07)<<3)) & (WCR_OCC_SIZE-1) )
+#define ex_128(k, p)		( ((((p)>>3) ? _ex_128(k, 1) : (_ex_128(k, 0))>>(((p) & 0x07)<<3)) & (WCR_OCC_SIZE-1)) )
 #define p_128(v)			( _mm_cvtsi64_si128((uint64_t)(v)) )
 #define e_128(v)			( (uint64_t)_mm_cvtsi128_si64((__m128i)(v)) )
 
