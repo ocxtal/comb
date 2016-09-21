@@ -248,7 +248,7 @@ unittest()
 
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
-		assert(arr[i - 1] <= arr[i], "%lld, %d, %d", i, arr[i - i], arr[i]);
+		assert(arr[i - 1] <= arr[i], "%lld, %d, %d", i, arr[i - 1], arr[i]);
 	}
 	free(arr);
 }
@@ -267,7 +267,7 @@ unittest()
 
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
-		assert(arr[i - 1] <= arr[i], "%lld, %d, %d", i, arr[i - i], arr[i]);
+		assert(arr[i - 1] <= arr[i], "%lld, %d, %d", i, arr[i - 1], arr[i]);
 	}
 	free(arr);
 }
@@ -286,7 +286,7 @@ unittest()
 
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
-		assert(arr[i - 1] <= arr[i], "%lld, %lld, %lld", i, arr[i - i], arr[i]);
+		assert(arr[i - 1] <= arr[i], "%lld, %lld, %lld", i, arr[i - 1], arr[i]);
 	}
 	free(arr);
 }
@@ -306,7 +306,7 @@ unittest()
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((0xff & arr[i - 1]) <= (0xff & arr[i]),
-			"%lld, %d, %d", i, 0xff & arr[i - i], 0xff & arr[i]);
+			"%lld, %d, %d", i, 0xff & arr[i - 1], 0xff & arr[i]);
 	}
 	free(arr);
 }
@@ -326,7 +326,7 @@ unittest()
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((0xffff & arr[i - 1]) <= (0xffff & arr[i]),
-			"%lld, %d, %d", i, 0xffff & arr[i - i], 0xffff & arr[i]);
+			"%lld, %d, %d", i, 0xffff & arr[i - 1], 0xffff & arr[i]);
 	}
 	free(arr);
 }
@@ -346,7 +346,7 @@ unittest()
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((0xffffffff & arr[i - 1]) <= (0xffffffff & arr[i]),
-			"%lld, %lld, %lld", i, 0xffffffff & arr[i - i], 0xffffffff & arr[i]);
+			"%lld, %lld, %lld", i, 0xffffffff & arr[i - 1], 0xffffffff & arr[i]);
 	}
 	free(arr);
 }
@@ -366,7 +366,7 @@ unittest()
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((0xff00 & arr[i - 1]) <= (0xff00 & arr[i]),
-			"%lld, %d, %d", i, 0xff00 & arr[i - i], 0xff00 & arr[i]);
+			"%lld, %d, %d", i, 0xff00 & arr[i - 1], 0xff00 & arr[i]);
 	}
 	free(arr);
 }
@@ -386,7 +386,7 @@ unittest()
 	/* check */
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((0xffff0000 & arr[i - 1]) <= (0xffff0000 & arr[i]),
-			"%lld, %d, %d", i, 0xffff0000 & arr[i - i], 0xffff0000 & arr[i]);
+			"%lld, %d, %d", i, 0xffff0000 & arr[i - 1], 0xffff0000 & arr[i]);
 	}
 	free(arr);
 }
@@ -407,7 +407,7 @@ unittest()
 	uint64_t const mask = 0xffffffff00000000;
 	for(int64_t i = 1; i < UNITTEST_ARR_LEN; i++) {
 		assert((mask & arr[i - 1]) <= (mask & arr[i]),
-			"%lld, %lld, %lld", i, mask & arr[i - i], mask & arr[i]);
+			"%lld, %lld, %lld", i, mask & arr[i - 1], mask & arr[i]);
 	}
 	free(arr);
 }
