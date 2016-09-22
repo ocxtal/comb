@@ -363,17 +363,19 @@ struct gaba_writer_work_s {
 	/** save */
 	int32_t alen, blen;					/** (8) section lengths */
 	uint32_t aid, bid;					/** (8) */
+	int32_t asum, bsum;					/** (8) sum length from current tail to base of each section */
 	int32_t asidx, bsidx;				/** (8) base indices of the current trace */
-	int64_t psum;						/** (8) */
-	int64_t pspos;						/** (8) */
-
+	uint64_t _pad1;						/** (8) */
 	/** 64, 128 */
 
 	/** 64byte aligned */
+	/** save (contd) */
+	int64_t psum;						/** (8) */
+	int64_t pspos;						/** (8) */
 
 	/* section info */
 	struct gaba_sec_arr_s sec;			/** (16) */
-	uint64_t _pad[6];					/** (48) */
+	uint64_t _pad[4];					/** (32) */
 
 	/** 64, 192 */
 };
@@ -2289,21 +2291,19 @@ void trace_load_section_a(
 	/* load tail pointer (must be inited with leaf tail) */
 	struct gaba_joint_tail_s const *tail = this->w.l.atail;
 	int32_t len = tail->alen;
+	int32_t sum = len;
 	int32_t idx = this->w.l.aidx + len;
 
-	debug("adjust len(%d), idx(%d), tail(%p)", len, idx, tail);
 	while(idx <= 0) {
-		debug("tail(%p, %p)", tail, tail->tail != NULL ? tail->tail : NULL);
 		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_A) == 0; tail = tail->tail) {}
-		idx += (len = tail->alen);
-		debug("adjust again len(%d), idx(%d), tail(%p)", len, idx, tail);
+		len = tail->alen; sum += len; idx += len;
 	}
 
 	/* reload finished, store section info */
 	this->w.l.atail = tail->tail;
 	this->w.l.alen = len;
 	this->w.l.aid = tail->aid;
-	debug("finished, id(%u) len(%d), idx(%d), tail(%p)", tail->aid, len, idx, tail);
+	this->w.l.asum = sum;
 
 	this->w.l.aidx = idx;
 	this->w.l.asidx = idx;
@@ -2315,24 +2315,22 @@ void trace_load_section_b(
 {
 	debug("load section b, idx(%d), len(%d)", this->w.l.bidx, this->w.l.btail->blen);
 
-	/* reload needed, load tail pointer (must be inited with leaf tail) */
+	/* load tail pointer (must be inited with leaf tail) */
 	struct gaba_joint_tail_s const *tail = this->w.l.btail;
 	int32_t len = tail->blen;
+	int32_t sum = len;
 	int32_t idx = this->w.l.bidx + len;
 
-	debug("adjust len(%d), idx(%d), tail(%p)", len, idx, tail);
 	while(idx <= 0) {
-		debug("tail(%p, %p)", tail, tail->tail != NULL ? tail->tail : NULL);
 		for(tail = tail->tail; (tail->stat & GABA_STATUS_UPDATE_B) == 0; tail = tail->tail) {}
-		idx += (len = tail->blen);
-		debug("adjust again len(%d), idx(%d), tail(%p)", len, idx, tail);
+		len = tail->blen; sum += len; idx += len;
 	}
 
 	/* reload finished, store section info */
 	this->w.l.btail = tail->tail;
 	this->w.l.blen = len;
 	this->w.l.bid = tail->bid;
-	debug("finished, id(%u) len(%d), idx(%d), tail(%p)", tail->bid, len, idx, tail);
+	this->w.l.bsum = sum;
 
 	this->w.l.bidx = idx;
 	this->w.l.bsidx = idx;
@@ -2414,11 +2412,21 @@ void trace_load_section_b(
 		(t)->w.l.tail->tail->psum, (t)->w.l.tail->tail->ssum); \
 	/* update psum */ \
 	(t)->w.l.psum -= (t)->w.l.p; \
-	/* load tail */ \
-	struct gaba_joint_tail_s const *tail = (t)->w.l.tail = (t)->w.l.tail->tail; \
+	/* load section lengths */ \
+	struct gaba_joint_tail_s const *tail = (t)->w.l.tail; \
+	v2i32_t len = _load_v2i32(&tail->alen); \
+	/* reload tail */ \
+	tail = (t)->w.l.tail = tail->tail; \
 	blk = _last_block(tail) + 1; \
 	p = ((t)->w.l.p = tail->p) - 1; \
 	debug("updated psum(%lld), w.l.p(%d), p(%lld)", (t)->w.l.psum, (t)->w.l.p, p); \
+	/* adjust sum lengths */ \
+	v2i32_t const mask = _seta_v2i32(GABA_STATUS_UPDATE_B, GABA_STATUS_UPDATE_A); \
+	v2i32_t stat = _set_v2i32(tail->stat); \
+	v2i32_t sum = _load_v2i32(&(t)->w.l.asum); \
+	sum = _sub_v2i32(sum, _and_v2i32(_eq_v2i32(_and_v2i32(stat, mask), mask), len)); \
+	_store_v2i32(&(t)->w.l.asum, sum); \
+	debug("adjusted sum(%u, %u), len(%u, %u), stat(%u)", _hi32(sum), _lo32(sum), _hi32(len), _lo32(len), tail->stat); \
 	/* reload dir and mask pointer */ \
 	_trace_reload_ptr(p & (BLK - 1)); \
 	_trace_load_mask(); \
@@ -2470,22 +2478,22 @@ void trace_load_section_b(
 	_print_v2i32(idx); \
 	/* calc idx of the head of the block from ridx */ \
 	v2i32_t ridx = _load_v2i32(&blk->aridx); \
-	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
-	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32((BW - 1) - q, q)); \
+	v2i32_t sum = _load_v2i32(&(t)->w.l.asum); \
+	idx = _sub_v2i32(_sub_v2i32(sum, ridx), _seta_v2i32((BW - 1) - q, q)); \
 	debug("calc_index p(%lld), q(%lld)", p, q); \
 	_print_v2i32(ridx); \
-	_print_v2i32(len); \
+	_print_v2i32(sum); \
 	_print_v2i32(idx); \
 }
 #define _trace_reverse_calc_index(t) { \
 	_print_v2i32(idx); \
 	/* calc idx of the head of the block from ridx */ \
 	v2i32_t ridx = _load_v2i32(&blk->aridx); \
-	v2i32_t len = _load_v2i32(&(t)->w.l.alen); \
-	idx = _sub_v2i32(_sub_v2i32(len, ridx), _seta_v2i32((BW - 1) - q, q)); \
+	v2i32_t sum = _load_v2i32(&(t)->w.l.asum); \
+	idx = _sub_v2i32(_sub_v2i32(sum, ridx), _seta_v2i32((BW - 1) - q, q)); \
 	debug("calc_index p(%lld), q(%lld)", p, q); \
 	_print_v2i32(ridx); \
-	_print_v2i32(len); \
+	_print_v2i32(sum); \
 	_print_v2i32(idx); \
 }
 
@@ -3254,6 +3262,13 @@ struct trace_boundary_s trace_cat_section(
 	};
 	debug("init, ptr(%p), ppos(%lld)", b.ptr, b.ppos);
 
+	/*
+	 * fixme: apos != 0 and bpos != 0 suppose sections are
+	 * aligned from their heads.
+	 * (sh->aid == dt->aid && sh->apos == dt->apos + dt->alen)
+	 * && ...
+	 * might work well...
+	 */
 	if(dh != dt && sh != st && sh->apos != 0 && sh->bpos != 0) {
 		// merged = 1;
 		b.ptr--;
