@@ -2300,7 +2300,8 @@ void trace_load_section_a(
 	}
 
 	/* reload finished, store section info */
-	this->w.l.atail = tail->tail;
+	// this->w.l.atail = tail->tail;
+	this->w.l.atail = tail;		/* fixme: is this correct?? */
 	this->w.l.alen = len;
 	this->w.l.aid = tail->aid;
 	this->w.l.asum = sum;
@@ -2327,7 +2328,8 @@ void trace_load_section_b(
 	}
 
 	/* reload finished, store section info */
-	this->w.l.btail = tail->tail;
+	// this->w.l.btail = tail->tail;
+	this->w.l.btail = tail;		/* fixme: is this correct?? */
 	this->w.l.blen = len;
 	this->w.l.bid = tail->bid;
 	this->w.l.bsum = sum;
