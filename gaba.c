@@ -2756,7 +2756,7 @@ void trace_forward_body(
 
 	/* v loop */
 	_trace_forward_loop_v_head: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_forward_tail_v_head;
 		}
 		_trace_forward_gap_loop(this, head, bulk, v);
@@ -2766,14 +2766,14 @@ void trace_forward_body(
 
 	/* d dispatchers */
 	_trace_forward_loop_d_mid: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_forward_tail_d_mid;
 		} else {
 			goto _trace_forward_head_d_mid;
 		}
 	}
 	_trace_forward_loop_d_tail: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_forward_tail_d_tail;
 		} else {
 			goto _trace_forward_head_d_tail;
@@ -2787,7 +2787,7 @@ void trace_forward_body(
 
 	/* h loop */
 	_trace_forward_loop_h_head: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_forward_tail_h_head;
 		}
 		_trace_forward_gap_loop(this, head, bulk, h);
@@ -2854,7 +2854,7 @@ void trace_reverse_body(
 
 	/* h loop */
 	_trace_reverse_loop_h_head: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_reverse_tail_h_head;
 		}
 		_trace_reverse_gap_loop(this, head, bulk, h);
@@ -2864,14 +2864,14 @@ void trace_reverse_body(
 
 	/* d dispatchers */
 	_trace_reverse_loop_d_mid: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_reverse_tail_d_mid;
 		} else {
 			goto _trace_reverse_head_d_mid;
 		}
 	}
 	_trace_reverse_loop_d_tail: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_reverse_tail_d_tail;
 		} else {
 			goto _trace_reverse_head_d_tail;
@@ -2885,7 +2885,7 @@ void trace_reverse_body(
 
 	/* v loop */
 	_trace_reverse_loop_v_head: {
-		if(p < 2 * BLK) {
+		if(p < 3 * BLK) {
 			goto _trace_reverse_tail_v_head;
 		}
 		_trace_reverse_gap_loop(this, head, bulk, v);
@@ -3931,7 +3931,7 @@ struct gaba_score_vec_s gaba_init_create_score_vector(
 	int8_t giv = -score_matrix->score_gi_b;
 	
 	int8_t sb[16] __attribute__(( aligned(16) ));
-	struct gaba_score_vec_s sc;
+	struct gaba_score_vec_s sc __attribute__(( aligned(BW) ));
 	#if BIT == 2
 		for(int i = 0; i < 16; i++) {
 			sb[i] = v[i] - (geh + gih + gev + giv);
@@ -4080,10 +4080,10 @@ struct gaba_diff_vec_s gaba_init_create_diff_vectors(
 	int8_t drop = 0;
 	int8_t raise = max - (geh + gih + gev + giv);
 
-	int8_t dh[BW] __attribute__(( aligned(16) ));
-	int8_t dv[BW] __attribute__(( aligned(16) ));
+	int8_t dh[BW] __attribute__(( aligned(BW) ));
+	int8_t dv[BW] __attribute__(( aligned(BW) ));
 
-	struct gaba_diff_vec_s diff __attribute__(( aligned(16) ));
+	struct gaba_diff_vec_s diff __attribute__(( aligned(BW) ));
 	/**
 	 * dh: dH[i, j] - gh
 	 * dv: dV[i, j] - gv
@@ -4127,12 +4127,12 @@ struct gaba_diff_vec_s gaba_init_create_diff_vectors(
 	int8_t drop_df = giv + ofs_df;
 	int8_t raise_df = ofs_df;
 
-	int8_t dh[BW] __attribute__(( aligned(16) ));
-	int8_t dv[BW] __attribute__(( aligned(16) ));
-	int8_t de[BW] __attribute__(( aligned(16) ));
-	int8_t df[BW] __attribute__(( aligned(16) ));
+	int8_t dh[BW] __attribute__(( aligned(BW) ));
+	int8_t dv[BW] __attribute__(( aligned(BW) ));
+	int8_t de[BW] __attribute__(( aligned(BW) ));
+	int8_t df[BW] __attribute__(( aligned(BW) ));
 
-	struct gaba_diff_vec_s diff __attribute__(( aligned(16) ));
+	struct gaba_diff_vec_s diff __attribute__(( aligned(BW) ));
 	/**
 	 * dh: dH[i, j] - geh
 	 * dv: dV[i, j] - gev
