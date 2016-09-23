@@ -13,14 +13,14 @@ The algorithmic design basically follows the seed-and-extend method. Input files
 Python (>= 2.7 or 3.3) is required to run the build script dependent on the waf build framework. The programs, entirely written in C99, can be compiled with gcc-compatible compilers passing the CC option to the waf configure argument.
 
 ```
-./waf configure CC=clang clean build
-sudo ./waf install
+make CC=clang PREFIX=/usr/local
+sudo make install
 ```
 
 ## Usage
 
 ```
-comb [options] <ref. seq.> <query seq.> <output>
+comb [options] <ref. seq.> <query seq.> -o <output>
 ```
 
 ### Options
@@ -44,7 +44,7 @@ A penalty for a gap with length k is represented in a Gi + k*Ge form.
 
 * **-h** print help
 * **-v** print version info
-* **-t** number of threads (multi-thread mode is broken for now)
+* **-t** number of threads
 
 
 ## Examples
@@ -54,7 +54,7 @@ A penalty for a gap with length k is represented in a Gi + k*Ge form.
 Linear-to-linear alignment is the normal, conventional alignment concept that is implemented in many programs like the BLAST, BWA and so on... The comb aligner can handle the similar tasks, taking FASTA reference and FASTA/Q reads then generating SAM output.
 
 ```
-comb examples/linear1.fa examples/linear2.fa test.sam
+comb examples/linear1.fa examples/linear2.fa -o test.sam
 ```
 
 ### Linear-to-graph
@@ -62,7 +62,7 @@ comb examples/linear1.fa examples/linear2.fa test.sam
 The GFA format is acceptable as an input reference sequence object. The sequence segments in the GFA file are indexed in the same way as the linear references. The alignments are reported in the GPA format by default.
 
 ```
-comb examples/graph1.fa examples/linear2.fa test.gpa
+comb examples/graph1.gfa examples/linear2.fa -o test.gpa
 ```
 
 ### Graph-to-graph
@@ -70,7 +70,7 @@ comb examples/graph1.fa examples/linear2.fa test.gpa
 The comb aligner can find a set of high-score paths between two graphical sequence objects.
 
 ```
-comb examples/graph1.fa examples/graph2.fa test.gpa
+comb examples/graph1.gfa examples/graph2.gfa -o test.gpa
 ```
 
 ## Notes
@@ -79,9 +79,6 @@ comb examples/graph1.fa examples/graph2.fa test.gpa
 
 * The software is not stable. It may report wrong results and segfaults in an unexpected way.
 * The libfna parser library and libgref graph indexing library cannot handle links with overlaps (links with non-0M cigar in the GFA format).
-* The affine-gap penalty alignment routine in the gaba library has a bug, reporting wrong alignment paths.
-* Overlapping results are not filterd.
-* Multi-thread mode segfaults.
 
 ### TODO
 
