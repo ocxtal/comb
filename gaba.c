@@ -3630,12 +3630,7 @@ int64_t parse_dump_gap_string(
  * @macro _parse_count_match_forward, _parse_count_gap_forward
  */
 #define _parse_count_match_forward(_arr) ({ \
-	uint64_t _a = (_arr); \
-	uint64_t m0 = _a & (_a>>1); \
-	uint64_t m1 = _a | (_a<<1); \
-	uint64_t m = m0 | ~m1; \
-	debug("m0(%llx), m1(%llx), m(%llx), tzcnt(%llu, %llu)", m0, m1, m, tzcnt(m), popcnt(~m & (m - 1))); \
-	tzcnt(m); \
+	tzcnt((_arr) ^ 0x5555555555555555); \
 })
 #define _parse_count_gap_forward(_arr) ({ \
 	uint64_t _a = (_arr); \
@@ -3668,9 +3663,8 @@ uint64_t suffix(gaba_dp_print_cigar_forward)(
 	while(1) {
 		uint64_t rsidx = ridx;
 		while(1) {
-			uint64_t a = MIN2(
-				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
-				ridx & ~0x01);
+			uint64_t m = _parse_count_match_forward(parse_load_uint64(p, lim - ridx));
+			uint64_t a = MIN2(m, ridx) & ~0x01;
 			ridx -= a;
 			volatile uint64_t c = a;
 			if(c < 64) { break; }
@@ -3721,9 +3715,8 @@ uint64_t suffix(gaba_dp_dump_cigar_forward)(
 	while(1) {
 		uint64_t rsidx = ridx;
 		while(1) {
-			uint64_t a = MIN2(
-				_parse_count_match_forward(parse_load_uint64(p, lim - ridx)),
-				ridx & ~0x01);
+			uint64_t m = _parse_count_match_forward(parse_load_uint64(p, lim - ridx));
+			uint64_t a = MIN2(m, ridx) & ~0x01;
 			debug("a(%lld), ridx(%lld), ridx&~0x01(%lld)", a, ridx, ridx & ~0x01);
 			ridx -= a;
 			volatile uint64_t c = a;
@@ -3756,12 +3749,7 @@ uint64_t suffix(gaba_dp_dump_cigar_forward)(
  * @macro _parse_count_match_reverse, _parse_count_gap_reverse
  */
 #define _parse_count_match_reverse(_arr) ({ \
-	uint64_t _a = (_arr); \
-	uint64_t m0 = _a & ((_a>>1) | (0x01ULL<<63)); \
-	uint64_t m1 = _a | (_a<<1); \
-	uint64_t m = m0 | ~m1; \
-	debug("m0(%llx), m1(%llx), m(%llx), lzcnt(%llu)", m0, m1, m, lzcnt(m)); \
-	lzcnt(m); \
+	lzcnt((_arr) ^ 0x5555555555555555); \
 })
 #define _parse_count_gap_reverse(_arr) ({ \
 	uint64_t _a = (_arr); \
@@ -3795,9 +3783,8 @@ uint64_t suffix(gaba_dp_print_cigar_reverse)(
 	while(1) {
 		uint64_t sidx = idx;
 		while(1) {
-			uint64_t a = MIN2(
-				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
-				idx & ~0x01);
+			uint64_t m = _parse_count_match_reverse(parse_load_uint64(p, idx + ofs));
+			uint64_t a = MIN2(m, idx) & ~0x01;
 			idx -= a;
 			if(a < 64) { break; }
 
@@ -3845,9 +3832,8 @@ uint64_t suffix(gaba_dp_dump_cigar_reverse)(
 	while(1) {
 		uint64_t sidx = idx;
 		while(1) {
-			uint64_t a = MIN2(
-				_parse_count_match_reverse(parse_load_uint64(p, idx + ofs)),
-				idx & ~0x01);
+			uint64_t m = _parse_count_match_reverse(parse_load_uint64(p, idx + ofs));
+			uint64_t a = MIN2(m, idx) & ~0x01;
 			idx -= a;
 			if(a < 64) { break; }
 
