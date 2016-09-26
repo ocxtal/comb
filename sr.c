@@ -19,7 +19,7 @@
 
 
 /* constants */
-#define SR_SINGLE_READ_MEM_SIZE		( 1024 * 1024 )
+#define SR_SINGLE_READ_MEM_SIZE		( 4 * 1024 * 1024 )
 
 /* inline directive */
 #define _force_inline				inline

@@ -847,7 +847,7 @@ struct comb_align_params_s *comb_init_align(
 		.message_context = (void *)stderr,
 		.num_threads = 0,
 		.mem_size = mem_estimate_free_size(),
-		.pool_size = 1024,
+		.pool_size = 256,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
@@ -1266,7 +1266,7 @@ struct comb_align_params_s *comb_init_bwa_mem(
 
 		.num_threads = 0,
 		.mem_size = 0,
-		.pool_size = 1024,
+		.pool_size = 256,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
