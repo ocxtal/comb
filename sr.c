@@ -19,7 +19,7 @@
 
 
 /* constants */
-#define SR_SINGLE_READ_MEM_SIZE		( 64 * 1024 * 1024 )
+#define SR_SINGLE_READ_MEM_SIZE		( 1024 * 1024 )
 
 /* inline directive */
 #define _force_inline				inline
@@ -46,6 +46,7 @@ struct sr_s {
 	gref_idx_t *idx;
 	struct sr_gref_s *(*iter_read)(
 		sr_t *sr);
+	lmm_pool_t *pool;
 	struct sr_params_s params;
 };
 
@@ -58,11 +59,13 @@ struct sr_gref_intl_s {
 	char const *path;
 	gref_t const *gref;
 	gref_iter_t *iter;
+	struct sr_s *sr;
 	fna_seq_t *seq;
 	uint8_t gref_need_free;
 	uint8_t seq_need_free;
 	uint8_t reserved2[6];
 };
+_static_assert(sizeof(struct sr_gref_s) == sizeof(struct sr_gref_intl_s));
 
 /**
  * @fn sr_dump_seq
@@ -156,6 +159,7 @@ struct sr_gref_s *sr_get_index(
 
 	*r = (struct sr_gref_intl_s){
 		.lmm = lmm,
+		.sr = sr,
 		.path = sr->path,
 		.gref = (gref_t const *)sr->idx,
 		.iter = NULL,
@@ -185,6 +189,7 @@ struct sr_gref_s *sr_get_iter_graph(
 		sizeof(struct sr_gref_intl_s));
 	*r = (struct sr_gref_intl_s){
 		.lmm = NULL,
+		.sr = sr,
 		.path = sr->path,
 		.gref = sr->acv,
 		.iter = gref_iter_init(sr->acv, NULL)
@@ -207,7 +212,10 @@ struct sr_gref_s *sr_get_iter_read(
 	gref_acv_t *acv = NULL;
 
 	/* init local memory */
-	lmm_t *lmm_read = lmm_init(NULL, SR_SINGLE_READ_MEM_SIZE);
+	// lmm_t *lmm_read = lmm_init(NULL, SR_SINGLE_READ_MEM_SIZE);
+	lmm_t *lmm_read = lmm_init(
+		lmm_pool_create_object(sr->pool),
+		sr->params.read_mem_size - sizeof(struct lmm_s));
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)lmm_malloc(
 		lmm_read, sizeof(struct sr_gref_intl_s));
 	debug("sr_gref malloc, ptr(%p)", r);
@@ -254,6 +262,7 @@ struct sr_gref_s *sr_get_iter_read(
 
 	*r = (struct sr_gref_intl_s){
 		.lmm = lmm_read,
+		.sr = sr,
 		.path = sr->path,
 		.gref = acv,
 		.iter = gref_iter_init(acv, NULL),
@@ -280,6 +289,7 @@ void sr_gref_free(
 	struct sr_gref_s *_r)
 {
 	struct sr_gref_intl_s *r = (struct sr_gref_intl_s *)_r;
+	struct sr_s *sr = r->sr;
 	if(r == NULL) { return; }
 
 	debug("sr_gref free, ptr(%p)", r);
@@ -290,7 +300,10 @@ void sr_gref_free(
 
 	lmm_t *lmm = r->lmm; r->lmm = NULL;
 	lmm_free(lmm, r);
-	lmm_clean(lmm);
+	void *base = lmm_clean(lmm);
+	if(base != NULL) {
+		lmm_pool_delete_object(sr->pool, base);
+	}
 	return;
 }
 
@@ -333,11 +346,23 @@ sr_t *sr_init(
 
 	/* copy params */
 	sr->params = *params;
+	#define _restore(_key, _val)	{ if((uint64_t)(_key) == 0) { (_key) = (_val); } }
+	_restore(sr->params.pool_size, 1024);
+	_restore(sr->params.read_mem_size, SR_SINGLE_READ_MEM_SIZE);
+
+	/* init pool */
+	if(sr->iter_read == sr_get_iter_read) {
+		sr->pool = lmm_pool_init(NULL, sr->params.read_mem_size, sr->params.pool_size);
+		if(sr->pool == NULL) {
+			goto _sr_init_error_handler;
+		}
+	}
 	return((sr_t *)sr);
 
 _sr_init_error_handler:;
 	free(sr->path); sr->path = NULL;
 	fna_close(sr->fna); sr->fna = NULL;
+	lmm_pool_clean(sr->pool); sr->pool = NULL;
 	free(sr);
 	return(NULL);
 }
@@ -353,6 +378,7 @@ void sr_clean(
 	gref_clean(sr->acv); sr->acv = NULL;
 	free(sr->path); sr->path = NULL;
 	fna_close(sr->fna); sr->fna = NULL;
+	lmm_pool_clean(sr->pool); sr->pool = NULL;
 	free(sr);
 	return;
 }

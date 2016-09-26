@@ -54,6 +54,7 @@ struct comb_align_params_s {
 
 	int64_t num_threads;
 	int64_t mem_size;
+	int64_t pool_size;
 
 	char *command;
 	char *command_base;
@@ -336,7 +337,7 @@ int comb_align(
 			.format = params->query_format,
 			.k = params->k,
 			.seq_direction = SR_FW_ONLY,
-			// .num_threads = params->num_threads
+			.pool_size = params->pool_size,
 		));
 	comb_align_error(query != NULL, "Failed to open query file `%s'.", params->query_name);
 
@@ -356,11 +357,11 @@ int comb_align(
 
 	/* initialize parallel task dispatcher */
 	w = comb_align_worker_init(params, conf, ref, query, aw);
-	pt = ptask_init(comb_align_worker, (void **)w, params->num_threads, 2048);
+	pt = ptask_init(comb_align_worker, (void **)w, params->num_threads, params->pool_size);
 	comb_align_error(w != NULL && pt != NULL, "Failed to initialize parallel worker threads.");
 
 	/* run tasks */
-	ptask_stream(pt, comb_align_source, (void *)*w, comb_align_drain, (void *)*w, 512);
+	ptask_stream(pt, comb_align_source, (void *)*w, comb_align_drain, (void *)*w, params->pool_size / 4);
 
 	/* destroy objects */
 	ret = 0;
@@ -846,6 +847,7 @@ struct comb_align_params_s *comb_init_align(
 		.message_context = (void *)stderr,
 		.num_threads = 0,
 		.mem_size = mem_estimate_free_size(),
+		.pool_size = 1024,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),
@@ -1264,6 +1266,7 @@ struct comb_align_params_s *comb_init_bwa_mem(
 
 		.num_threads = 0,
 		.mem_size = 0,
+		.pool_size = 1024,
 		.command = comb_build_command_string(argc, argv),
 		.command_base = strdup(base),
 		.program_name = strdup("comb"),

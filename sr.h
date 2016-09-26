@@ -45,6 +45,8 @@ struct sr_params_s {
 	uint8_t reserved1;
 	uint16_t num_threads;
 	uint16_t reserved2;
+	uint32_t pool_size;
+	uint32_t read_mem_size;
 	void *lmm;					/* lmm memory manager */
 };
 typedef struct sr_params_s sr_params_t;
@@ -60,6 +62,7 @@ struct sr_gref_s {
 	char const *path;
 	gref_t const *gref;
 	gref_iter_t *iter;
+	void *reserved1[2];
 	uint32_t reserved2[2];
 };
 
