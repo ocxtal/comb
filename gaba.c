@@ -4342,7 +4342,8 @@ int32_t gaba_dp_add_stack(
 		/* add new block */
 		uint64_t next_size = this->curr_mem->size * 2;
 		struct gaba_mem_block_s *mem = this->curr_mem->next =
-			(struct gaba_mem_block_s *)malloc(next_size);
+			(struct gaba_mem_block_s *)gaba_aligned_malloc(
+				next_size, MEM_ALIGN_SIZE);
 		if(mem == NULL) { return(GABA_ERROR_OUT_OF_MEM); }
 
 		mem->next = NULL;
