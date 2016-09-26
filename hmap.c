@@ -199,7 +199,7 @@ hmap_t *hmap_init(
 	params = (params == NULL) ? &default_params : params;
 
 	/* size must be power of 2 */
-	uint64_t hmap_size = (params->hmap_size == 0)
+	uint64_t hmap_size = (params->hmap_size < 2)
 		? HMAP_DEFAULT_HASH_SIZE
 		: params->hmap_size;
 	if((hmap_size & (hmap_size - 1)) != 0) {

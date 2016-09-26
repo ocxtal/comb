@@ -231,6 +231,7 @@ struct sr_gref_s *sr_get_iter_read(
 				.seq_format = GREF_4BIT,
 				.copy_mode = GREF_NOCOPY,
 				.num_threads = sr->params.num_threads,
+				.hash_size = 2,
 				.lmm = lmm_read));
 
 			gref_append_segment(pool,
