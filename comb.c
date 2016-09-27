@@ -319,7 +319,7 @@ int comb_align(
 		.overlap_thresh = params->overlap_thresh,
 		.gapless_thresh = params->gapless_thresh,
 		.score_thresh = params->score_thresh));
-	comb_align_error(conf != NULL, "Failed to create alignment configuration.");
+	comb_align_error(conf != NULL, "Failed to create alignment configuration. Check scoring parameters are small enough to be handled in gaba library.\n");
 
 	/* build reference sequence index */
 	ref = sr_init(params->ref_name,
@@ -329,7 +329,7 @@ int comb_align(
 			.seq_direction = SR_FW_ONLY,
 			.num_threads = params->num_threads
 		));
-	comb_align_error(ref != NULL, "Failed to open reference file `%s'.", params->ref_name);
+	comb_align_error(ref != NULL, "Failed to open reference file `%s'.\n", params->ref_name);
 
 	/* build read pool */
 	query = sr_init(params->query_name,
@@ -339,11 +339,11 @@ int comb_align(
 			.seq_direction = SR_FW_ONLY,
 			.pool_size = params->pool_size,
 		));
-	comb_align_error(query != NULL, "Failed to open query file `%s'.", params->query_name);
+	comb_align_error(query != NULL, "Failed to open query file `%s'.\n", params->query_name);
 
 	/* build alignment writer */
 	struct sr_gref_s *r = sr_get_index(ref);
-	comb_align_error(r != NULL, "Failed to build reference index.");
+	comb_align_error(r != NULL, "Failed to build reference index.\n");
 	aw = aw_init(params->out_name, r->gref,
 		AW_PARAMS(
 			.format = params->out_format,
@@ -353,12 +353,12 @@ int comb_align(
 			.command = params->command
 		));
 	sr_gref_free(r);
-	comb_align_error(aw != NULL, "Failed to open output file `%s'.", params->out_name);
+	comb_align_error(aw != NULL, "Failed to open output file `%s'.\n", params->out_name);
 
 	/* initialize parallel task dispatcher */
 	w = comb_align_worker_init(params, conf, ref, query, aw);
 	pt = ptask_init(comb_align_worker, (void **)w, params->num_threads, params->pool_size);
-	comb_align_error(w != NULL && pt != NULL, "Failed to initialize parallel worker threads.");
+	comb_align_error(w != NULL && pt != NULL, "Failed to initialize parallel worker threads.\n");
 
 	/* run tasks */
 	ptask_stream(pt, comb_align_source, (void *)*w, comb_align_drain, (void *)*w, params->pool_size / 4);
@@ -550,7 +550,6 @@ void comb_print_error(
 	va_start(l, msg);
 	fprintf(stderr, "[ERROR] ");
 	vfprintf(stderr, msg, l);
-	fprintf(stderr, "\n");
 	va_end(l);
 	return;
 }
@@ -968,7 +967,7 @@ struct comb_align_params_s *comb_init_align(
 			break;
 		case 3:
 			/* paired-end mapping mode */
-			comb_print_error("paired-end mapping mode is not implemented.");
+			comb_print_error("paired-end mapping mode is not implemented.\n");
 			goto _comb_init_align_error_handler;
 		default:
 			comb_print_invalid_args(argv, optind, argc);
@@ -1364,7 +1363,7 @@ struct comb_align_params_s *comb_init_bwa_mem(
 			case 'Y':
 			case 'M':
 			case 'I':
-				comb_print_error("unimplemented option `%c'.", c);
+				comb_print_error("unimplemented option `%c'.\n", c);
 				break;
 			/* unknown option */
 			default: comb_print_unknown_option(c); break;
@@ -1389,7 +1388,7 @@ struct comb_align_params_s *comb_init_bwa_mem(
 			break;
 		case 3:
 			/* paired-end mapping mode */
-			comb_print_error("paired-end mapping mode is not implemented.");
+			comb_print_error("paired-end mapping mode is not implemented.\n");
 			goto _comb_init_bwa_mem_error_handler;
 		default:
 			comb_print_invalid_args(argv, optind, argc);

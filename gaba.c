@@ -3906,6 +3906,36 @@ void gaba_init_restore_default_params(
 }
 
 /**
+ * @fn gaba_init_check_score
+ * @brief return non-zero if the score is not applicable
+ */
+static _force_inline
+int gaba_init_check_score(
+	struct gaba_score_s const *score_matrix)
+{
+	int32_t max = extract_max(score_matrix->score_sub);
+	int32_t geh = -score_matrix->score_ge_a;
+	int32_t gev = -score_matrix->score_ge_b;
+	int32_t gih = -score_matrix->score_gi_a;
+	int32_t giv = -score_matrix->score_gi_b;
+
+	#if MODEL == LINEAR
+		if(max - 2 * (geh + gih) > 255) { return(-1); }
+		if(max - 2 * (gev + giv) > 255) { return(-1); }
+		if((geh + gih) > 0) { return(-1); }
+		if((gev + giv) > 0) { return(-1); }
+	#else
+		if(max - 2 * (geh + gih) > 31) { return(-1); }
+		if(max - 2 * (gev + giv) > 31) { return(-1); }
+		if(geh < gih) { return(-1); }
+		if(gev < giv) { return(-1); }
+		if((geh + gih) < -7) { return(-1); }
+		if((gev + giv) < -7) { return(-1); }
+	#endif
+	return(0);
+}
+
+/**
  * @fn gaba_init_create_score_vector
  */
 static _force_inline
@@ -4199,6 +4229,11 @@ gaba_t *suffix(gaba_init)(
 
 	/* restore defaults */
 	gaba_init_restore_default_params(&params_intl);
+
+	/* check the scores are applicable */
+	if(gaba_init_check_score(params_intl.score_matrix) != 0) {
+		return(NULL);
+	}
 
 	/* malloc gaba_context_s */
 	struct gaba_context_s *ctx = (struct gaba_context_s *)gaba_aligned_malloc(
