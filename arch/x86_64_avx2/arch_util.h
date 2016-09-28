@@ -216,16 +216,12 @@
 /* cache line operation */
 #define WCR_BUF_SIZE		( 64 )		/** 64 bytes */
 #define memcpy_buf(_dst, _src) { \
-	register __m128i *_s = (__m128i *)(_src); \
-	register __m128i *_d = (__m128i *)(_dst); \
-	__m128i xmm0 = _mm_load_si128(_s); \
-	_mm_stream_si128(_d, xmm0); \
-	__m128i xmm1 = _mm_load_si128(_s + 1); \
-	_mm_stream_si128(_d + 1, xmm1); \
-	__m128i xmm2 = _mm_load_si128(_s + 2); \
-	_mm_stream_si128(_d + 2, xmm2); \
-	__m128i xmm3 = _mm_load_si128(_s + 3); \
-	_mm_stream_si128(_d + 3, xmm3); \
+	register __m256i *_s = (__m256i *)(_src); \
+	register __m256i *_d = (__m256i *)(_dst); \
+	__m256i ymm0 = _mm256_load_si256(_s); \
+	_mm256_stream_si256(_d, ymm0); \
+	__m256i ymm1 = _mm256_load_si256(_s + 1); \
+	_mm256_stream_si256(_d + 1, ymm1); \
 }
 
 /* 128bit register operation */
