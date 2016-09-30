@@ -217,18 +217,26 @@
 
 
 /* cache line operation */
-#define WCR_BUF_SIZE		( 64 )		/** 64 bytes */
+#define WCR_BUF_SIZE		( 128 )		/** two cache lines in x86_64 */
 #define memcpy_buf(_dst, _src) { \
 	register __m128i *_s = (__m128i *)(_src); \
 	register __m128i *_d = (__m128i *)(_dst); \
 	__m128i xmm0 = _mm_load_si128(_s); \
-	_mm_stream_si128(_d, xmm0); \
 	__m128i xmm1 = _mm_load_si128(_s + 1); \
-	_mm_stream_si128(_d + 1, xmm1); \
 	__m128i xmm2 = _mm_load_si128(_s + 2); \
-	_mm_stream_si128(_d + 2, xmm2); \
 	__m128i xmm3 = _mm_load_si128(_s + 3); \
+	__m128i xmm4 = _mm_load_si128(_s + 4); \
+	__m128i xmm5 = _mm_load_si128(_s + 5); \
+	__m128i xmm6 = _mm_load_si128(_s + 6); \
+	__m128i xmm7 = _mm_load_si128(_s + 7); \
+	_mm_stream_si128(_d, xmm0); \
+	_mm_stream_si128(_d + 1, xmm1); \
+	_mm_stream_si128(_d + 2, xmm2); \
 	_mm_stream_si128(_d + 3, xmm3); \
+	_mm_stream_si128(_d + 4, xmm4); \
+	_mm_stream_si128(_d + 5, xmm5); \
+	_mm_stream_si128(_d + 6, xmm6); \
+	_mm_stream_si128(_d + 7, xmm7); \
 }
 
 /* 128bit register operation */

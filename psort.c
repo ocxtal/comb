@@ -21,6 +21,7 @@
 #include "psort.h"
 #include "ptask.h"		/* pthread parallel task execution library */
 #include "log.h"
+#include "sassert.h"
 
 
 /* constants */
@@ -39,6 +40,10 @@
  */
 #define _force_inline	inline
 // #define _force_inline
+
+/* max / min */
+#define MAX2(x, y)					( (x) < (y) ? (y) : (x) )
+#define MIN2(x, y)					( (x) > (y) ? (y) : (x) )
 
 /**
  * @struct psort_occ_s
@@ -65,15 +70,27 @@ struct psort_buffer_s {
  * @struct psort_thread_context_s
  */
 struct psort_thread_context_s {
-	struct psort_occ_s *occ;
-	struct psort_buffer_counter_s *cnt;
-	struct psort_buffer_s *buf;
-	int32_t digit;
-	int32_t num_threads;
-	void *src;
-	void *dst;
-	int64_t from, to;
+	// struct psort_occ_s *occ;
+	// struct psort_buffer_counter_s *cnt;
+
+	/* aligned on 64byte boundary */
+	uint64_t occ[WCR_OCC_SIZE];			/* (2048) */
+	uint8_t cnt[WCR_OCC_SIZE];			/* (256) */
+
+	/* aligned on 64byte boundary (2304) */
+	uint8_t buf[WCR_OCC_SIZE][WCR_BUF_SIZE];/* (8192) */
+
+	/* aligned on 64byte boundary (10496) */
+	uint32_t digit;						/* (4) */
+	uint32_t num_threads;				/* (4) */
+	void *src;							/* (8) */
+	void *dst;							/* (8) */
+	uint64_t from, to;					/* (16) */
+	uint64_t _pad[3];					/* (24) */
+
+	/* aligned on 64byte boundary (10560) */
 };
+_static_assert(sizeof(struct psort_thread_context_s) == 2368 + WCR_OCC_SIZE * WCR_BUF_SIZE);
 
 /**
  * @fn aligned_malloc
@@ -226,7 +243,7 @@ unittest_config(
 	.depends_on = { "psort_radix_internal" }
 );
 
-#define UNITTEST_ARR_LEN		100
+#define UNITTEST_ARR_LEN		10000
 
 /* srand */
 unittest()

@@ -24,20 +24,16 @@ static
 void join(psort_count_occ_, SUFFIX)(
 	struct psort_thread_context_s *ctx)
 {
-	/* initialize occ array */
-	uint64_t *occ = (uint64_t *)ctx->occ->occ;
-	memset(occ, 0, sizeof(uint64_t) * WCR_OCC_SIZE);	
-
-	/* extract elem pointer */
-	elem_t *src = (elem_t *)ctx->src;
-	uint64_t from = ctx->from;
-	uint64_t to = ctx->to;
+	/* initialize occ and counter array */
+	uint64_t *occ = (uint64_t *)ctx->occ;
+	memset(occ, 0, (sizeof(uint64_t) + sizeof(uint8_t)) * WCR_OCC_SIZE);	
 
 	/* count occurrences */
+	elem_t *sp = (elem_t *)ctx->src + ctx->from;
+	elem_t *ep = (elem_t *)ctx->src + ctx->to;
 	uint64_t digit = ctx->digit;
-	for(uint64_t i = from; i < to; i++) {
-		occ[ex(rd(src + i), digit)]++;
-		debug("n(%llu), occ(%llu)", ex(rd(src + i), digit), occ[ex(rd(src + i), digit)]);
+	for(elem_t *p = sp; p < ep; p++) {
+		occ[ex(rd(p), digit)]++;
 	}
 	return;
 }
@@ -50,25 +46,14 @@ static
 void join(psort_gather_occ_, SUFFIX)(
 	struct psort_thread_context_s *ctx)
 {
-	struct psort_occ_s *occ = ctx->occ;
-	struct psort_buffer_counter_s *cnt = ctx->cnt;
-
 	uint64_t threads = ctx->num_threads;
-	uint64_t sum = 0;
+	elem_t *ptr = ctx->dst;
 	for(uint64_t i = 0; i < WCR_OCC_SIZE; i++) {
 		for(uint64_t j = 0; j < threads; j++) {
-			uint64_t curr_occ = occ[j].occ[i];
-
-			/* store base index to occ[j].occ[i] */
-			occ[j].occ[i] = sum & ~(WCR_BUF_ELEM_COUNT - 1);
-
-			/* store initial buffer counter to cnt[j].cnt[i] */
-			cnt[j].cnt[i] = sum & (WCR_BUF_ELEM_COUNT - 1);
-
-			debug("sum(%llu), occ(%llu), cnt(%u)", sum, occ[j].occ[i], cnt[j].cnt[i]);
-
-			/* update sum */
-			sum += curr_occ;
+			/* store base pointer to occ[j].occ[i] */
+			uint64_t curr_occ = ctx[j].occ[i];
+			ctx[j].occ[i] = (uint64_t)ptr;
+			ptr += curr_occ;
 		}
 	}
 	return;
@@ -82,44 +67,38 @@ void join(psort_scatter_, SUFFIX)(
 	struct psort_thread_context_s *ctx)
 {
 	/* extract pointers */
-	uint64_t *occ = (uint64_t *)ctx->occ->occ;
-	uint8_t *cnt = (uint8_t *)ctx->cnt->cnt;
-	elem_t (*buf)[WCR_BUF_ELEM_COUNT] =
-		(elem_t (*)[WCR_BUF_ELEM_COUNT])ctx->buf->buf;
+	elem_t **base = (elem_t **)ctx->occ;
+	uint8_t *cnt = (uint8_t *)ctx->cnt;
+	elem_t (*buf)[WCR_BUF_ELEM_COUNT] = (elem_t (*)[WCR_BUF_ELEM_COUNT])ctx->buf;
 
 	/* extract elem pointer */
-	elem_t *src = (elem_t *)ctx->src;
-	elem_t *dst = (elem_t *)ctx->dst;
-	uint64_t from = ctx->from;
-	uint64_t to = ctx->to;
-
-	debug("from(%lld), to(%lld)", from, to);
+	elem_t *sp = (elem_t *)ctx->src + ctx->from;
+	elem_t *ep = (elem_t *)ctx->src + ctx->to;
 
 	/* scatter */
 	uint64_t digit = ctx->digit;
-	for(uint64_t i = from; i < to; i++) {
+	for(elem_t *p = sp; p < ep; p++) {
 		/* load an element, store to the buffer */
-		register elem_t e = rd(src + i);
+		register elem_t e = rd(p);
 		register uint64_t n = ex(e, digit);
+		register elem_t *q = base[n];
+
+		if(((uint64_t)q & (WCR_BUF_SIZE - 1)) != 0) {
+			/* p is not aligned to cache boundary, write directly */
+			wr(q, e);
+			base[n] = q + 1;
+			continue;
+		}
+
+		/* read counter */
 		register uint8_t c = cnt[n];
-
-		wr(buf[n] + c, e);
-
-		debug("e(%llu), n(%llu), cnt(%u), p(%p), e(%llu)",
-			(uint64_t)e, n, cnt[n], buf[n] + (uint64_t)cnt[n],
-			(uint64_t)rd(buf[n] + (uint64_t)cnt[n]));
-
+		wr(&buf[n][c], e);
 
 		/** check if flush is needed */
 		if(++c == WCR_BUF_ELEM_COUNT) {
-			debug("bulk copy n(%llu)", n);
-			/* bulk copy */
-			memcpy_buf(dst + occ[n], buf[n]);
-
-			/* update index */
-			occ[n] += WCR_BUF_ELEM_COUNT;
-
-			/* reset counter */
+			/* bulk copy and update pointer */
+			memcpy_buf(q, buf[n]);
+			base[n] = q + WCR_BUF_ELEM_COUNT;
 			c = 0;
 		}
 
@@ -136,38 +115,16 @@ static
 void join(psort_flush_, SUFFIX)(
 	struct psort_thread_context_s *ctx)
 {
-	struct psort_occ_s *occ = ctx->occ;
-	struct psort_buffer_counter_s *cnt = ctx->cnt;
-	struct psort_buffer_s *buf = ctx->buf;
-	elem_t *dst = (elem_t *)ctx->dst;
-
 	/** flush the remaining content */
 	uint64_t threads = ctx->num_threads;
-	uint64_t prev_occ = 0;
-	uint64_t prev_cnt = 0;
 	for(uint64_t i = 0; i < WCR_OCC_SIZE; i++) {
 		for(uint64_t j = 0; j < threads; j++) {
-			uint64_t curr_occ = occ[j].occ[i];
-			uint64_t curr_cnt = cnt[j].cnt[i];
-
-			debug("prev_occ(%lld), prev_cnt(%lld), curr_occ(%lld), curr_cnt(%lld)",
-				prev_occ, prev_cnt, curr_occ, curr_cnt);
-
-			/* reset prev_cnt if the current block differs from the previous one */
-			prev_cnt = (prev_occ == curr_occ) ? prev_cnt : 0;
-			debug("update prev_cnt(%lld)", prev_cnt);
-
-			/* copy */
-			for(uint64_t k = prev_cnt; k < curr_cnt; k++) {
-				debug("flush move k(%lld), e(%llu), p(%p)",
-					k, (uint64_t)rd(((elem_t *)buf[j].buf[i]) + k), ((elem_t *)buf[j].buf[i]) + k);
-				wr(dst + curr_occ + k,
-					rd(((elem_t *)buf[j].buf[i]) + k));
+			if(ctx[j].cnt[i] == 0) { continue; }
+			elem_t *dp = (elem_t *)ctx[j].occ[i];
+			elem_t *sp = (elem_t *)ctx[j].buf[i];
+			for(uint64_t k = 0; k < ctx[j].cnt[i]; k++) {
+				wr(&dp[k], rd(&sp[k]));
 			}
-
-			/* save occ and cnt */
-			prev_occ = curr_occ;
-			prev_cnt = curr_cnt;
 		}
 	}
 	return;
@@ -208,13 +165,10 @@ void join(psort_partialsort_parallel_, SUFFIX)(
 	void *ptr = aligned_malloc(
 		  nt * (
 		  	  sizeof(struct psort_thread_context_s *)
-		  	+ 3 * sizeof(void *)
-			+ sizeof(struct psort_thread_context_s)
-			+ sizeof(struct psort_occ_s)
-			+ sizeof(struct psort_buffer_counter_s)
-			+ sizeof(struct psort_buffer_s))
+		  	+ 3 * sizeof(void *)		/* function pointers */
+			+ sizeof(struct psort_thread_context_s))
 		+ sizeof(elem_t) * len,
-		16);
+		32);
 
 	/* array of pointers to thread contexts */
 	struct psort_thread_context_s **pth = (struct psort_thread_context_s **)ptr;
@@ -226,10 +180,7 @@ void join(psort_partialsort_parallel_, SUFFIX)(
 
 	/* thread contexts and working buffers */
 	struct psort_thread_context_s *th = (struct psort_thread_context_s *)&copyback[nt];
-	struct psort_occ_s *occ = (struct psort_occ_s *)&th[nt];
-	struct psort_buffer_counter_s *cnt = (struct psort_buffer_counter_s *)&occ[nt];
-	struct psort_buffer_s *buf = (struct psort_buffer_s *)&cnt[nt];
-	void *dst = (void *)&buf[nt];
+	void *dst = (void *)&th[nt];
 
 	/* initialize thread contexts */
 	for(uint64_t i = 0; i < nt; i++) {
@@ -240,11 +191,6 @@ void join(psort_partialsort_parallel_, SUFFIX)(
 		count_occ[i] = (void *)join(psort_count_occ_, SUFFIX);
 		scatter[i] = (void *)join(psort_scatter_, SUFFIX);
 		copyback[i] = (void *)join(psort_copyback_, SUFFIX);
-
-		/* pointer to working buffers */
-		th[i].occ = &occ[i];
-		th[i].cnt = &cnt[i];
-		th[i].buf = &buf[i];
 
 		/* num_threads */
 		th[i].num_threads = nt;
@@ -266,11 +212,6 @@ void join(psort_partialsort_parallel_, SUFFIX)(
 			th[j].dst = dst;
 		}
 
-		debug("start loop");
-		for(uint64_t j = 0; j < len; j++) {
-			debug("%llu, ", ((elem_t *)src)[j]);
-		}
-
 		/* count occ */
 		ptask_parallel(pt, count_occ, NULL);
 
@@ -282,11 +223,6 @@ void join(psort_partialsort_parallel_, SUFFIX)(
 
 		/* flush */
 		join(psort_flush_, SUFFIX)(th);
-
-		debug("end loop");
-		for(uint64_t j = 0; j < len; j++) {
-			debug("%llu, ", ((elem_t *)dst)[j]);
-		}
 
 		/* swap */
 		void *tmp = src; src = dst; dst = tmp;

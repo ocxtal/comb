@@ -18,6 +18,9 @@
 #ifndef _BENCH_H_INCLUDED
 #define _BENCH_H_INCLUDED
 
+#include <stdint.h>
+#include <string.h>
+
 /**
  * benchmark macros
  */
