@@ -857,7 +857,7 @@ struct comb_align_params_s *comb_init_align(
 		.gapless_thresh = 0,
 		.xdrop = 0,		/* default xdrop threshold is derived from scoring parameters */
 		.m = 1, .x = 2, .gi = 2, .ge = 1,
-		.clip = 'S',
+		.clip = 'H',	/* default clip sequence for secondary alignments */
 		.include_unmapped = 1,
 		.score_thresh = 0
 	};

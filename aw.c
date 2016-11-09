@@ -44,7 +44,8 @@ struct aw_conf_s {
 		aw_t *aw,
 		gref_idx_t const *r,
 		gref_acv_t const *q,
-		gaba_alignment_t const *aln);
+		gaba_alignment_t const *aln,
+		int64_t primary);
 	void (*unmapped)(
 		aw_t *aw,
 		gref_idx_t const *r,
@@ -242,9 +243,10 @@ int64_t sam_calc_flags(
 	gref_idx_t const *r,
 	gref_acv_t const *q,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_section_s const *next)
-{	
-	return(0);
+	struct gaba_path_section_s const *next,
+	int64_t primary)
+{
+	return(primary != 0 ? 0 : 0x100);
 }
 
 /**
@@ -308,7 +310,8 @@ void sam_print_cigar_forward(
 	aw_t *aw,
 	gref_acv_t const *q,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_s const *path)
+	struct gaba_path_s const *path,
+	int64_t primary)
 {
 	gref_section_t const *bsec = gref_get_section(q, curr->bid);
 	uint64_t hlen = curr->bpos;
@@ -318,7 +321,7 @@ void sam_print_cigar_forward(
 
 	/* print clip at the head */
 	if(hlen > 0) {
-		zfprintf(aw->fp, "%lld%c", hlen, aw->clip);
+		zfprintf(aw->fp, "%lld%c", hlen, primary != 0 ? 'S' : aw->clip);
 	}
 
 	/* print cigar */
@@ -331,7 +334,7 @@ void sam_print_cigar_forward(
 
 	/* print clip at the tail */
 	if(tlen > 0) {
-		zfprintf(aw->fp, "%lld%c", tlen, aw->clip);
+		zfprintf(aw->fp, "%lld%c", tlen, primary != 0 ? 'S' : aw->clip);
 	}
 	zfputc(aw->fp, '\t');
 	return;
@@ -345,7 +348,8 @@ void sam_print_cigar_reverse(
 	aw_t *aw,
 	gref_acv_t const *q,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_s const *path)
+	struct gaba_path_s const *path,
+	int64_t primary)
 {
 	gref_section_t const *bsec = gref_get_section(q, curr->bid);
 	uint64_t hlen = curr->bpos;
@@ -355,7 +359,7 @@ void sam_print_cigar_reverse(
 
 	/* print clip at the head */
 	if(tlen > 0) {
-		zfprintf(aw->fp, "%lld%c", tlen, aw->clip);
+		zfprintf(aw->fp, "%lld%c", tlen, primary != 0 ? 'S' : aw->clip);
 	}
 
 	/* print cigar */
@@ -368,7 +372,7 @@ void sam_print_cigar_reverse(
 
 	/* print clip at the tail */
 	if(hlen > 0) {
-		zfprintf(aw->fp, "%lld%c", hlen, aw->clip);
+		zfprintf(aw->fp, "%lld%c", hlen, primary != 0 ? 'S' : aw->clip);
 	}
 	zfputc(aw->fp, '\t');
 	return;
@@ -382,15 +386,16 @@ static _force_inline
 void sam_print_seq_qual_forward(
 	aw_t *aw,
 	gref_acv_t const *q,
-	struct gaba_path_section_s const *curr)
+	struct gaba_path_section_s const *curr,
+	int64_t primary)
 {
 	/* determine direction and fix seq pointer */
 	gref_section_t const *bsec = gref_get_section(q, gref_fw(curr->bid));
 
 	/* include clipped sequence if clipping is 'S' */
 	sam_print_seq_forward(aw,
-		(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos],
-		(aw->clip == 'S') ? bsec->len : curr->blen);
+		(primary != 0 || aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos],
+		(primary != 0 || aw->clip == 'S') ? bsec->len : curr->blen);
 
 	/* print quality string */
 	zfprintf(aw->fp, "\t*\t");
@@ -408,7 +413,8 @@ void sam_write_segment_forward(
 	gref_acv_t const *q,
 	struct gaba_path_s const *path,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_section_s const *next)
+	struct gaba_path_section_s const *next,
+	int64_t primary)
 {
 	/* query name */
 	aw_print_str(aw->fp,
@@ -417,7 +423,7 @@ void sam_write_segment_forward(
 	zfputc(aw->fp, '\t');
 
 	/* flags (revcomp indicator) */
-	aw_print_num(aw->fp, sam_calc_flags(r, q, curr, next));
+	aw_print_num(aw->fp, sam_calc_flags(r, q, curr, next, primary));
 	zfputc(aw->fp, '\t');
 
 	/* reference name and pos (name is skipped by default) */
@@ -433,7 +439,7 @@ void sam_write_segment_forward(
 	zfputc(aw->fp, '\t');
 
 	/* cigar */
-	sam_print_cigar_forward(aw, q, curr, path);
+	sam_print_cigar_forward(aw, q, curr, path, primary);
 
 	/* ref name and pos of the next section */
 	if(next != NULL) {
@@ -452,7 +458,7 @@ void sam_write_segment_forward(
 	zfprintf(aw->fp, "0\t");
 
 	/* seq and qual */
-	sam_print_seq_qual_forward(aw, q, curr);
+	sam_print_seq_qual_forward(aw, q, curr, primary);
 
 	/* print option tags */
 	sam_print_option_tags(aw, q, curr, path);
@@ -468,7 +474,8 @@ static _force_inline
 void sam_print_seq_qual_reverse(
 	aw_t *aw,
 	gref_acv_t const *q,
-	struct gaba_path_section_s const *curr)
+	struct gaba_path_section_s const *curr,
+	int64_t primary)
 {
 	/* determine direction and fix seq pointer */
 	gref_section_t const *bsec = gref_get_section(q, gref_rv(curr->bid));
@@ -478,14 +485,14 @@ void sam_print_seq_qual_reverse(
 	if(bsec->base < lim) {
 		/* if reverse-complemented sequence is available */
 		sam_print_seq_forward(aw,
-			(aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos + curr->blen],
-			(aw->clip == 'S') ? bsec->len : curr->blen);
+			(primary != 0 || aw->clip == 'S') ? bsec->base : &bsec->base[curr->bpos + curr->blen],
+			(primary != 0 || aw->clip == 'S') ? bsec->len : curr->blen);
 	} else {
 		/* if reverse-complemented sequence is not available */
 		gref_section_t const *r = gref_get_section(q, gref_fw(curr->bid));
 		sam_print_seq_reverse(aw,
-			(aw->clip == 'S') ? r->base : &r->base[curr->bpos],
-			(aw->clip == 'S') ? r->len : curr->blen);
+			(primary != 0 || aw->clip == 'S') ? r->base : &r->base[curr->bpos],
+			(primary != 0 || aw->clip == 'S') ? r->len : curr->blen);
 	}
 
 	/* print quality string */
@@ -504,7 +511,8 @@ void sam_write_segment_reverse(
 	gref_acv_t const *q,
 	struct gaba_path_s const *path,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_section_s const *next)
+	struct gaba_path_section_s const *next,
+	int64_t primary)
 {
 	/* query name */
 	aw_print_str(aw->fp,
@@ -513,7 +521,7 @@ void sam_write_segment_reverse(
 	zfputc(aw->fp, '\t');
 
 	/* flags (revcomp indicator) */
-	aw_print_num(aw->fp, 0x10 | sam_calc_flags(r, q, curr, next));
+	aw_print_num(aw->fp, 0x10 | sam_calc_flags(r, q, curr, next, primary));
 	zfputc(aw->fp, '\t');
 
 	/* reference name and pos (name is skipped by default) */
@@ -530,7 +538,7 @@ void sam_write_segment_reverse(
 	zfputc(aw->fp, '\t');
 
 	/* cigar */
-	sam_print_cigar_reverse(aw, q, curr, path);
+	sam_print_cigar_reverse(aw, q, curr, path, primary);
 
 	/* ref name and pos of the next section */
 	if(next != NULL) {
@@ -549,7 +557,7 @@ void sam_write_segment_reverse(
 	zfprintf(aw->fp, "0\t");
 
 	/* seq and qual */
-	sam_print_seq_qual_reverse(aw, q, curr);
+	sam_print_seq_qual_reverse(aw, q, curr, primary);
 
 	/* print option tags */
 	sam_print_option_tags(aw, q, curr, path);
@@ -567,12 +575,13 @@ void sam_write_segment(
 	gref_acv_t const *q,
 	struct gaba_path_s const *path,
 	struct gaba_path_section_s const *curr,
-	struct gaba_path_section_s const *next)
+	struct gaba_path_section_s const *next,
+	int64_t primary)
 {
 	if(gref_dir(curr->aid) ^ gref_dir(curr->bid)) {
-		sam_write_segment_reverse(aw, r, q, path, curr, next);
+		sam_write_segment_reverse(aw, r, q, path, curr, next, primary);
 	} else {
-		sam_write_segment_forward(aw, r, q, path, curr, next);
+		sam_write_segment_forward(aw, r, q, path, curr, next, primary);
 	}
 	return;
 }
@@ -585,18 +594,19 @@ void sam_write_alignment(
 	aw_t *aw,
 	gref_idx_t const *r,
 	gref_acv_t const *q,
-	gaba_alignment_t const *aln)
+	gaba_alignment_t const *aln,
+	int64_t primary)
 {
 	debug("slen(%u)", aln->slen);
 	for(uint64_t i = 0; i < aln->slen - 1; i++) {
 		debug("i(%lld), path(%p), &sec[i](%p), &sec[i+1](%p)",
 			i, aln->path, &aln->sec[i], &aln->sec[i + 1]);
-		sam_write_segment(aw, r, q, aln->path, &aln->sec[i], &aln->sec[i + 1]);
+		sam_write_segment(aw, r, q, aln->path, &aln->sec[i], &aln->sec[i + 1], primary);
 	}
 
 	debug("i(%u), path(%p), &sec[i](%p), &sec[i+1](%p)",
 		aln->slen - 1, aln->path, &aln->sec[aln->slen - 1], NULL);
-	sam_write_segment(aw, r, q, aln->path, &aln->sec[aln->slen - 1], NULL);
+	sam_write_segment(aw, r, q, aln->path, &aln->sec[aln->slen - 1], NULL, primary);
 	return;
 }
 
@@ -767,7 +777,8 @@ void gpa_write_alignment(
 	aw_t *aw,
 	gref_idx_t const *r,
 	gref_acv_t const *q,
-	gaba_alignment_t const *aln)
+	gaba_alignment_t const *aln,
+	int64_t primary)
 {
 	debug("slen(%u)", aln->slen);
 
@@ -805,7 +816,7 @@ void aw_append_alignment(
 {
 	for(uint64_t i = 0; i < cnt; i++) {
 		debug("append i(%lld), ref(%p), query(%p), aln[i](%p)", i, ref, query, aln[i]);
-		aw->conf.body(aw, ref, query, aln[i]);
+		aw->conf.body(aw, ref, query, aln[i], i == 0);
 	}
 	return;
 }
