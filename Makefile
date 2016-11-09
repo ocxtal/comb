@@ -14,5 +14,5 @@ clean: configure
 	python waf clean
 
 install:
-	python waf install
+	python waf configure CC=${CC} --prefix=${PREFIX} install
 
